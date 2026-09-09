@@ -16,7 +16,7 @@ what you did not.
 The root `resolutions` select patched Vite and esbuild versions because VitePress
 1.6 and tsup 8.5 still request older ranges. Recheck upstream ranges before removing
 these overrides. Dependency updates must pass web tests, panel and documentation
-builds, release notice checks, and a fresh vulnerability scan.
+builds, release packaging tests, and a fresh vulnerability scan.
 
 ## What to run for which change
 
@@ -28,19 +28,19 @@ builds, release notice checks, and a fresh vulnerability scan.
 | Release packaging | `script/test release` |
 | Update installation and relaunch ordering | `swift test --package-path NectoMac --filter UpdateFinisherTests`, then a pinned-Dock update |
 | Built panel entry points and assets | `node script/check-panel-assets.mjs` |
-| Tokens, `NectoTheme`, `components.css` | `node script/check-design-tokens.mjs`, then open the gallery in both appearances |
+| Tokens, `NectoTheme`, `components.css` | `script/test native`, then open the gallery in both appearances |
 | Anything that reaches the app | `script/build`, then launch it |
 | The SDK's public API | `script/build` with a simulator booted, including ExampleApp's SDK integration |
 | Contract change | Update fixtures in the same commit |
 
-`script/test` runs Swift and web unit tests, native panel cache checks, Mac app unit tests, release/update contracts and static
-checks. Run browser layout checks separately with `script/test layout`. Passing
-tests does not verify UI or transport changes; those also need checks in the app
-or on a device.
+`script/test` runs Swift and Vitest unit tests, native cache and WebView integration
+tests, package/release contracts and panel asset checks. Check layouts and localized
+copy in the plugin preview. Passing tests does not verify UI or transport changes;
+those also need checks in the app or on a device.
 
-The `NectoAppTests` scheme runs Swift Testing without launching the Mac app. The
-approval controller's source belongs to both targets; tests inject an in-memory
-save function instead of writing user preferences. Run it in Xcode or directly:
+The `NectoAppTests` scheme runs Swift Testing without launching the Mac app. App
+sources under test belong to both targets. Tests use an in-memory approval store,
+temporary cache directories and isolated WebKit data stores. Run it in Xcode or directly:
 
 ```bash
 xcodebuild -project Necto.xcodeproj -scheme NectoAppTests -destination 'platform=macOS' test
@@ -156,7 +156,7 @@ that callers return promptly, and ensure a retry cannot accumulate unfinished wo
 They also verify that removing a plugin cancels its active subscriptions without
 stopping subscriptions on another connected device, and that a subscription still
 opening cannot outlive removal or caller cancellation.
-`node script/check-web-content-recovery.mjs` (also in `script/test native`) loads real
+`NectoWebViewRecoveryTests` (in `script/test native`) loads real
 hidden WKWebViews and injects content-process termination delegate events. It checks
 reload, the retry limit, and cancellation on teardown. It does not force memory
 pressure or terminate the user's WebKit processes; actual OS-triggered recovery
@@ -179,8 +179,8 @@ It does not verify a real DMG, signing or an installed app's update flow.
 The npm tarballs include `LICENSE`. The DMG and the app's `Contents/Resources`
 include `THIRD_PARTY_NOTICES.txt`, added before signing. `yarn docs:build` emits
 the same filename with licenses for the website's bundled dependencies and font.
-Missing dependency licenses fail the build. `script/test release` checks packaging
-and notice inclusion; inspect the actual artifacts before publishing.
+Missing dependency licenses fail the build. Inspect the notices in the actual
+artifacts before publishing.
 
 `swift test --package-path NectoMac --filter NectoAppReleaseTests` checks release metadata, redirect policy,
 bundle/version matching and real ad-hoc signed app fixtures, including the embedded
@@ -202,8 +202,12 @@ The release argument sets `MARKETING_VERSION`; the script reads the built
 read this bundle value, not an independent source-code version.
 
 Public CI uses GitHub-hosted runners and builds the app and ExampleApp without signing.
-Its Xcode matrix checks the Swift 6.0 minimum and a newer toolchain; the web job uses
-Node 22.12.0 and Yarn 4.6.0. GitHub Pages must be configured to deploy from Actions.
+`Check` runs four independent jobs: `Mac Build & Tests`, `SDK Build & Tests`,
+`Web Plugins Build & Tests`, and `Documentation Build`. Mac and SDK use Xcode 26.6
+on `macos-26`; web and documentation builds use `ubuntu-24.04`. All four jobs use
+Node 22.12.0, and web and documentation builds use Yarn 4.6.0.
+Documentation deployment remains a separate manual workflow. GitHub Pages must be
+configured to deploy from Actions.
 Workflow files alone do not prove a successful run on those machines.
 
 `script/release` attaches the DMG and two developer-package tarballs. GitHub computes

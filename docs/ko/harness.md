@@ -45,11 +45,12 @@ Mac host  ── runtime ──┬─ host bridge      storage, targets, shell
 새 권한은 별도 모듈에 `NectoPluginable`을 구현해 추가해요. 와이어 메시지 종류나
 `NectoSDKRuntime` 코드를 추가하지 않아요.
 
-**검사** — `NectoSDK`는 `NectoModel`과 `NectoTransport`만 import하고
-`Sources/NectoSDK`의 파일에는 기능 이름에 의존하는 코드가 없어야 해요.
+**검사** — Swift 패키지의 실제 의존성과 SDK만 추가한 앱의 연결을 확인해요.
+기능별 모듈 분리는 코드 리뷰에서 확인하며, 주석이나 식별자 표기를 테스트하지는 않아요.
 
 ```bash
-script/check-sdk-generic.sh
+node --test script/tests/package.test.mjs
+swift test --package-path Tests/Fixtures/SDKConsumer
 ```
 
 ## 규칙 2: Necto는 앱이 동작하는 방식을 정하지 않아요
@@ -132,9 +133,9 @@ Mac의 프로바이더나 실제 디바이스 연결을 검증하는 것은 아�
 긴 URL, 실패, pending 행, 잘린 본문을
 목 데이터에 넣어 실제 트래픽에서 생길 수 있는 레이아웃 문제를 확인해요.
 
-**검사** — `node script/check-plugin-layout.mjs`가 플러그인을 렌더링하고
-가로 오버플로, 잘린 헤더, 겹치는 컨트롤을 검사해요. 타입 검사만으로는
-이런 레이아웃 문제를 확인할 수 없어요.
+**검사** — 플러그인 미리보기를 좁은 화면과 넓은 화면에서 열어 가로 넘침,
+잘린 헤더, 겹치는 컨트롤을 확인해요. 타입 검사만으로는 이런 레이아웃 문제를
+확인할 수 없어요.
 
 ## 규칙 7: 디자인 시스템은 하나예요
 
@@ -159,19 +160,15 @@ script/serve-design
 토큰을 다시 적용해요. Necto 토큰을 쓰는 플러그인의 외관은 맞추지만
 하드코딩된 CSS까지 바꾸지는 않아요.
 
-정적 하네스는 Swift 테마, 호스트 오버라이드, 커밋된 모든 패널 빌드를
-`theme.css`와 비교해요.
+`NectoThemeTests`는 공용 스타일시트와 커밋된 패널 스타일을 실제 WKWebView에
+적용해 네이티브 색상과 비교해요. 두 외관과 오래된 패널 토큰을 호스트가
+갱신하는 동작도 확인해요.
 
 ```bash
-node script/check-design-tokens.mjs
+script/test native
 ```
 
-갤러리 하네스는 네이티브 셸 목을 Swift 기본값과 현재의 데스크톱/디바이스
-플러그인 구분에 맞춰 유지해요.
-
-```bash
-node script/check-design-gallery.mjs
-```
+셸을 변경할 때는 갤러리의 레이아웃과 문구도 직접 확인하세요.
 
 패널 에셋 하네스는 커밋된 모든 패널에 `index.html`이 있는지, 그리고
 패널이 참조하는 각 로컬 스크립트와 스타일시트가 존재하고 비어 있지 않은지도
@@ -183,8 +180,8 @@ node script/check-panel-assets.mjs
 
 디자인 토큰을 변경하면 다음을 확인하세요.
 
-- **토큰 값 일치:** `node script/check-design-tokens.mjs`로 `NectoTheme.swift`,
-  WebView 호스트, `theme.css`의 값이 일치하는지 확인해요.
+- **토큰 값 일치:** `script/test native`로 WebView에 표시된 색상과
+  `NectoTheme`을 두 외관에서 비교해요.
 - **텍스트 대비:** 배경, 사이드바, surface, hover, selected 상태에서 실제로
   사용하는 텍스트와 배경색의 대비를 계산해요.
 
@@ -198,8 +195,8 @@ node script/check-panel-assets.mjs
 | 브리지 또는 프로바이더 | `script/test swift`, 그다음 웹 플러그인에서 호출 |
 | Mac UI, DI, 호스트 브리지 | `xcodebuild -scheme Necto -destination 'platform=macOS' build` |
 | SDK 또는 ExampleApp 런타임 | 부팅된 시뮬레이터에서 `ExampleApp` 빌드 후 실행 |
-| 웹 플러그인 | `yarn build`, `node script/check-panel-assets.mjs`, `node script/check-plugin-layout.mjs`, 그다음 앱에서 로드 |
-| 디자인 토큰, `NectoTheme`, `components.css` | `node script/check-design-tokens.mjs`, 그다음 두 외관 모두에서 갤러리 열기 |
+| 웹 플러그인 | `yarn build`, `script/test web`, 그다음 앱에서 로드 |
+| 디자인 토큰, `NectoTheme`, `components.css` | `script/test native`, 그다음 두 외관 모두에서 갤러리 열기 |
 
 ExampleApp에는 부팅된 시뮬레이터가 필요하고 디바이스 이름은 머신마다
 다르므로 절대 하드코딩하지 마세요.

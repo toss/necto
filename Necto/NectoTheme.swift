@@ -6,8 +6,7 @@ import SwiftUI
 
 /// The design tokens from `docs/design.md`, in SwiftUI form.
 ///
-/// The same values live in `WebPackages/Bridge/theme.css`. `script/check-design-tokens.mjs`
-/// compares both copies and the WebView override.
+/// `NectoThemeTests` compares these with the colors rendered by the WebView.
 enum NectoTheme {
     // MARK: Colors
 

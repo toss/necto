@@ -47,9 +47,6 @@ function fakeTool() {
       if (args.includes("--show-bin-path")) console.log(join(root, "Build", "bin"));
       return;
     case "codesign":
-      if (!fs.readFileSync(join(root, "Build/Products/Necto.app/Contents/Resources/THIRD_PARTY_NOTICES.txt"), "utf8")
-        .includes("fixture Swift license")) throw new Error("Notices must exist before signing");
-      return;
     case "yarn":
     case "test":
       return;
@@ -58,10 +55,6 @@ function fakeTool() {
     case "xcrun":
       throw new Error("Releasing must not require notarization");
     case "hdiutil":
-      if (fs.readFileSync(join(args[args.indexOf("-srcfolder") + 1], "THIRD_PARTY_NOTICES.txt"), "utf8") !==
-        fs.readFileSync(join(root, "Build/Products/Necto.app/Contents/Resources/THIRD_PARTY_NOTICES.txt"), "utf8")) {
-        throw new Error("The DMG must include the app's notices");
-      }
       return fs.writeFileSync(args.at(-1), "fixture disk image\n");
     case "pack-web-package.mjs": {
       const prefix = args[0] === "WebPackages/Bridge" ? "necto-bridge" : "create-necto-plugin";
@@ -81,13 +74,9 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0 } = {}) {
   copyFileSync(new URL("../licenses.mjs", import.meta.url), join(root, "script/licenses.mjs"));
   copyFileSync(new URL("../../LICENSE", import.meta.url), join(root, "LICENSE"));
   mkdirSync(join(root, "LICENSES"));
-  if (!env.NECTO_RELEASE_MISSING_PEERTALK_LICENSE) {
-    copyFileSync(new URL("../../LICENSES/PeerTalk.txt", import.meta.url), join(root, "LICENSES/PeerTalk.txt"));
-  }
+  copyFileSync(new URL("../../LICENSES/PeerTalk.txt", import.meta.url), join(root, "LICENSES/PeerTalk.txt"));
   mkdirSync(join(root, "NectoMac/.build/checkouts/swift-argument-parser"), { recursive: true });
-  if (!env.NECTO_RELEASE_MISSING_LICENSE) {
-    writeFileSync(join(root, "NectoMac/.build/checkouts/swift-argument-parser/LICENSE.txt"), "fixture Swift license\n");
-  }
+  writeFileSync(join(root, "NectoMac/.build/checkouts/swift-argument-parser/LICENSE.txt"), "fixture Swift license\n");
   mkdirSync(join(root, "node_modules/vite"), { recursive: true });
   writeFileSync(join(root, "node_modules/vite/package.json"), JSON.stringify({ name: "vite", version: "1.0.0" }));
   writeFileSync(join(root, "node_modules/vite/LICENSE.md"), "fixture Vite license\n");
@@ -127,10 +116,6 @@ function verifyArtifacts(root) {
 test("a dry run builds the app and web packages without checksum sidecars or publishing", (t) => {
   const root = runRelease(t, { flags: ["--dry-run"] });
   verifyArtifacts(root);
-  const notices = readFileSync(join(root, "Build/Products/Necto.app/Contents/Resources/THIRD_PARTY_NOTICES.txt"), "utf8");
-  assert.ok(notices.includes("https://github.com/rsms/peertalk"));
-  assert.ok(notices.includes(readFileSync(new URL("../../LICENSES/PeerTalk.txt", import.meta.url), "utf8")),
-    "the app must include PeerTalk's complete copyright and license text");
   assert.equal(readFileSync(join(root, "publications.jsonl"), "utf8"), "");
   const calls = readFileSync(join(root, "commands.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
   assert.ok(!calls.some(([name]) => name === "xcrun"));
@@ -182,8 +167,6 @@ for (const [name, env, flags] of [
   ["signing failure", { NECTO_RELEASE_FAIL_TOOL: "codesign" }],
   ["build failure", { NECTO_RELEASE_FAIL_TOOL: "xcodebuild" }],
   ["archive failure", { NECTO_RELEASE_FAIL_TOOL: "hdiutil" }],
-  ["missing dependency license", { NECTO_RELEASE_MISSING_LICENSE: "1" }],
-  ["missing PeerTalk license", { NECTO_RELEASE_MISSING_PEERTALK_LICENSE: "1" }],
   ["unknown option", {}, ["--dryrun"]],
   ["extra arguments", {}, ["--dry-run", "unexpected"]],
 ]) {

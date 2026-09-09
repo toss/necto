@@ -23,19 +23,19 @@
 | 릴리스 패키징 | `script/test release` |
 | 업데이트 설치와 재실행 순서 | `swift test --package-path NectoMac --filter UpdateFinisherTests` 실행 후, Dock에 고정한 앱 업데이트하기 |
 | 빌드된 패널 진입점과 에셋 | `node script/check-panel-assets.mjs` |
-| 토큰, `NectoTheme`, `components.css` | `node script/check-design-tokens.mjs` 실행 후, 갤러리를 두 외형 모두에서 열기 |
+| 토큰, `NectoTheme`, `components.css` | `script/test native` 실행 후, 갤러리를 두 외형 모두에서 열기 |
 | 앱까지 도달하는 모든 변경 | `script/build` 실행 후, 앱 실행하기 |
 | SDK의 공개 API | 시뮬레이터를 부팅한 상태에서 `script/build`로 ExampleApp의 SDK 연동까지 빌드하기 |
 | 계약 변경 | 같은 커밋에서 픽스처 업데이트하기 |
 
-`script/test`는 Swift·웹 단위 테스트, 네이티브 패널 캐시, Mac 앱 단위 테스트,
-릴리스·업데이트 계약과 정적 검사를 실행해요. 브라우저 레이아웃
-검사는 `script/test layout`으로 따로 실행해요. 테스트 통과만으로 UI나 전송 경로를
-검증한 것은 아니므로 해당 변경은 앱이나 실기기에서도 확인해야 해요.
+`script/test`는 Swift·Vitest 단위 테스트, 네이티브 캐시·WebView 통합 테스트,
+패키지·릴리스 계약과 패널 에셋 검사를 실행해요. 레이아웃과 번역 문구는 플러그인
+미리보기에서 직접 확인해요. 테스트 통과만으로 UI나 전송 경로를 검증한 것은 아니므로
+해당 변경은 앱이나 실기기에서도 확인해야 해요.
 
 `NectoAppTests` 스킴은 Mac 앱을 실행하지 않고 Swift Testing 테스트를 실행해요.
-승인 컨트롤러 소스를 앱과 테스트 타깃이 함께 사용하며 테스트에서는 사용자 설정을
-쓰는 대신 메모리에 저장하는 함수를 주입해요. Xcode에서 스킴을 실행하거나
+검사할 앱 소스를 두 타깃이 함께 사용해요. 테스트에는 메모리 승인 저장소,
+임시 캐시 디렉터리, 격리된 WebKit 저장소를 사용해요. Xcode에서 스킴을 실행하거나
 다음 명령을 사용하세요.
 
 ```bash
@@ -146,7 +146,7 @@ CLI 설치·삭제 변경은 Settings → About의 명령을 실행한 뒤 `nect
 호출자가 바로 반환되는지, 재시도로 미종료 작업이 쌓이지 않는지 확인해요.
 플러그인을 삭제할 때 활성 구독도 취소되는지, 다른 기기의 구독은 유지되는지 확인해요.
 구독을 여는 도중 플러그인이 삭제되거나 호출자가 취소되면 구독을 시작하지 않아야 해요.
-`node script/check-web-content-recovery.mjs`는 실제 숨겨진 WKWebView에 콘텐츠 프로세스
+`NectoWebViewRecoveryTests`는 실제 숨겨진 WKWebView에 콘텐츠 프로세스
 종료 delegate 이벤트를 주입해 재로딩·재시도 제한·해제 시 취소를 확인해요.
 `script/test native`에도 포함돼 있어요. 메모리 부족을 강제로 만들거나 사용자의 WebKit
 프로세스를 종료하는 검증은 아니며, 실제 OS 종료 후 복구와 장시간 실행은 별도로 확인해야 해요.
@@ -165,8 +165,8 @@ dry-run 격리를 검사하며 앱을 빌드하거나 GitHub에 연결하지 않
 npm 압축 파일에는 `LICENSE`를, DMG와 앱의 `Contents/Resources`에는
 `THIRD_PARTY_NOTICES.txt`를 포함해요. 앱 고지는 서명 전에 추가해요.
 `yarn docs:build`는 웹사이트에 포함된 라이브러리와 글꼴의 고지를 같은 파일명으로
-생성해요. 의존성의 라이선스가 없으면 빌드가 실패해요. `script/test release`로
-패키징과 고지 포함 여부를 검사하고, 게시 전에는 실제 배포물도 확인하세요.
+생성해요. 의존성의 라이선스가 없으면 빌드가 실패해요. 게시 전에는 실제 배포물에
+고지가 포함됐는지 확인하세요.
 
 `swift test --package-path NectoMac --filter NectoAppReleaseTests`는 릴리스 메타데이터, 리디렉션 정책,
 번들·버전 일치 여부와 내장 CLI를 포함한 실제 ad-hoc 서명 앱을 검사해요.
@@ -189,8 +189,13 @@ npm 압축 파일에는 `LICENSE`를, DMG와 앱의 `Contents/Resources`에는
 별도 소스 코드 상수가 아니라 이 번들 버전을 사용해요.
 
 공개 CI는 GitHub-hosted runner에서 앱과 ExampleApp을 서명 없이 빌드해요.
-Xcode 매트릭스로 Swift 6.0 최소 버전과 최신 도구를 확인하며 웹 작업은 Node 22.12.0과
-Yarn 4.6.0을 사용해요. GitHub Pages는 Actions 배포로 설정해야 해요.
+`Check`의 작업은 `Mac Build & Tests`, `SDK Build & Tests`,
+`Web Plugins Build & Tests`, `Documentation Build`로 나뉘어요.
+Mac과 SDK는 `macos-26`에서 Xcode 26.6을 사용하고
+웹과 문서 빌드는 `ubuntu-24.04`에서 실행해요.
+Node 22.12.0은 네 작업 모두에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
+문서 배포는 별도 워크플로에서 수동으로 실행하며
+GitHub Pages는 Actions 배포로 설정해야 해요.
 워크플로 파일을 추가한 것만으로 외부 환경에서 실행에 성공했다고 볼 수는 없어요.
 
 `script/release`는 DMG와 개발용 패키지 두 개를 첨부해요. 해시는 GitHub가

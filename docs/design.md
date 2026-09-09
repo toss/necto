@@ -80,7 +80,8 @@ foundation is how a colour ends up correct in one theme and wrong in the other.
 
 Both ladders are authoritative at the top of `theme.css`. The theme rules below them
 only *choose* between the two. Swift and the WebView host mirror the values they need;
-`script/check-design-tokens.mjs` fails when either copy or a built panel drifts.
+`NectoThemeTests` compares native colors with rendered WebView colors, including built
+panels and host overrides. Run it with `script/test native`.
 
 ## Colour
 

@@ -52,7 +52,8 @@ final class NectoPluginPage {
          find: NectoFindSession? = nil,
          uiFontFamily: String = NectoFontPreference.defaultUI,
          codeFontFamily: String = NectoFontPreference.defaultCode,
-         locale: String = "en", isDark: Bool = false) {
+         locale: String = "en", isDark: Bool = false,
+         websiteDataStore: WKWebsiteDataStore? = nil) {
         let originHost = plugin.principal.map(NectoPluginSchemeHandler.originHost(for:))
             ?? UUID().uuidString.lowercased()
         bridge = NectoBridgeCoordinator(plugin: plugin, originHost: originHost, registry: registry, target: target, find: find,
@@ -63,7 +64,7 @@ final class NectoPluginPage {
         controller.addScriptMessageHandler(bridge, contentWorld: .page, name: NectoBridgeCoordinator.handlerName)
         let configuration = WKWebViewConfiguration()
         // Unregistered previews must not inherit or persist another installation's data.
-        if plugin.principal == nil { configuration.websiteDataStore = .nonPersistent() }
+        configuration.websiteDataStore = plugin.principal == nil ? .nonPersistent() : (websiteDataStore ?? .default())
         configuration.userContentController = controller
         configuration.setURLSchemeHandler(
             NectoPluginSchemeHandler(originHost: originHost, archive: plugin.archive),
