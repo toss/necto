@@ -1,0 +1,30 @@
+.build/
+.swiftpm/
+DerivedData/
+/Derived/
+*.xcuserstate
+.DS_Store
+
+node_modules/
+dist/
+*.log
+
+# xcodebuild output
+Build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# yarn
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+.pnp.*
+
+# Web build output. BuiltInPlugins/Plugins is committed because the app bundle needs it.
+WebBridge/dist/
+
+# Local agent tooling. Machine specific, and not part of how Necto is built.
+.claude/
+/_workspace/
+**/.vitepress/cache/

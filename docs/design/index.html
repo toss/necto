@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Necto design gallery</title>
+    <link rel="stylesheet" href="../../WebPackages/Bridge/theme.css" />
+    <link rel="stylesheet" href="../../WebPackages/Bridge/components.css" />
+    <link rel="stylesheet" href="./gallery.css" />
+  </head>
+  <body>
+    <div class="themebar">
+      <span class="source">rendered from WebPackages/Bridge/theme.css + components.css</span>
+      <div class="switch" role="group" aria-label="Theme">
+        <button type="button" data-set="light" aria-pressed="false">light</button>
+        <button type="button" data-set="dark" aria-pressed="false">dark</button>
+        <button type="button" data-set="system" aria-pressed="true">system</button>
+      </div>
+    </div>
+
+    <div class="page">
+      <header>
+        <p class="brandline">Necto · design guide</p>
+        <h1>One system, every surface</h1>
+        <p class="lede">
+          Every surface below is drawn from the stylesheets that ship, not from a copy.
+          Nothing here is a picture: if a component looks wrong on this page, it looks
+          wrong in the app. The rules behind it are in
+          <a href="../design.md">docs/design.md</a>.
+        </p>
+      </header>
+
+      <section>
+        <h2>Themes</h2>
+        <p class="lede">
+          Only the neutral ladder is restated between light and dark. Everything else
+          derives from it, so the two cannot drift apart. Surfaces come forward by
+          getting <em>lighter</em> in dark, which is the opposite of light.
+        </p>
+        <div class="pair">
+          <div class="pin-light"><h3>light</h3><div class="ramp" data-ladder="light"></div></div>
+          <div class="pin-dark"><h3>dark</h3><div class="ramp" data-ladder="dark"></div></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>The whole app</h2>
+        <p class="lede">
+          The shell and a plugin together, which is the only way either is ever seen.
+          The app leads, the devices it is running on sit under it, then come the
+          plugins carried by the selected app and the plugins installed on this Mac.
+          Settings sits at the foot of the sidebar, away from what changes.
+        </p>
+
+        <div class="sizes" role="group" aria-label="Text size">
+          <span class="necto-caption">Text size</span>
+          <button type="button" data-scale="0.9">small</button>
+          <button type="button" data-scale="1" aria-pressed="true">medium</button>
+          <button type="button" data-scale="1.15">large</button>
+        </div>
+
+        <div class="frame tall" id="app"></div>
+
+      </section>
+
+      <section>
+        <h2>Plugin Sample</h2>
+        <p class="lede">
+          The sample device plugin carried by ExampleApp. It is the gallery again,
+          but inside Necto and against the real bridge — so a component that only
+          works on this page is a component that does not work.
+        </p>
+        <div class="frame tall" id="plugin-sample"></div>
+      </section>
+
+      <section>
+        <h2>Settings</h2>
+        <p class="lede">
+          Reached from the foot of the sidebar, and drawn in the same panel a plugin
+          would use — it is a screen of the app, not a floating window that has to be
+          dismissed before work continues.
+        </p>
+        <div class="frame" id="settings" style="height: 420px"></div>
+        <p class="lede" style="margin-top: var(--necto-space-3)">
+          Desktop plugins get their own page, because managing what is installed on
+          this Mac has nothing to do with how the app looks.
+        </p>
+        <div class="frame" id="settings-plugins" style="height: 420px"></div>
+        <p class="lede" style="margin-top: var(--necto-space-3)">
+          Shell access has one overview and one caller detail. The overview owns the
+          global override; the detail owns one caller's policy and exact commands.
+        </p>
+        <div class="frame" id="settings-shell" style="height: 560px"></div>
+        <div class="frame" id="settings-shell-detail" style="height: 560px;margin-top:var(--necto-space-3)"></div>
+      </section>
+
+      <section>
+        <h2>Installing a desktop plugin</h2>
+        <p class="lede">
+          Three screens, in the order they are met. A desktop plugin is a folder Necto
+          watches, so the first one is also how a plugin author works on theirs.
+        </p>
+
+        <h3 class="stepped">Manage</h3>
+        <p class="lede">
+          Installed and enabled are separate. Turning one off is how you find out
+          whether it is the one misbehaving, without losing its settings.
+        </p>
+        <div class="frame" id="plugins-manage" style="height: 420px"></div>
+
+        <h3 class="stepped">Approve</h3>
+        <p class="lede">
+          Review the desktop bridges the plugin requests before installing it.
+          Declining installs nothing. Updates that request new bridges need approval
+          again; shell commands also follow the caller's shell access policy.
+        </p>
+        <div class="frame" id="plugins-approve" style="height: 480px"></div>
+
+        <h3 class="stepped">When it fails</h3>
+        <p class="lede">
+          Refusals are specific: which requirement, which version, what to do next.
+        </p>
+        <div class="frame" id="plugins-failed" style="height: 300px"></div>
+      </section>
+
+      <section>
+        <h2>Network</h2>
+        <p class="lede">A wide table. The densest surface Necto has, and the one that sets row height for the rest.</p>
+        <div class="frame" id="network"></div>
+      </section>
+
+      <section>
+        <h2>Events</h2>
+        <p class="lede">A stream: few fixed columns, messages of any length, a level that has to read at a glance.</p>
+        <div class="frame" id="events"></div>
+      </section>
+
+      <section>
+        <h2>Performance</h2>
+        <p class="lede">Measurements over time. A value past its budget says so in more than colour.</p>
+        <div class="frame" id="performance"></div>
+      </section>
+
+      <section>
+        <h2>Feature panels</h2>
+        <p class="lede">
+          Shipped and external plugin shapes assembled from the stylesheet's own
+          components. They stay here as regression examples after implementation.
+        </p>
+      </section>
+
+      <section>
+        <h3>UserDefaults</h3>
+        <p class="lede">Stored keys, their types, and what is in them. Writing one is a change to a running app, so it asks first.</p>
+        <div class="frame" id="preferences"></div>
+      </section>
+
+      <section>
+        <h3>UserDefaults &middot; editing</h3>
+        <p class="lede">
+          A value is edited in its own shape. A Bool is a switch, a number is a number
+          field, and a collection is rows &mdash; one element per field, never a JSON
+          blob to retype. An element that is itself structured is one line of JSON in
+          its row. Data is not editable; it is described and copied.
+        </p>
+        <div class="frame" id="preferences-editors"></div>
+      </section>
+
+      <section>
+        <h3>Files</h3>
+        <p class="lede">The app's own container. A tree that has to stay readable at depth, and sizes that line up.</p>
+        <div class="frame" id="files"></div>
+      </section>
+
+      <section>
+        <h3>View inspector</h3>
+        <p class="lede">The hierarchy on screen, its measurements, and the frame drawn where it sits.</p>
+        <div class="frame" id="views"></div>
+      </section>
+
+      <section>
+        <h3>Mock server</h3>
+        <p class="lede">Rules that answer instead of the network. Each one is off until it is turned on, and says how many times it fired.</p>
+        <div class="frame" id="mocks"></div>
+      </section>
+
+      <section>
+        <h3>Web views</h3>
+        <p class="lede">Every <code>WKWebView</code> the app has open, and a console into the one that is selected.</p>
+        <div class="frame" id="webviews"></div>
+      </section>
+
+      <section>
+        <h3>Device</h3>
+        <p class="lede">Things done to the device rather than read from it: open a link, take a picture, record the screen.</p>
+        <div class="frame" id="device"></div>
+      </section>
+
+      <section>
+        <h2>Components</h2>
+        <p class="lede">What <code>components.css</code> gives a plugin.</p>
+        <div class="frame" id="components"></div>
+      </section>
+
+      <section>
+        <h2>Tokens</h2>
+        <p class="lede">Read live from the stylesheet, so this list cannot fall behind.</p>
+        <div id="tokens" class="tokens"></div>
+      </section>
+
+      <section>
+        <h2>Rules</h2>
+        <ul class="rules">
+          <li><b>One density.</b> Every plugin uses <code>--necto-row-height</code>. Two densities read as two applications.</li>
+          <li><b>One separator.</b> Space or a rule, never both.</li>
+          <li><b>One status shape.</b> A 200, a 404 and a failure are drawn the same way.</li>
+          <li><b>Ink for state, colour for status.</b> Selection and focus are ink; success, warning and danger own the colour.</li>
+          <li><b>Numbers monospaced and right aligned,</b> heading over the digits.</li>
+          <li><b>No <code>-webkit-font-smoothing</code>.</b> It thins strokes AppKit does not thin.</li>
+          <li><b>Never hardcode a colour.</b> Take it from the semantic or component layer.</li>
+        </ul>
+      </section>
+    </div>
+
+    <script src="./gallery.js"></script>
+  </body>
+</html>

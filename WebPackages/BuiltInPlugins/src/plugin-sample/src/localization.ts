@@ -1,0 +1,50 @@
+//
+//  Copyright (c) 2026 Viva Republica, Inc.
+//
+
+import { createTranslator } from "@necto/bridge";
+
+export const t = createTranslator({
+  ko: {
+    Bridge: "브릿지",
+    Shell: "셸",
+    States: "상태",
+    Context: "컨텍스트",
+    "Loading…": "불러오는 중…",
+    "Query · host.info": "쿼리 · host.info",
+    Run: "실행",
+    "Not run yet": "아직 실행하지 않았습니다",
+    "Stream · host.ticks": "스트림 · host.ticks",
+    Start: "시작",
+    Stop: "중지",
+    "0 events": "이벤트 0개",
+    "Not started": "시작하지 않았습니다",
+    "Make it fail": "실패 상태 만들기",
+    "Every refusal below is real: the call is made and Necto turns it down. This is what a plugin's error handling has to survive.": "아래 거절은 모두 실제 호출 결과입니다. Necto가 요청을 거절할 때 플러그인의 오류 처리가 견뎌야 하는 상태를 보여줍니다.",
+    "Unknown operation": "알 수 없는 오퍼레이션",
+    "Bad input": "잘못된 입력",
+    "PERMISSION_DENIED is not here because it cannot be reached from a plugin: a manifest that asks for an operation whose permission it does not declare is refused before it loads. The code arrives when a user installs a plugin and declines part of what it asked for.": "PERMISSION_DENIED는 플러그인 내부에서 만들 수 없어 여기에 없습니다. 선언하지 않은 권한의 오퍼레이션을 요청하는 manifest는 로드 전에 거절됩니다. 사용자가 플러그인 설치 중 일부 권한을 거절하면 이 코드가 전달됩니다.",
+    Empty: "비어 있음",
+    "Nothing to show": "표시할 내용이 없습니다",
+    "What a plugin looks like before its first result.": "플러그인이 첫 결과를 받기 전의 모습입니다.",
+    failed: "실패",
+    "{count} event": "이벤트 {count}개",
+    "{count} events": "이벤트 {count}개",
+    "Necto allowed it. That is itself worth knowing.": "Necto가 요청을 허용했습니다. 이것도 확인할 가치가 있습니다.",
+    Notice: "알림",
+    "This plugin only works inside Necto": "이 플러그인은 Necto 안에서만 동작합니다.",
+    "none selected": "선택되지 않음",
+    "Exact command": "정확한 명령어",
+    "Command approval compares this exact string. Change one character to make it a different command.": "명령별 승인은 이 문자열 전체를 비교합니다. 한 글자만 달라져도 다른 명령어입니다.",
+    "Request approval": "승인 요청",
+    "Request Full Access": "전체 허용 요청",
+    "Run command": "명령 실행",
+    "Try unapproved command": "미승인 명령 실행",
+    "Last result": "최근 결과",
+    "Allow the Plugin Sample greeting?": "Plugin Sample 인사 명령을 허용할까요?",
+    "The sample uses printf to verify shell execution and stdout.": "샘플은 printf로 셸 실행과 stdout을 검증합니다.",
+    "Allow every Plugin Sample command?": "Plugin Sample의 모든 명령을 허용할까요?",
+    "Full Access lets Plugin Sample run any shell command without asking again.": "전체 허용은 Plugin Sample이 다시 묻지 않고 모든 셸 명령어를 실행할 수 있게 합니다.",
+    "All commands": "모든 명령어",
+  },
+});

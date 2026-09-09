@@ -1,0 +1,31 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Metric cards and sparklines come from the shared system. This panel only fixes the
+ * six process cards into balanced rows.
+ */
+
+@import "@necto/bridge/theme.css";
+@import "@necto/bridge/components.css";
+
+html,
+body,
+.necto-app {
+  height: 100%;
+}
+
+.necto-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 720px) {
+  .necto-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 440px) {
+  .necto-metrics {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+#
+#  Copyright (c) 2026 Viva Republica, Inc.
+#
+# Serves the repo so docs/design/index.html can read the stylesheets it
+# renders from. No caching: the gallery is looked at while the CSS is being changed,
+# and a cached stylesheet means looking at the previous answer.
+#
+#   script/serve-design [port]
+#
+import functools
+import http.server
+import pathlib
+import sys
+
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self) -> None:
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        super().end_headers()
+
+    def log_message(self, *_args) -> None:
+        pass
+
+
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 5203
+root = pathlib.Path(__file__).resolve().parent.parent
+handler = functools.partial(Handler, directory=str(root))
+
+print(f"http://localhost:{port}/docs/design/index.html")
+http.server.ThreadingHTTPServer(("127.0.0.1", port), handler).serve_forever()

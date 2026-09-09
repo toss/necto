@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../../WebPackages/Bridge/theme.css" />
+    <link rel="stylesheet" href="../../../WebPackages/Bridge/components.css" />
+    <link rel="stylesheet" href="../gallery.css" />
+    <style>
+      html, body { margin: 0; padding: 0; }
+      body {
+        width: max-content;
+        background: var(--necto-bg);
+      }
+      .spare { display: none; }
+
+      #app {
+        box-sizing: border-box;
+        width: 1160px;
+        height: 640px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame" id="app"></div>
+
+    <div class="spare">
+      <div id="components"></div><div id="events"></div><div id="network"></div>
+      <div id="performance"></div><div id="plugin-sample"></div><div id="plugins-approve"></div>
+      <div id="plugins-confirm"></div><div id="plugins-failed"></div><div id="plugins-manage"></div>
+      <div id="settings"></div><div id="settings-plugins"></div><div id="tokens"></div>
+    </div>
+
+    <script src="../gallery.js"></script>
+  </body>
+</html>

@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "id": "preferences",
+  "name": "UserDefaults",
+  "description": "What the app has stored in UserDefaults",
+  "version": "0.1.0",
+  "author": "Necto",
+  "icon": {
+    "systemName": "list.bullet.rectangle"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "preferences.list",
+      "title": "List keys",
+      "description": "Every stored key, with a trimmed preview of its value",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.preferences.list",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "suite": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "preview": {
+                  "type": "string"
+                },
+                "isTruncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "type",
+                "preview",
+                "isTruncated"
+              ],
+              "additionalProperties": true
+            }
+          },
+          "total": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "preferences.detail",
+      "title": "Read a key",
+      "description": "The whole value of one key",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.preferences.detail",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "suite": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entry": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "type",
+              "value"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "entry"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "preferences.suites",
+      "title": "List stores",
+      "description": "The stores this app offers",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.preferences.suites",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "suites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "suites"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "preferences.set",
+      "title": "Write a key",
+      "description": "Writes a value into a running app's store",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.preferences.set",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "suite": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "value": {},
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entry": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "type",
+              "value"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "entry"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "preferences.remove",
+      "title": "Remove a key",
+      "description": "Removes a key from a running app's store",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.preferences.remove",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "suite": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "removed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    }
+  ]
+}

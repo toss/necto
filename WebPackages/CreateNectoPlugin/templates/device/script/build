@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+npm run build
+swift build
+xcodebuild \
+  -project __PROJECT_NAME__.xcodeproj \
+  -scheme ExampleApp \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath DerivedData \
+  CODE_SIGNING_ALLOWED=NO \
+  build

@@ -1,0 +1,354 @@
+{
+  "schemaVersion": 1,
+  "id": "network-logger",
+  "name": "Network",
+  "description": "Watch the app's network requests as they happen",
+  "version": "1.0.0",
+  "author": "Necto",
+  "icon": {
+    "systemName": "network"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "records.list",
+      "title": "List requests",
+      "description": "Returns the requests recorded so far",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.network-records.list",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5000
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "method": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "host": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "completed",
+                    "failed"
+                  ]
+                },
+                "startedAtMilliseconds": {
+                  "type": "number"
+                },
+                "statusCode": {
+                  "type": "number"
+                },
+                "durationMilliseconds": {
+                  "type": "number"
+                },
+                "responseByteCount": {
+                  "type": "number"
+                },
+                "errorSummary": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "method",
+                "url",
+                "name",
+                "host",
+                "state",
+                "startedAtMilliseconds"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "records"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 3000
+    },
+    {
+      "id": "records.detail",
+      "title": "Request detail",
+      "description": "Returns headers, bodies and a cURL for one request",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.network-records.detail",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "recordID": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "recordID"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "record": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "completed",
+                  "failed"
+                ]
+              },
+              "startedAtMilliseconds": {
+                "type": "number"
+              },
+              "statusCode": {
+                "type": "number"
+              },
+              "durationMilliseconds": {
+                "type": "number"
+              },
+              "responseByteCount": {
+                "type": "number"
+              },
+              "errorSummary": {
+                "type": "string"
+              },
+              "requestHeaders": {
+                "type": "object"
+              },
+              "responseHeaders": {
+                "type": "object"
+              },
+              "curl": {
+                "type": "string"
+              },
+              "requestBody": {
+                "type": "object",
+                "properties": {
+                  "byteCount": {
+                    "type": "number"
+                  },
+                  "isTruncated": {
+                    "type": "boolean"
+                  },
+                  "contentType": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "byteCount",
+                  "isTruncated"
+                ],
+                "additionalProperties": true
+              },
+              "responseBody": {
+                "type": "object",
+                "properties": {
+                  "byteCount": {
+                    "type": "number"
+                  },
+                  "isTruncated": {
+                    "type": "boolean"
+                  },
+                  "contentType": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "byteCount",
+                  "isTruncated"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "id",
+              "method",
+              "url",
+              "name",
+              "host",
+              "state",
+              "startedAtMilliseconds",
+              "requestHeaders",
+              "responseHeaders",
+              "curl"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "record"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 3000
+    },
+    {
+      "id": "records.observe",
+      "title": "Observe requests",
+      "description": "Receives a record whenever a request starts or finishes",
+      "kind": "stream",
+      "binding": {
+        "name": "necto.device.network-records.observe",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "record": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "completed",
+                  "failed"
+                ]
+              },
+              "startedAtMilliseconds": {
+                "type": "number"
+              },
+              "statusCode": {
+                "type": "number"
+              },
+              "durationMilliseconds": {
+                "type": "number"
+              },
+              "responseByteCount": {
+                "type": "number"
+              },
+              "errorSummary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "method",
+              "url",
+              "name",
+              "host",
+              "state",
+              "startedAtMilliseconds"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "record"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 0
+    },
+    {
+      "id": "records.clear",
+      "title": "Clear requests",
+      "description": "Removes the recorded requests for the selected app",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.network-records.clear",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cleared"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 3000
+    }
+  ]
+}

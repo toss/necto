@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Only what is particular to this plugin. Everything structural comes from
+ * @necto/bridge/components.css, so the panel looks like part of the app rather than
+ * like a page embedded in it.
+ */
+
+@import "@necto/bridge/theme.css";
+@import "@necto/bridge/components.css";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+#root > .necto-app {
+  height: 100%;
+}
+
+/* The pane needs no box of its own; the aside inside it is the whole thing. */
+.detail-slot {
+  display: contents;
+}
+
+.view-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--necto-space-2);
+  min-width: 180px;
+}
+
+.view-map {
+  position: relative;
+  height: 132px;
+  max-width: 100%;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  border: 1px solid var(--necto-border);
+  border-radius: var(--necto-radius-control);
+  background: var(--necto-base-05);
+}
+
+.view-map:focus-visible {
+  outline: 2px solid var(--necto-accent);
+  outline-offset: 2px;
+}
+
+.view-map-selection {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid var(--necto-accent);
+  background: color-mix(in srgb, var(--necto-accent) 12%, transparent);
+}
+
+.view-action-buttons,
+.view-text-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--necto-space-1);
+}
+
+.view-text-input {
+  min-width: 0;
+  flex: 1;
+}

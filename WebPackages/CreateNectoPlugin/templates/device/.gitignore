@@ -1,0 +1,7 @@
+.build/
+DerivedData/
+node_modules/
+Package.resolved
+Sources/__PLUGIN_MODULE__/Panel/assets/
+Sources/__PLUGIN_MODULE__/Panel/index.html
+Sources/__PLUGIN_MODULE__/Panel/manifest.json

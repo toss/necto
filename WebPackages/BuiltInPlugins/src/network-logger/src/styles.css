@@ -1,0 +1,67 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Only what is particular to this plugin. Everything structural comes from
+ * @necto/bridge/components.css, so the log looks like part of the app rather than
+ * like a page embedded in it.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+.col-status { width: 88px; }
+.col-method { width: 72px; }
+.col-started { width: 112px; }
+.col-duration { width: 84px; }
+.col-size { width: 80px; }
+
+/* The path is the subject of a row; the host is context and stays quiet beside it. */
+.req-host {
+  margin-left: var(--necto-space-2);
+  color: var(--necto-text-tertiary);
+  font-size: var(--necto-size-caption);
+}
+
+/* A failed row reads as failed on its own line, not only in its status cell. */
+tr[data-failed="true"] .req-name {
+  color: var(--necto-danger);
+}
+
+.cell-method {
+  color: var(--necto-text-secondary);
+  font-family: var(--necto-font-mono);
+  font-size: var(--necto-size-label);
+}
+
+.cell-numeric {
+  color: var(--necto-text-tertiary);
+  font-family: var(--necto-font-mono);
+  font-size: var(--necto-size-label);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.count {
+  color: var(--necto-text-tertiary);
+  font-size: var(--necto-size-label);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .col-started,
+  .col-duration,
+  .col-size,
+  .cell-started,
+  .cell-duration,
+  .cell-size {
+    display: none;
+  }
+}
+
+@container (max-width: 640px) {
+  .col-started, .col-duration, .col-size,
+  .cell-started, .cell-duration, .cell-size { display: none; }
+}

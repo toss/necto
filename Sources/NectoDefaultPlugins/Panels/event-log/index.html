@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Events</title>
+    <script type="module" crossorigin src="./assets/index.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index.css">
+  </head>
+  <body>
+    <div class="necto-app">
+      <div class="necto-toolbar">
+        <input class="necto-field event-search" id="search" type="search" />
+        <select class="necto-field event-level-filter" id="level"></select>
+        <select class="necto-field event-category-filter" id="category"></select>
+        <span class="necto-badge" id="count">0</span>
+        <span style="margin-left: auto"></span>
+        <button type="button" class="necto-button necto-button-quiet necto-button-danger" id="clear">Clear</button>
+      </div>
+
+      <div class="necto-body" id="body"></div>
+    </div>
+
+  </body>
+</html>

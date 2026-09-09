@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "id": "shell-demo",
+  "name": "Shell Demo",
+  "description": "Exercises Necto shell approval and execution without a connected app",
+  "version": "1.0.0",
+  "author": "Necto",
+  "icon": {
+    "systemName": "terminal"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "shell.request",
+      "title": "Request shell approval",
+      "description": "Asks the user to approve exact Bash commands for this plugin",
+      "kind": "once",
+      "binding": {
+        "name": "necto.desktop.shell.authorization.request",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "access": {
+            "type": "string",
+            "enum": ["commandApproval", "fullAccess"]
+          },
+          "title": { "type": "string", "maxLength": 80 },
+          "message": { "type": "string", "maxLength": 500 }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "approved": { "type": "boolean" },
+          "approvedCommands": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["approved", "approvedCommands"],
+        "additionalProperties": false
+      },
+      "timeoutMs": 0
+    },
+    {
+      "id": "shell.execute",
+      "title": "Run shell command",
+      "description": "Runs one exact Bash command through the Necto shell policy",
+      "kind": "once",
+      "binding": {
+        "name": "necto.desktop.shell.execute",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" }
+        },
+        "required": ["command"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "stdout": { "type": "string" },
+          "stderr": { "type": "string" },
+          "exitCode": { "type": "integer" }
+        },
+        "required": ["stdout", "stderr", "exitCode"],
+        "additionalProperties": false
+      },
+      "timeoutMs": 30000
+    }
+  ]
+}

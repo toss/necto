@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "id": "plugin-sample",
+  "name": "Plugin Sample",
+  "description": "Every component a plugin gets, running against the real bridge",
+  "version": "1.0.0",
+  "author": "Necto",
+  "icon": {
+    "systemName": "square.grid.2x2"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "host.info",
+      "title": "Host info",
+      "description": "Reads the Necto version and protocol version",
+      "kind": "once",
+      "binding": {
+        "name": "necto.desktop.info",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "nectoVersion": {
+            "type": "string"
+          },
+          "protocolVersion": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "nectoVersion",
+          "protocolVersion"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 3000
+    },
+    {
+      "id": "host.ticks",
+      "title": "Observe ticks",
+      "description": "Verifies that the stream path works",
+      "kind": "stream",
+      "binding": {
+        "name": "necto.desktop.ticks",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "intervalMs": {
+            "type": "number",
+            "minimum": 100,
+            "maximum": 60000
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "number"
+          },
+          "timestamp": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "sequence",
+          "timestamp"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 0
+    },
+    {
+      "id": "shell.request",
+      "title": "Request shell approval",
+      "description": "Asks the user to approve exact Bash commands for this plugin",
+      "kind": "once",
+      "binding": {
+        "name": "necto.desktop.shell.authorization.request",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "commands": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "access": {
+            "type": "string",
+            "enum": ["commandApproval", "fullAccess"]
+          },
+          "title": { "type": "string", "maxLength": 80 },
+          "message": { "type": "string", "maxLength": 500 }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "approved": { "type": "boolean" },
+          "approvedCommands": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "required": ["approved", "approvedCommands"],
+        "additionalProperties": false
+      },
+      "timeoutMs": 0
+    },
+    {
+      "id": "shell.execute",
+      "title": "Run shell command",
+      "description": "Runs one exact Bash command through the Necto shell policy",
+      "kind": "once",
+      "binding": {
+        "name": "necto.desktop.shell.execute",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" }
+        },
+        "required": ["command"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "stdout": { "type": "string" },
+          "stderr": { "type": "string" },
+          "exitCode": { "type": "integer" }
+        },
+        "required": ["stdout", "stderr", "exitCode"],
+        "additionalProperties": false
+      },
+      "timeoutMs": 30000
+    }
+  ]
+}

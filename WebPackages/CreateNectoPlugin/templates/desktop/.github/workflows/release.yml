@@ -1,0 +1,60 @@
+# Publishes the plugin when you push a tag. There is nothing to configure: the
+# token GitHub hands every workflow run is enough, and zip, jq and gh are already
+# on the runner.
+#
+#   # set the new version in public/manifest.json
+#   git tag v1.0.1 && git push --tags
+name: Release
+
+on:
+  push:
+    tags: ["*"]
+
+# Creating a release writes to the repository. Without this the run is refused.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+      - run: npm run build
+
+      # The manifest version is what Necto compares to decide an update is
+      # available, so a tag that disagrees with it ships a release no one is
+      # offered. Stop here rather than publish that.
+      - name: Check the tag against the manifest
+        run: |
+          version=$(jq -r .version dist/manifest.json)
+          tag=${GITHUB_REF_NAME#v}
+          if [ "$version" != "$tag" ]; then
+            echo "public/manifest.json says $version, but the tag is $tag." >&2
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      # A plugin is a folder with manifest.json at its root, zipped. The manifest
+      # rides alongside as well, so Necto can say what this release offers before
+      # anyone downloads it.
+      - name: Package
+        run: |
+          cd dist && zip -qr "../__PROJECT_NAME__-$VERSION.zip" .
+          cd .. && cp dist/manifest.json "__PROJECT_NAME__-$VERSION.manifest.json"
+
+      - name: Publish
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "__PROJECT_NAME__-$VERSION.zip" \
+            "__PROJECT_NAME__-$VERSION.manifest.json" \
+            --title "__DISPLAY_NAME__ $VERSION" \
+            --generate-notes

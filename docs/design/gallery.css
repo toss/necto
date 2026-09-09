@@ -1,0 +1,129 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Only what this page needs to present the system. The system itself is in
+ * WebPackages/Bridge/theme.css and WebPackages/Bridge/components.css.
+ */
+
+body {
+  margin: 0;
+  background: var(--necto-sidebar);
+  color: var(--necto-text);
+  font-family: var(--necto-font);
+  font-size: var(--necto-size-body);
+  line-height: 1.5;
+}
+
+.page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 96px; display: flex; flex-direction: column; gap: var(--necto-space-5); }
+
+h1 { margin: 0 0 var(--necto-space-2); font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+h2 { margin: 0 0 var(--necto-space-1); font-size: 17px; font-weight: 600; }
+h3 { margin: 0 0 var(--necto-space-2); font-size: 13px; font-weight: 600; }
+
+.lede { max-width: 64ch; margin: 0 0 var(--necto-space-3); color: var(--necto-text-secondary); }
+
+a { color: var(--necto-text); text-decoration-color: var(--necto-border-strong); text-underline-offset: 2px; }
+a:hover { text-decoration-color: var(--necto-text); }
+
+.brandline {
+  margin: 0 0 var(--necto-space-2);
+  color: var(--necto-brand);
+  font-family: var(--necto-font-mono);
+  font-size: var(--necto-size-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+code { padding: 1px 4px; border-radius: 3px; background: var(--necto-base-05); font-family: var(--necto-font-mono); font-size: 0.92em; }
+
+.themebar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--necto-space-2) var(--necto-space-3);
+  border-bottom: 1px solid var(--necto-border);
+  background: color-mix(in srgb, var(--necto-sidebar) 88%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.source { color: var(--necto-text-tertiary); font-family: var(--necto-font-mono); font-size: var(--necto-size-caption); }
+
+.switch { display: flex; gap: 2px; padding: 2px; border: 1px solid var(--necto-border); border-radius: var(--necto-radius-control); background: var(--necto-bg); }
+.switch button { height: 24px; padding: 0 10px; border: none; border-radius: 3px; background: none; color: var(--necto-text-tertiary); font-family: var(--necto-font-mono); font-size: var(--necto-size-label); }
+.switch button:hover { color: var(--necto-text); }
+.switch button[aria-pressed="true"] { background: var(--necto-selected); color: var(--necto-text); }
+
+.frame { overflow: hidden; border: 1px solid var(--necto-border-strong); border-radius: var(--necto-radius-panel); background: var(--necto-bg); }
+
+.pair { display: grid; gap: var(--necto-space-3); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+.pin-light, .pin-dark { padding: var(--necto-space-3); border-radius: var(--necto-radius-panel); }
+/* The two ladders shown next to each other, each drawn in its own colours, so the
+   comparison holds whichever theme the page itself is in. */
+.pin-light { background: var(--light-00); color: var(--light-100); }
+.pin-dark { background: var(--dark-05); color: var(--dark-100); }
+/* Hairlines in the card's own ink, so the steps nearest the card background are still
+   countable in both directions. */
+.ramp { display: flex; overflow: hidden; border-radius: var(--necto-radius-control); gap: 1px; background: color-mix(in srgb, currentcolor 30%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, currentcolor 30%, transparent); }
+.ramp span { flex: 1; height: 30px; }
+
+.tokens { display: grid; gap: var(--necto-space-3); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.token-card { padding: var(--necto-space-3); border: 1px solid var(--necto-border); border-radius: var(--necto-radius-panel); background: var(--necto-bg); }
+.token-row { display: flex; align-items: center; gap: var(--necto-space-2); margin-bottom: 6px; font-family: var(--necto-font-mono); font-size: var(--necto-size-label); }
+.token-chip { width: 18px; height: 18px; flex: none; border: 1px solid var(--necto-border); border-radius: 3px; }
+.token-row code { margin-left: auto; background: none; color: var(--necto-text-tertiary); font-size: var(--necto-size-caption); }
+
+.rules { max-width: 70ch; margin: 0; padding-left: 20px; color: var(--necto-text-secondary); }
+.rules li { margin-bottom: var(--necto-space-2); }
+.rules b { color: var(--necto-text); }
+
+
+.req-host { margin-left: var(--necto-space-2); color: var(--necto-text-tertiary); font-size: var(--necto-size-caption); }
+.demo-row { display: flex; align-items: center; gap: var(--necto-space-2); padding: var(--necto-space-3); flex-wrap: wrap; }
+.demo-row + .demo-row { border-top: 1px solid var(--necto-border); }
+.demo-label { width: 84px; flex: none; color: var(--necto-text-tertiary); font-size: var(--necto-size-caption); }
+
+
+.frame.tall { height: 560px; }
+
+/* The window around a plugin. Drawn by the shell in AppKit, so these classes are the
+   gallery's own — a plugin never draws a title bar. */
+.win { display: flex; height: 100%; background: var(--necto-bg); }
+.win > .necto-sidebar { width: 280px; flex: none; padding-top: 0; }
+.win > .necto-app { min-width: 0; flex: 1; }
+/* The native header and the web page meet on the same token. This explicit rule keeps
+   the seam visible in the mock instead of relying on inheritance to happen to match. */
+.win > .necto-app > .win-bar { background: var(--necto-bg); }
+
+/* The title bar is not a row across the window: it is the top of whichever column is
+   leftmost. So the lights ride on the sidebar, and land on the plugin when it closes. */
+.win-bar { display: flex; height: 38px; flex: none; align-items: center; gap: var(--necto-space-3); padding: 0 var(--necto-space-3); }
+.win-bar > * { display: flex; align-items: center; }
+.win-lights { display: flex; gap: 8px; }
+.win-lights i { width: 12px; height: 12px; border-radius: 50%; }
+/* macOS draws these, so they are its colours rather than ours. */
+.win-lights i:nth-child(1) { background: #ff5f57; }
+.win-lights i:nth-child(2) { background: #febc2e; }
+.win-lights i:nth-child(3) { background: #28c840; }
+.win-heading { display: flex; align-items: center; gap: 6px; font-family: var(--necto-font-ui); font-size: var(--necto-size-label); }
+
+.sizes { display: flex; align-items: center; gap: var(--necto-space-2); margin-bottom: var(--necto-space-3); }
+.sizes button { height: 24px; padding: 0 10px; border: 1px solid var(--necto-border-strong); border-radius: var(--necto-radius-control); background: var(--necto-bg); color: var(--necto-text-secondary); font-family: var(--necto-font-mono); font-size: var(--necto-size-label); }
+.sizes button[aria-pressed="true"] { background: var(--necto-selected); color: var(--necto-text); }
+
+/* Settings sits at the foot of the sidebar, away from the things that change. */
+.side-foot { margin-top: auto; padding-top: var(--necto-space-2); border-top: 1px solid var(--necto-border); }
+
+/* An icon reads as part of the name, not as its own column. */
+.named { display: inline-flex; align-items: center; gap: 6px; }
+
+h3.stepped { margin: var(--necto-space-5) 0 var(--necto-space-1); font-size: 14px; }
+.row-actions { display: flex; align-items: center; gap: var(--necto-space-2); justify-content: flex-end; }
+
+@container (max-width: 640px) {
+  .gallery-network-list th:nth-child(n+4),
+  .gallery-network-list td:nth-child(n+4) { display: none; }
+}

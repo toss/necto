@@ -1,0 +1,57 @@
+{
+  "name": "@necto/bridge",
+  "version": "0.1.0",
+  "description": "Typed client for the Necto plugin bridge. Call the operations your plugin declares in its manifest.",
+  "keywords": [
+    "necto",
+    "debugging",
+    "ios",
+    "plugin",
+    "bridge"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toss/toss-necto.git",
+    "directory": "WebPackages/Bridge"
+  },
+  "homepage": "https://github.com/toss/toss-necto/tree/main/WebPackages/Bridge#readme",
+  "bugs": "https://github.com/toss/toss-necto/issues",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./theme.css": "./theme.css",
+    "./components.css": "./components.css"
+  },
+  "files": [
+    "dist",
+    "theme.css",
+    "components.css",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "prepack": "yarn build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.7"
+  }
+}

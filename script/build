@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# Build everything the app needs, in dependency order.
+#
+# Built-in plugins are built before the app because their output ships inside the
+# app bundle.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+run_xcodebuild() {
+  local pattern="$1"
+  shift
+
+  set +e
+  "$@" | grep -E "$pattern"
+  local build_status="${PIPESTATUS[0]}"
+  set -e
+  return "$build_status"
+}
+
+echo "==> web packages"
+yarn install --immutable
+yarn build
+
+echo
+echo "==> swift packages"
+swift build
+swift build --package-path NectoMac
+
+echo
+echo "==> app"
+run_xcodebuild "error:|warning:|BUILD" xcodebuild \
+  -project Necto.xcodeproj \
+  -scheme Necto \
+  -configuration Debug \
+  -destination 'platform=macOS' \
+  build
+
+# ExampleApp is the only thing that compiles against the SDK the way an app would, so
+# a change that breaks adopting it is invisible until this runs. It needs a booted
+# simulator; without one, say so rather than passing quietly.
+echo
+echo "==> ExampleApp"
+SIM_ID="$(xcrun simctl list devices booted | awk -F '[()]' '/Booted/{print $2; exit}')"
+if [ -n "$SIM_ID" ]; then
+  run_xcodebuild "error:|BUILD" xcodebuild \
+    -project Necto.xcodeproj \
+    -scheme ExampleApp \
+    -configuration Debug \
+    -destination "id=$SIM_ID" \
+    -derivedDataPath Build \
+    build
+else
+  echo "SKIP: no booted simulator, so the SDK was not compiled against an app."
+fi
+
+echo
+echo "built: Build/Products/Debug/Necto.app"

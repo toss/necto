@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "id": "performance-monitor",
+  "name": "Performance",
+  "description": "What the app is spending, over time",
+  "version": "0.2.0",
+  "author": "Necto",
+  "icon": {
+    "systemName": "chart.line.uptrend.xyaxis"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "performance.metrics",
+      "title": "Metrics",
+      "description": "What this app measures, and its budgets",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.performance.metrics",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "budget": {
+                  "type": "number"
+                },
+                "budgetKind": {
+                  "type": "string",
+                  "enum": [
+                    "atMost",
+                    "atLeast"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "unit"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "metrics"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "performance.series",
+      "title": "Series",
+      "description": "Readings over time",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.performance.series",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "metricID": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5000
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "metricID": {
+                  "type": "string"
+                },
+                "samples": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "at": {
+                        "type": "number"
+                      },
+                      "value": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "at",
+                      "value"
+                    ],
+                    "additionalProperties": true
+                  }
+                },
+                "latest": {},
+                "isOverBudget": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "metricID",
+                "samples",
+                "latest",
+                "isOverBudget"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "series"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "performance.observe",
+      "title": "Watch readings",
+      "description": "Readings as they arrive",
+      "kind": "stream",
+      "binding": {
+        "name": "necto.device.performance.observe",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "interval": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 60
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "metricID": {
+            "type": "string"
+          },
+          "sample": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "number"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "at",
+              "value"
+            ],
+            "additionalProperties": true
+          },
+          "isOverBudget": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "metricID",
+          "sample",
+          "isOverBudget"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "performance.snapshot",
+      "title": "Process snapshot",
+      "description": "CPU, memory, frame rate, thread count and thermal state at this moment",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.performance.snapshot",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "type": "object",
+            "properties": {
+              "cpu": { "type": "number" },
+              "memoryMB": { "type": "number" },
+              "fps": { "type": "number" },
+              "threads": { "type": "number" },
+              "residentMemoryMB": { "type": "number" },
+              "compressedMemoryMB": { "type": "number" },
+              "thermalState": { "type": "string" },
+              "timestamp": { "type": "number" }
+            },
+            "required": [
+              "cpu",
+              "memoryMB",
+              "fps",
+              "threads",
+              "residentMemoryMB",
+              "compressedMemoryMB",
+              "thermalState",
+              "timestamp"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": ["snapshot"],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "performance.memory",
+      "title": "Memory detail",
+      "description": "The process memory breakdown reported by the operating system",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.performance.memory",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "memory": {
+            "type": "object",
+            "properties": {
+              "available": { "type": "boolean" },
+              "physicalFootprintMB": { "type": "number" },
+              "residentSizeMB": { "type": "number" },
+              "virtualSizeMB": { "type": "number" },
+              "compressedMB": { "type": "number" }
+            },
+            "required": ["available"],
+            "additionalProperties": true
+          }
+        },
+        "required": ["memory"],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    }
+  ]
+}

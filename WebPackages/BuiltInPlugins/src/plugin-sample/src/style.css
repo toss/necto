@@ -1,0 +1,19 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Nothing but the two shared stylesheets: this plugin has no widget the system does
+ * not already have, so it has no CSS of its own.
+ */
+
+@import "@necto/bridge/theme.css";
+@import "@necto/bridge/components.css";
+
+html,
+body,
+.necto-app {
+  height: 100%;
+}
+
+.necto-body {
+  padding: var(--necto-space-3);
+}

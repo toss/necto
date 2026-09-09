@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:toss-necto}",
+            "name": "Debug necto-cli",
+            "target": "necto-cli",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug necto-cli"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:toss-necto}",
+            "name": "Release necto-cli",
+            "target": "necto-cli",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release necto-cli"
+        }
+    ]
+}

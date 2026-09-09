@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Necto design · updater</title>
+    <link rel="stylesheet" href="../../WebPackages/Bridge/theme.css" />
+    <link rel="stylesheet" href="../../WebPackages/Bridge/components.css" />
+    <link rel="stylesheet" href="./gallery.css" />
+    <style>
+      .mock {
+        display: flex;
+        border: 1px solid var(--necto-border);
+        border-radius: var(--necto-radius-control);
+        overflow: hidden;
+        min-height: 300px;
+        font-family: var(--necto-font-mono);
+        font-size: 12px;
+        color: var(--necto-text);
+      }
+      .mock-sidebar {
+        width: 220px;
+        background: var(--necto-sidebar);
+        border-right: 1px solid var(--necto-border);
+        display: flex;
+        flex-direction: column;
+        padding: 10px 0 0;
+      }
+      .mock-group { padding: 4px 12px; color: var(--necto-text-tertiary); font-size: 11px; }
+      .mock-row { padding: 5px 12px; color: var(--necto-text-secondary); }
+      .mock-foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-top: 1px solid var(--necto-border);
+      }
+      .mock-foot .spacer { flex: 1; }
+      .mock-detail { flex: 1; padding: 18px 20px; background: var(--necto-base-00, transparent); }
+      .about-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 0;
+        border-top: 1px solid var(--necto-border);
+        border-bottom: 1px solid var(--necto-border);
+      }
+      .about-row .label { flex: none; width: 70px; }
+      .about-row .hint { flex: 1; }
+      .scenarios { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    </style>
+  </head>
+  <body>
+    <div class="themebar">
+      <span class="source">rendered from WebPackages/Bridge/theme.css + components.css</span>
+      <div class="switch" role="group" aria-label="Theme">
+        <button type="button" data-set="light" aria-pressed="false">light</button>
+        <button type="button" data-set="dark" aria-pressed="false">dark</button>
+        <button type="button" data-set="system" aria-pressed="true">system</button>
+      </div>
+    </div>
+
+    <div class="page">
+      <header>
+        <p class="brandline">Necto · design proposal</p>
+        <h1>The update lives where the version lives</h1>
+        <p class="lede">
+          No new screen. When a release is out, an Update button appears beside
+          Settings at the foot of the sidebar — one click downloads, verifies
+          against the published hash, installs and relaunches. The About row in
+          Settings mirrors the same state with the detail.
+        </p>
+      </header>
+
+      <section>
+        <div class="mock">
+          <div class="mock-sidebar">
+            <div class="mock-group">Device Plugins</div>
+            <div class="mock-row">Events</div>
+            <div class="mock-row">Network</div>
+            <div class="spacer" style="flex: 1"></div>
+            <div class="mock-foot">
+              <span>Settings</span>
+              <span class="spacer"></span>
+              <span id="slot"></span>
+            </div>
+          </div>
+          <div class="mock-detail">
+            <p class="necto-caption" style="margin: 0 0 8px">Settings › About</p>
+            <div class="about-row">
+              <span class="label">Necto</span>
+              <span class="hint necto-caption" id="hint"></span>
+              <span id="ver" style="color: var(--necto-text-secondary)"></span>
+            </div>
+            <p class="necto-caption" style="margin-top: 10px">
+              One state, two places: the sidebar button acts, the About row explains.
+            </p>
+          </div>
+        </div>
+
+        <div class="scenarios" id="scenarios"></div>
+      </section>
+    </div>
+
+    <script src="./gallery.js"></script>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const set = (slot, hint, ver) => {
+        $("slot").innerHTML = slot;
+        $("hint").textContent = hint;
+        $("ver").textContent = ver;
+        const up = $("up");
+        if (up) up.addEventListener("click", play);
+      };
+      const caption = (text) => `<span class="necto-caption">${text}</span>`;
+      const states = {
+        "최신": () => set("", "Checked a moment ago — up to date.", "0.3.3"),
+        "업데이트 있음": () =>
+          set(
+            '<button id="up" type="button" class="necto-button necto-button-primary">Update</button>',
+            "0.3.3 is out — one click installs and relaunches.",
+            "0.3.2",
+          ),
+        "/Applications 밖": () =>
+          set(
+            "",
+            "0.3.3 is out, but Necto is not running from /Applications — a Show releases button opens the page.",
+            "0.3.2",
+          ),
+        "해시 불일치": () =>
+          set(
+            '<button id="up" type="button" class="necto-button">Retry</button>',
+            "The download did not match its published hash. Nothing was installed.",
+            "0.3.2",
+          ),
+      };
+      function play() {
+        set(caption("Downloading…"), "Downloading 0.3.3… (1.7 MB)", "0.3.2");
+        setTimeout(() => set(caption("Verifying…"), "Verifying against the published hash…", "0.3.2"), 900);
+        setTimeout(() => set(caption("Installing…"), "Installing into /Applications…", "0.3.2"), 1700);
+        setTimeout(() => set(caption("Relaunching…"), "Updated. Relaunching…", "0.3.3"), 2500);
+        setTimeout(states["최신"], 3400);
+      }
+      for (const [label, apply] of Object.entries(states)) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "necto-button";
+        button.textContent = label;
+        button.addEventListener("click", apply);
+        $("scenarios").append(button);
+      }
+      states["업데이트 있음"]();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+#
+# Cut a release: verify, build the app and public web packages, tag, and publish
+# one GitHub release with every artifact attached.
+#
+#   script/release 0.4.2            # ad-hoc sign, tag and publish
+#   script/release 0.4.2 --dry-run  # build locally without publishing
+#
+# Both modes use ad-hoc signing without a company certificate or notarization.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+run_xcodebuild() {
+  local pattern="$1"
+  shift
+
+  set +e
+  "$@" | grep -E "$pattern"
+  local build_status="${PIPESTATUS[0]}"
+  set -e
+  return "$build_status"
+}
+
+VERSION="${1:-}"
+DRY_RUN="${2:-}"
+
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
+   [[ -n "$DRY_RUN" && "$DRY_RUN" != "--dry-run" ]] || [[ $# -gt 2 ]]; then
+  echo "Usage: script/release <version> [--dry-run]   e.g. script/release 0.4.2" >&2
+  exit 1
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "The working tree must be clean before releasing." >&2
+  exit 1
+fi
+
+BRANCH="$(git branch --show-current)"
+if [ "$BRANCH" != "main" ] && [ "$DRY_RUN" != "--dry-run" ]; then
+  echo "Releases are cut from main. This is '$BRANCH'." >&2
+  exit 1
+fi
+
+if git rev-parse "$VERSION" >/dev/null 2>&1; then
+  echo "Tag $VERSION already exists." >&2
+  exit 1
+fi
+
+echo "==> tests"
+script/test
+
+echo
+echo "==> web packages"
+yarn build
+
+echo
+echo "==> app (Release)"
+run_xcodebuild "error:|BUILD" xcodebuild \
+  -project Necto.xcodeproj \
+  -scheme Necto \
+  -configuration Release \
+  -destination 'platform=macOS' \
+  ONLY_ACTIVE_ARCH=NO \
+  MARKETING_VERSION="$VERSION" \
+  build
+
+BUILD_DIR="$(
+  xcodebuild \
+    -project Necto.xcodeproj \
+    -scheme Necto \
+    -configuration Release \
+    -destination 'platform=macOS' \
+    MARKETING_VERSION="$VERSION" \
+    -showBuildSettings 2>/dev/null |
+    awk -F ' = ' '/^[[:space:]]*TARGET_BUILD_DIR = / { print $2; exit }'
+)"
+APP="$BUILD_DIR/Necto.app"
+if [ ! -d "$APP" ]; then
+  echo "No app at $APP — the Release build did not produce one." >&2
+  exit 1
+fi
+BUILT_VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$APP/Contents/Info.plist")"
+if [[ "$BUILT_VERSION" != "$VERSION" ]]; then
+  echo "Built app version '$BUILT_VERSION' does not match release '$VERSION'." >&2
+  exit 1
+fi
+
+echo
+echo "==> command line tool"
+# Copy before signing so the CLI is included in the bundle's signature.
+swift build --package-path NectoMac -c release --arch arm64 --arch x86_64 --product necto-cli >/dev/null
+cp "$(swift build --package-path NectoMac -c release --arch arm64 --arch x86_64 --product necto-cli --show-bin-path)/necto-cli" \
+  "$APP/Contents/MacOS/necto-cli"
+
+node script/licenses.mjs "$APP"
+
+codesign --force --sign - --timestamp=none --options runtime "$APP/Contents/MacOS/necto-cli"
+codesign --force --sign - --timestamp=none --options runtime --preserve-metadata=entitlements "$APP"
+codesign --verify --strict "$APP/Contents/MacOS/necto-cli"
+codesign --verify --deep --strict --all-architectures "$APP"
+
+ARCHIVE="Build/Necto-$VERSION.dmg"
+rm -f "$ARCHIVE"
+STAGE="$(mktemp -d)"
+trap 'rm -rf -- "$STAGE"' EXIT
+cp -R "$APP" "$STAGE/"
+cp "$APP/Contents/Resources/THIRD_PARTY_NOTICES.txt" "$STAGE/THIRD_PARTY_NOTICES.txt"
+ln -s /Applications "$STAGE/Applications"
+hdiutil create -volname "Necto $VERSION" -srcfolder "$STAGE" -ov -format UDZO -quiet "$ARCHIVE"
+rm -rf "$STAGE"
+
+echo
+echo "==> public web packages"
+script/pack-web-package.mjs WebPackages/Bridge "$VERSION" Build >/dev/null
+script/pack-web-package.mjs WebPackages/CreateNectoPlugin "$VERSION" Build >/dev/null
+BRIDGE_ARCHIVE="Build/necto-bridge-$VERSION.tgz"
+SCAFFOLD_ARCHIVE="Build/create-necto-plugin-$VERSION.tgz"
+
+echo
+echo "archived: $ARCHIVE ($(du -h "$ARCHIVE" | cut -f1 | tr -d ' '))"
+echo "archived: $BRIDGE_ARCHIVE"
+echo "archived: $SCAFFOLD_ARCHIVE"
+
+if [ "$DRY_RUN" == "--dry-run" ]; then
+  echo "dry run: no tag, no push, no release."
+  exit 0
+fi
+
+echo
+echo "==> tag and release"
+git tag "$VERSION"
+git push origin "$VERSION"
+gh release create "$VERSION" "$ARCHIVE" "$BRIDGE_ARCHIVE" "$SCAFFOLD_ARCHIVE" \
+  --title "Necto $VERSION" \
+  --generate-notes
+
+echo
+echo "released: $VERSION"

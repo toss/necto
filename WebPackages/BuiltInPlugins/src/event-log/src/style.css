@@ -1,0 +1,56 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Only the column widths. Everything else comes from @necto/bridge/components.css,
+ * so the log looks like part of the app rather than like a page embedded in it.
+ */
+
+@import "@necto/bridge/theme.css";
+@import "@necto/bridge/components.css";
+
+html,
+body,
+.necto-app {
+  height: 100%;
+}
+
+.col-time { width: 116px; }
+.col-level { width: 84px; }
+.col-tag { width: 120px; }
+
+.event-search { max-width: 360px; }
+.event-level-filter { max-width: 132px; flex: 0 0 132px; }
+.event-category-filter { max-width: 180px; flex: 0 1 180px; }
+
+.necto-table { table-layout: fixed; }
+
+.event-row td { vertical-align: middle; }
+
+.event-message-cell { min-width: 0; }
+
+.event-message {
+  display: block;
+  overflow: hidden;
+  color: var(--necto-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-detail-content {
+  display: grid;
+  gap: var(--necto-space-3);
+}
+
+.event-detail-section {
+  min-width: 0;
+}
+
+.event-detail-message {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.event-detail-expand {
+  margin-top: var(--necto-space-2);
+}

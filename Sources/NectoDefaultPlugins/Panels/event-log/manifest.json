@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 1,
+  "id": "event-log",
+  "name": "Events",
+  "description": "What the app did, newest first",
+  "version": "0.4.1",
+  "author": "Necto",
+  "icon": {
+    "systemName": "text.alignleft"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "events.list",
+      "title": "List events",
+      "description": "Recent events, newest first",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.events.list",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5000
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "debug",
+              "info",
+              "warn",
+              "error"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "number"
+                },
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "debug",
+                    "info",
+                    "warn",
+                    "error"
+                  ]
+                },
+                "tag": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "hasDetail": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "at",
+                "level",
+                "tag",
+                "message",
+                "hasDetail"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "events.detail",
+      "title": "Event detail",
+      "description": "Everything recorded about one event",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.events.detail",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "eventID": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventID"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "at": {
+                "type": "number"
+              },
+              "level": {
+                "type": "string",
+                "enum": [
+                  "debug",
+                  "info",
+                  "warn",
+                  "error"
+                ]
+              },
+              "tag": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "hasDetail": {
+                "type": "boolean"
+              },
+              "detail": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "at",
+              "level",
+              "tag",
+              "message",
+              "hasDetail",
+              "detail"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "events.observe",
+      "title": "Watch events",
+      "description": "Events as they happen",
+      "kind": "stream",
+      "binding": {
+        "name": "necto.device.events.observe",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "at": {
+                "type": "number"
+              },
+              "level": {
+                "type": "string",
+                "enum": [
+                  "debug",
+                  "info",
+                  "warn",
+                  "error"
+                ]
+              },
+              "tag": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "hasDetail": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "at",
+              "level",
+              "tag",
+              "message",
+              "hasDetail"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "events.clear",
+      "title": "Clear events",
+      "description": "Empties the log kept in the app",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.events.clear",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "cleared": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cleared"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    }
+  ]
+}

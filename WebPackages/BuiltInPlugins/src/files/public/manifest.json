@@ -1,0 +1,356 @@
+{
+  "schemaVersion": 1,
+  "id": "files",
+  "name": "Files",
+  "description": "The app's own container",
+  "version": "0.1.0",
+  "author": "Necto",
+  "icon": {
+    "systemName": "folder"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "files.roots",
+      "title": "List roots",
+      "description": "The places this app offers to browse",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.files.roots",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "roots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "roots"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "files.list",
+      "title": "List a directory",
+      "description": "What is in one directory, directories first",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.files.list",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "isDirectory": {
+                  "type": "boolean"
+                },
+                "size": {
+                  "type": "number"
+                },
+                "itemCount": {
+                  "type": "number"
+                },
+                "modifiedAt": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "name",
+                "isDirectory"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "files.preview",
+      "title": "Preview a file",
+      "description": "The head of a text file, a whole image, or a description of a binary one",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.files.preview",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "image",
+                  "binary"
+                ]
+              },
+              "size": {
+                "type": "number"
+              },
+              "modifiedAt": {
+                "type": "number"
+              },
+              "text": {
+                "type": "string"
+              },
+              "isTruncated": {
+                "type": "boolean"
+              },
+              "mediaType": {
+                "type": "string"
+              },
+              "base64": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "kind",
+              "size"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "files.info",
+      "title": "File information",
+      "description": "Metadata for one file or directory",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.files.info",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "isDirectory": {
+                "type": "boolean"
+              },
+              "size": {
+                "type": "number"
+              },
+              "itemCount": {
+                "type": "number"
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "modifiedAt": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "name",
+              "isDirectory"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "files.write",
+      "title": "Write a text file",
+      "description": "Atomically replaces one UTF-8 text file in an offered root",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.files.write",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root",
+          "path",
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "written": {
+            "type": "boolean"
+          },
+          "size": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "written",
+          "size"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "files.delete",
+      "title": "Delete",
+      "description": "Removes a file or directory from the running app",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.files.delete",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "root",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "removed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 5000
+    }
+  ]
+}

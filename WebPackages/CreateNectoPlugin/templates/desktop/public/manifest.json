@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "__PLUGIN_ID__",
+  "name": "__DISPLAY_NAME__",
+  "description": "A desktop plugin created with create-necto-plugin",
+  "version": "0.1.0",
+  "author": "Your Name",
+  "icon": {
+    "systemName": "puzzlepiece.extension"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "host.info",
+      "title": "Host info",
+      "description": "Reads the Necto and protocol versions",
+      "kind": "once",
+      "binding": {
+        "name": "necto.desktop.info",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "nectoVersion": {
+            "type": "string"
+          },
+          "protocolVersion": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "nectoVersion",
+          "protocolVersion"
+        ],
+        "additionalProperties": true
+      },
+      "timeoutMs": 3000
+    }
+  ]
+}

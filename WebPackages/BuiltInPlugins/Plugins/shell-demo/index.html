@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Shell Demo</title>
+    <script type="module" crossorigin src="./assets/index.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index.css">
+  </head>
+  <body>
+    <div class="necto-app">
+      <div class="necto-toolbar">
+        <span class="necto-caption" data-i18n="Desktop Shell Demo">Desktop Shell Demo</span>
+        <span id="bridge-status" class="necto-status necto-status-idle" data-i18n="Waiting">Waiting</span>
+      </div>
+
+      <div class="necto-body">
+        <h2 class="necto-section-title" data-i18n="Exact command">Exact command</h2>
+        <p class="necto-caption" data-i18n="Command approval compares this exact string. Change one character to make it a different command.">
+          Command approval compares this exact string. Change one character to make it
+          a different command.
+        </p>
+        <div class="necto-toolbar-group">
+          <input
+            class="necto-field"
+            id="shell-command"
+            aria-label="Shell command"
+            value="/usr/bin/printf 'Hello from Necto Shell Demo\n'"
+          />
+        </div>
+        <div class="necto-toolbar-group">
+          <button type="button" class="necto-button" id="request-access" data-i18n="Request approval">Request approval</button>
+          <button type="button" class="necto-button necto-button-danger" id="request-full-access" data-i18n="Request Full Access">Request Full Access</button>
+          <button type="button" class="necto-button necto-button-primary" id="run-command" data-i18n="Run command">Run command</button>
+          <button type="button" class="necto-button necto-button-quiet" id="run-unapproved" data-i18n="Try unapproved command">Try unapproved command</button>
+        </div>
+
+        <h2 class="necto-section-title" data-i18n="Last result">Last result</h2>
+        <dl class="necto-pairs" id="result">
+          <div><dt data-i18n="Not run yet">Not run yet</dt><dd></dd></div>
+        </dl>
+
+        <div id="failure"></div>
+
+        <h2 class="necto-section-title" data-i18n="Verification flow">Verification flow</h2>
+        <ol class="verification necto-caption">
+          <li data-i18n="Run first to see PERMISSION_DENIED in Protected mode.">Run first to see PERMISSION_DENIED in Protected mode.</li>
+          <li data-i18n="Request approval and accept the native Necto dialog.">Request approval and accept the native Necto dialog.</li>
+          <li data-i18n="Run again to see stdout and exitCode 0.">Run again to see stdout and exitCode 0.</li>
+          <li data-i18n="Try the unapproved command to prove exact matching.">Try the unapproved command to prove exact matching.</li>
+        </ol>
+      </div>
+    </div>
+
+  </body>
+</html>

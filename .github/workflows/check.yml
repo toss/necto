@@ -1,0 +1,68 @@
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift:
+    if: github.server_url == 'https://github.com'
+    runs-on: macos-15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        xcode: ["16", "26.3"]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: swift --version
+      - run: script/test swift
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - run: script/test native
+      - run: script/check-sdk-generic.sh
+      - name: Build the Mac app for both architectures
+        run: >-
+          xcodebuild -project Necto.xcodeproj -scheme Necto
+          -destination 'generic/platform=macOS' ONLY_ACTIVE_ARCH=NO
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Build the public example
+        run: >-
+          xcodebuild -project Necto.xcodeproj -scheme ExampleApp
+          -destination 'generic/platform=iOS Simulator' ONLY_ACTIVE_ARCH=NO
+          CODE_SIGNING_ALLOWED=NO build
+
+  web:
+    if: github.server_url == 'https://github.com'
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.12.0
+      - name: Install dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+      - run: yarn build
+      - run: script/test web
+      - run: script/test layout
+      - run: script/test release
+      - run: yarn docs:build

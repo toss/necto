@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Performance</title>
+    <script type="module" crossorigin src="./assets/index.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index.css">
+  </head>
+  <body>
+    <div class="necto-app">
+      <div class="necto-toolbar">
+        <div class="necto-tabs" style="border: 0; padding: 0">
+          <button type="button" class="necto-tab" data-window="60">1 m</button>
+          <button type="button" class="necto-tab" data-window="300" aria-selected="true">5 m</button>
+          <button type="button" class="necto-tab" data-window="3600">1 h</button>
+        </div>
+        <div id="process-controls" style="margin-left: auto; display: flex; gap: var(--necto-space-2); align-items: center"></div>
+      </div>
+
+      <div class="necto-body" id="body"></div>
+    </div>
+
+  </body>
+</html>

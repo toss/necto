@@ -1,0 +1,29 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ */
+
+@import "@necto/bridge/theme.css";
+@import "@necto/bridge/components.css";
+
+html,
+body,
+.necto-app {
+  height: 100%;
+}
+
+.necto-body {
+  padding: var(--necto-space-3);
+}
+
+#failure {
+  margin-top: var(--necto-space-3);
+}
+
+.verification {
+  margin: 0;
+  padding-left: var(--necto-space-5);
+}
+
+.verification li + li {
+  margin-top: var(--necto-space-1);
+}

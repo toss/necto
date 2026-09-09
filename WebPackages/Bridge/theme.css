@@ -1,0 +1,197 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Necto design tokens. docs/design.md explains the reasoning; this file is
+ * the values. The host owns appearance, so a plugin that styles itself from these
+ * follows the window around it without any theme code of its own.
+ *
+ * Four layers: foundation, semantic, component, state. A plugin uses the semantic and
+ * component layers and never hardcodes a colour.
+ */
+
+:root {
+  /* Both ladders live here, once. The theme rules below only choose between them,
+     so a value can never be updated in one theme and left stale in the other. */
+  --light-00: #ffffff;
+  --light-05: #fcfcfc;
+  --light-10: #f6f7f6;
+  --light-20: #eff1f0;
+  --light-30: #e5e5e5;
+  --light-40: #cfcfc9;
+  --light-50: #adada7;
+  --light-60: #666662;
+  --light-70: #4f4f4b;
+  --light-80: #343432;
+  --light-100: #141413;
+  --light-brand: #ac5635;
+  --light-success: #1a6f3e;
+  --light-warning: #8a5a00;
+  --light-danger: #b3261e;
+  --light-info: #2b5fd9;
+
+  /* Lifted off black. A debugger is read for hours, and near-black behind light text
+     is the contrast that makes strokes bloom. */
+  --dark-00: #1c1c1b;
+  --dark-05: #161615;
+  --dark-10: #232322;
+  --dark-20: #2b2b29;
+  --dark-30: #333331;
+  --dark-40: #43433f;
+  --dark-50: #5c5c57;
+  --dark-60: #94948e;
+  --dark-70: #b4b4ad;
+  --dark-80: #d3d3cc;
+  --dark-100: #eeeeea;
+  --dark-brand: #d1886b;
+  --dark-success: #4ac26b;
+  --dark-warning: #e0a52e;
+  --dark-danger: #ff6b60;
+  --dark-info: #6cb0ff;
+
+}
+
+/* Foundation ------------------------------------------------------ */
+/* Theming happens here and nowhere else: three rules that pick a ladder. Everything
+   below derives from the result, so the themes cannot drift apart. */
+:root {
+  --necto-base-00: var(--light-00);
+  --necto-base-05: var(--light-05);
+  --necto-base-10: var(--light-10);
+  --necto-base-20: var(--light-20);
+  --necto-base-30: var(--light-30);
+  --necto-base-40: var(--light-40);
+  --necto-base-50: var(--light-50);
+  --necto-base-60: var(--light-60);
+  --necto-base-70: var(--light-70);
+  --necto-base-80: var(--light-80);
+  --necto-base-100: var(--light-100);
+
+  --necto-brand: var(--light-brand);
+  --necto-surface: var(--necto-base-05);
+  color-scheme: light;
+
+  --necto-success: var(--light-success);
+  --necto-warning: var(--light-warning);
+  --necto-danger: var(--light-danger);
+  --necto-info: var(--light-info);
+}
+
+/* The host decides. `data-theme` is how the Mac app pins a window; the media query is
+   the fallback when it has not said anything yet. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --necto-base-00: var(--dark-00);
+    --necto-base-05: var(--dark-05);
+    --necto-base-10: var(--dark-10);
+    --necto-base-20: var(--dark-20);
+    --necto-base-30: var(--dark-30);
+    --necto-base-40: var(--dark-40);
+    --necto-base-50: var(--dark-50);
+    --necto-base-60: var(--dark-60);
+    --necto-base-70: var(--dark-70);
+    --necto-base-80: var(--dark-80);
+    --necto-base-100: var(--dark-100);
+
+    --necto-brand: var(--dark-brand);
+    /* Surfaces come forward by getting lighter, the opposite of light mode. */
+    --necto-surface: var(--necto-base-10);
+    /* Scrollbars and form controls are painted by the UA from this, not from our
+       colours. Left at `light` they stay bright in a dark window. */
+    color-scheme: dark;
+
+    --necto-success: var(--dark-success);
+    --necto-warning: var(--dark-warning);
+    --necto-danger: var(--dark-danger);
+    --necto-info: var(--dark-info);
+  }
+}
+
+:root[data-theme="dark"] {
+  --necto-base-00: var(--dark-00);
+  --necto-base-05: var(--dark-05);
+  --necto-base-10: var(--dark-10);
+  --necto-base-20: var(--dark-20);
+  --necto-base-30: var(--dark-30);
+  --necto-base-40: var(--dark-40);
+  --necto-base-50: var(--dark-50);
+  --necto-base-60: var(--dark-60);
+  --necto-base-70: var(--dark-70);
+  --necto-base-80: var(--dark-80);
+  --necto-base-100: var(--dark-100);
+
+  --necto-brand: var(--dark-brand);
+  --necto-surface: var(--necto-base-10);
+  color-scheme: dark;
+
+  --necto-success: var(--dark-success);
+  --necto-warning: var(--dark-warning);
+  --necto-danger: var(--dark-danger);
+  --necto-info: var(--dark-info);
+}
+
+:root {
+  /* Semantic ------------------------------------------------------ */
+  --necto-bg: var(--necto-base-00);
+  --necto-sidebar: var(--necto-base-05);
+  --necto-hover: var(--necto-base-10);
+  --necto-selected: var(--necto-base-20);
+  --necto-border: var(--necto-base-30);
+  --necto-border-strong: var(--necto-base-40);
+  --necto-text: var(--necto-base-100);
+  --necto-text-secondary: var(--necto-base-70);
+  --necto-text-tertiary: var(--necto-base-60);
+
+  /* Selection and focus are ink. In a debugging tool a coloured thing should mean
+     something happened, and nothing else. */
+  --necto-accent: var(--necto-base-100);
+
+  --necto-font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --necto-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --necto-font-ui: var(--necto-font);
+
+  --necto-font-scale: 1;
+  --necto-size-title: calc(17px * var(--necto-font-scale));
+  --necto-size-body: calc(13px * var(--necto-font-scale));
+  --necto-size-label: calc(12px * var(--necto-font-scale));
+  --necto-size-caption: calc(11px * var(--necto-font-scale));
+
+  --necto-space-1: 4px;
+  --necto-space-2: 8px;
+  --necto-space-3: 12px;
+  --necto-space-4: 16px;
+  --necto-space-5: 24px;
+
+  /* Component ----------------------------------------------------- */
+  --necto-row-height: calc(26px * var(--necto-font-scale));
+  --necto-header-height: calc(26px * var(--necto-font-scale));
+  --necto-toolbar-height: calc(38px * var(--necto-font-scale));
+  --necto-field-height: calc(24px * var(--necto-font-scale));
+  --necto-button-height: calc(24px * var(--necto-font-scale));
+  --necto-radius-control: 4px;
+  --necto-radius-panel: 10px;
+
+  /* State --------------------------------------------------------- */
+  --necto-focus-ring: 0 0 0 3px color-mix(in srgb, var(--necto-accent) 18%, transparent);
+  --necto-disabled-opacity: 0.45;
+}
+
+/* Base ------------------------------------------------------------ */
+/* Enough that a plugin which imports nothing else already sits in the window
+   correctly. Deliberately no `-webkit-font-smoothing`: it thins strokes that AppKit
+   does not thin, and it is the reason plugins used to read as lighter than the shell
+   beside them. */
+body {
+  margin: 0;
+  background: var(--necto-bg);
+  color: var(--necto-text);
+  font-family: var(--necto-font);
+  font-size: var(--necto-size-body);
+  line-height: 1.5;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--necto-font-mono);
+}

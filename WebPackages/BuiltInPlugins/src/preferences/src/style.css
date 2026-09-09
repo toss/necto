@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Only what is particular to this plugin. Everything structural comes from
+ * @necto/bridge/components.css, so the panel looks like part of the app rather than
+ * like a page embedded in it.
+ */
+
+@import "@necto/bridge/theme.css";
+@import "@necto/bridge/components.css";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+#root > .necto-app {
+  height: 100%;
+}
+
+/* The pane needs no box of its own; the aside inside it is the whole thing. */
+.detail-slot {
+  display: contents;
+}

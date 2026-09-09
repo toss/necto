@@ -1,0 +1,61 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Only what is particular to this plugin. Everything structural comes from
+ * @necto/bridge/components.css, so the panel looks like part of the app rather than
+ * like a page embedded in it.
+ */
+
+@import "@necto/bridge/theme.css";
+@import "@necto/bridge/components.css";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+#root > .necto-app {
+  height: 100%;
+}
+
+/* The pane needs no box of its own; the aside inside it is the whole thing. */
+.detail-slot {
+  display: contents;
+}
+
+.file-edit-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-edit-body > :not(.necto-json-editor) {
+  flex-shrink: 0;
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--necto-space-2);
+  margin-top: var(--necto-space-2);
+  align-items: center;
+}
+
+/*
+ * An image preview is bounded by the detail pane, never by the picture: a 3x device
+ * screenshot must not push the pane wider than the panel.
+ */
+.file-image-frame {
+  display: flex;
+  justify-content: center;
+  padding: var(--necto-space-2);
+  border: 1px solid var(--necto-border);
+  border-radius: var(--necto-radius-panel);
+  background: var(--necto-surface);
+  overflow: auto;
+}
+
+.file-image {
+  max-width: 100%;
+  height: auto;
+}
