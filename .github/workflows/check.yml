@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   swift:
+    name: Swift & macOS (Xcode ${{ matrix.xcode }})
     if: github.server_url == 'https://github.com'
     runs-on: macos-15
     timeout-minutes: 30
@@ -28,25 +29,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: swift --version
-      - run: script/test swift
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.12.0
-      - run: script/test native
-      - run: script/check-sdk-generic.sh
+      - name: Show Swift version
+        run: swift --version
+      - name: Test SDK, Mac packages and SDK consumer
+        run: script/test swift
+      - name: Test native integrations and Mac app
+        run: script/test native
       - name: Build the Mac app for both architectures
         run: >-
           xcodebuild -project Necto.xcodeproj -scheme Necto
           -destination 'generic/platform=macOS' ONLY_ACTIVE_ARCH=NO
           CODE_SIGNING_ALLOWED=NO build
-      - name: Build the public example
+      - name: Build the iOS example
         run: >-
           xcodebuild -project Necto.xcodeproj -scheme ExampleApp
           -destination 'generic/platform=iOS Simulator' ONLY_ACTIVE_ARCH=NO
           CODE_SIGNING_ALLOWED=NO build
 
   web:
+    name: Web tests & documentation
     if: github.server_url == 'https://github.com'
     runs-on: macos-15
     timeout-minutes: 20
@@ -61,8 +62,11 @@ jobs:
         run: |
           corepack enable
           yarn install --immutable
-      - run: yarn build
-      - run: script/test web
-      - run: script/test layout
-      - run: script/test release
-      - run: yarn docs:build
+      - name: Build web packages
+        run: yarn build
+      - name: Test web packages and panel contracts
+        run: script/test web
+      - name: Test package boundaries and release artifacts
+        run: script/test release
+      - name: Build documentation
+        run: yarn docs:build

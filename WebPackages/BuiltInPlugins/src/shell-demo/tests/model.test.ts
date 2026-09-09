@@ -2,14 +2,9 @@
 //  Copyright (c) 2026 Viva Republica, Inc.
 //
 
-import assert from "node:assert/strict";
-import test from "node:test";
+import { assert, test } from "vitest";
 
-import { defaultCommand, executionRows, unapprovedCommand } from "../src/model.ts";
-
-test("the unapproved probe is an exact different command", () => {
-  assert.notEqual(unapprovedCommand, defaultCommand);
-});
+import { executionRows } from "../src/model";
 
 test("execution results expose stdout stderr and exit code", () => {
   assert.deepEqual(

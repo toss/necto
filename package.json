@@ -19,7 +19,6 @@
     "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
-    "puppeteer": "^25.3.0",
     "vitepress": "^1.6.3"
   },
   "resolutions": {

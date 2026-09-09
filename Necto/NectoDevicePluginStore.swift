@@ -11,6 +11,12 @@ import Foundation
 /// before reuse; legacy SDK stamps always require a fresh fetch.
 @MainActor
 final class NectoDevicePluginStore {
+    private let cacheDirectory: URL?
+
+    init(directory: URL? = nil) {
+        cacheDirectory = directory
+    }
+
     /// `~/Library/Application Support/Necto/DevicePlugins`, created on first use.
     static var directory: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -34,7 +40,8 @@ final class NectoDevicePluginStore {
               advertised.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil else {
             throw NectoDevicePluginError.hashMismatch(pluginID)
         }
-        var root = Self.directory
+        let directory = cacheDirectory ?? Self.directory
+        var root = directory
             .appending(path: pluginID, directoryHint: .isDirectory)
             .appending(path: advertised, directoryHint: .isDirectory)
 
@@ -50,7 +57,7 @@ final class NectoDevicePluginStore {
             }
             // Old SDK stamps cannot safely identify cached contents. Fetch each
             // registration, then store under the newly computed unambiguous hash.
-            root = Self.directory.appending(path: pluginID).appending(path: archive.contentHash)
+            root = directory.appending(path: pluginID).appending(path: archive.contentHash)
             let manager = FileManager.default
             let parent = root.deletingLastPathComponent()
             let staging = parent.appending(path: ".necto-install-\(UUID().uuidString)")

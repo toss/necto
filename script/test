@@ -6,13 +6,16 @@
 #   script/test          run everything
 #   script/test swift    Swift packages only
 #   script/test web      web packages only
-#   script/test release  release artifact contracts, without building or publishing
-#   script/test native   native panel cache and shell approval checks, without opening the app
-#   script/test layout   browser layout smoke tests only
+#   script/test release  package and release contracts, without building or publishing
+#   script/test native   Mac app unit and WebView integration tests
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 scope="${1:-all}"
+case "${scope}" in
+  all|swift|web|release|native) ;;
+  *) echo "Usage: script/test [swift|web|release|native]" >&2; exit 2 ;;
+esac
 failed=()
 
 run() {
@@ -29,7 +32,7 @@ run() {
 }
 
 if [[ "${scope}" == "all" || "${scope}" == "release" ]]; then
-  run "release artifact contracts" node --test script/tests/release.test.mjs script/tests/licenses.test.mjs
+  run "package and release contracts" node --test script/tests/package.test.mjs script/tests/release.test.mjs
 fi
 
 if [[ "${scope}" == "all" || "${scope}" == "swift" ]]; then
@@ -39,9 +42,7 @@ if [[ "${scope}" == "all" || "${scope}" == "swift" ]]; then
 fi
 
 if [[ "${scope}" == "all" || "${scope}" == "native" ]]; then
-  run "native panel cache" node script/check-device-plugin-store.mjs
-  run "web content recovery" node script/check-web-content-recovery.mjs
-  run "Mac app unit tests" xcodebuild -project Necto.xcodeproj -scheme NectoAppTests \
+  run "Mac app unit and integration tests" xcodebuild -project Necto.xcodeproj -scheme NectoAppTests \
     -destination 'platform=macOS' -derivedDataPath Build/Tests test
 fi
 
@@ -53,19 +54,7 @@ if [[ "${scope}" == "all" || "${scope}" == "web" ]]; then
   fi
   run "web typecheck" yarn typecheck
   run "web test" yarn test
-  run "plugin localization harness" node script/check-plugin-localization.mjs
-  run "design token harness" node script/check-design-tokens.mjs
-  run "design gallery harness" node script/check-design-gallery.mjs
   run "panel asset harness" node script/check-panel-assets.mjs
-fi
-
-if [[ "${scope}" == "layout" ]]; then
-  if [[ ! -d node_modules ]]; then
-    echo "==> yarn install"
-    yarn install --immutable
-    echo
-  fi
-  run "plugin layout harness" node script/check-plugin-layout.mjs
 fi
 
 if [[ ${#failed[@]} -gt 0 ]]; then

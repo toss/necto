@@ -2,7 +2,8 @@
 //  Copyright (c) 2026 Viva Republica, Inc.
 //
 
-import Darwin
+// Older SDKs import the read-only task port as an unannotated mutable C global.
+@preconcurrency import Darwin
 import NectoDefaultPlugins
 import NectoModel
 import NectoSDK

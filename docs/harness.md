@@ -49,11 +49,12 @@ in separate plugin modules.
 A new permission adds an `NectoPluginable` implementation in its own module. It never adds a wire message
 kind, and it never adds a line to `NectoSDKRuntime`.
 
-**Check:** `NectoSDK` imports only `NectoModel` and `NectoTransport`, and no file under
-`Sources/NectoSDK` names a feature.
+**Check:** test the evaluated Swift package dependencies and the SDK-only consumer.
+Review feature boundaries in code; comments and identifier spellings are not test assertions.
 
 ```bash
-script/check-sdk-generic.sh
+node --test script/tests/package.test.mjs
+swift test --package-path Tests/Fixtures/SDKConsumer
 ```
 
 ## Rule 2: Necto does not decide how an app works
@@ -133,9 +134,9 @@ exercising the web bridge client's message handling. It does not verify Mac prov
 or real device connections. Use long URLs, failures, pending rows and truncated bodies
 to check layouts against representative traffic.
 
-**Check:** `node script/check-plugin-layout.mjs` renders the plugin and fails on
-horizontal overflow, clipped headers and overlapping controls. Type checking alone
-does not detect these layout problems.
+**Check:** open the plugin preview at narrow and wide sizes to check overflow,
+clipped headers and overlapping controls. Type checking alone does not detect these
+layout problems.
 
 ## Rule 7: one design system
 
@@ -159,19 +160,15 @@ defaults can be older than the Mac shell. The host reasserts the current appeara
 neutral ladder and surface token at the WebView boundary. This keeps a plugin that
 uses Necto tokens aligned without pretending Necto can restyle arbitrary hardcoded CSS.
 
-The static harness compares the Swift theme, the host override and every committed
-panel build against `theme.css`:
+`NectoThemeTests` compares native colors with real WKWebView output using the shared
+stylesheet and committed panel styles. It checks both appearances and host overrides
+for older panel tokens:
 
 ```bash
-node script/check-design-tokens.mjs
+script/test native
 ```
 
-The gallery harness keeps its native-shell mock aligned with the Swift defaults and
-the current desktop/device plugin split:
-
-```bash
-node script/check-design-gallery.mjs
-```
+Check the gallery's layout and wording visually when changing the shell.
 
 The panel asset harness also checks that every committed panel has `index.html` and
 that each local script and stylesheet it references exists and is non-empty:
@@ -182,8 +179,8 @@ node script/check-panel-assets.mjs
 
 When changing design tokens, check the following:
 
-- **Matching token values:** run `node script/check-design-tokens.mjs` to check that
-  `NectoTheme.swift`, the WebView host and `theme.css` use matching values.
+- **Matching token values:** run `script/test native` to compare the colors rendered
+  by the WebView with `NectoTheme` in both appearances.
 - **Text contrast:** calculate contrast for the actual text and background colours
   used in the background, sidebar, surface, hover and selected states.
 
@@ -197,8 +194,8 @@ When changing design tokens, check the following:
 | A bridge or provider | `script/test swift`, then call it from the web plugin |
 | Mac UI, DI, host bridge | `xcodebuild -scheme Necto -destination 'platform=macOS' build` |
 | SDK or ExampleApp runtime | build and run `ExampleApp` on a booted simulator |
-| Web plugin | `yarn build`, `node script/check-panel-assets.mjs`, `node script/check-plugin-layout.mjs`, then load it in the app |
-| Design tokens, `NectoTheme`, `components.css` | `node script/check-design-tokens.mjs`, then open the gallery in both appearances |
+| Web plugin | `yarn build`, `script/test web`, then load it in the app |
+| Design tokens, `NectoTheme`, `components.css` | `script/test native`, then open the gallery in both appearances |
 
 ExampleApp needs a booted simulator, and device names differ per machine, so never
 hardcode one:

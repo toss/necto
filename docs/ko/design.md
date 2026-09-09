@@ -81,8 +81,8 @@ Swift 호스트를 확인하세요. `components.css`를 수정하면 양쪽의 �
 
 두 테마의 색상 단계는 `theme.css` 상단에서 정의해요. 아래의 테마 규칙은
 둘 중 하나를 선택해요. Swift와 WebView 호스트는 필요한 값을 복사해 사용하며
-이 값이나 빌드된 패널의 값이 원본과 다르면
-`script/check-design-tokens.mjs`가 실패해요.
+`NectoThemeTests`에서 네이티브 색상과 실제 WebView에 표시된 색상을 비교해요.
+빌드된 패널과 호스트의 토큰 갱신도 검사하며, `script/test native`로 실행해요.
 
 ## 색
 
