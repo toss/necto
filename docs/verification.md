@@ -202,8 +202,12 @@ The release argument sets `MARKETING_VERSION`; the script reads the built
 read this bundle value, not an independent source-code version.
 
 Public CI uses GitHub-hosted runners and builds the app and ExampleApp without signing.
-The Swift job uses Xcode 26.4 on `macos-26`; the web job uses
-Node 22.12.0 and Yarn 4.6.0. GitHub Pages must be configured to deploy from Actions.
+`Check` runs four independent jobs: `Mac Build & Tests`, `SDK Build & Tests`,
+`Web Plugins Build & Tests`, and `Documentation Build`. Mac and SDK use Xcode 26.6
+on `macos-26`; web and documentation builds use `ubuntu-24.04`. All four jobs use
+Node 22.12.0, and web and documentation builds use Yarn 4.6.0.
+Documentation deployment remains a separate manual workflow. GitHub Pages must be
+configured to deploy from Actions.
 Workflow files alone do not prove a successful run on those machines.
 
 `script/release` attaches the DMG and two developer-package tarballs. GitHub computes

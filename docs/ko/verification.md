@@ -189,8 +189,13 @@ npm 압축 파일에는 `LICENSE`를, DMG와 앱의 `Contents/Resources`에는
 별도 소스 코드 상수가 아니라 이 번들 버전을 사용해요.
 
 공개 CI는 GitHub-hosted runner에서 앱과 ExampleApp을 서명 없이 빌드해요.
-Swift 작업은 `macos-26`에서 Xcode 26.4를, 웹 작업은 Node 22.12.0과
-Yarn 4.6.0을 사용해요. GitHub Pages는 Actions 배포로 설정해야 해요.
+`Check`의 작업은 `Mac Build & Tests`, `SDK Build & Tests`,
+`Web Plugins Build & Tests`, `Documentation Build`로 나뉘어요.
+Mac과 SDK는 `macos-26`에서 Xcode 26.6을 사용하고
+웹과 문서 빌드는 `ubuntu-24.04`에서 실행해요.
+Node 22.12.0은 네 작업 모두에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
+문서 배포는 별도 워크플로에서 수동으로 실행하며
+GitHub Pages는 Actions 배포로 설정해야 해요.
 워크플로 파일을 추가한 것만으로 외부 환경에서 실행에 성공했다고 볼 수는 없어요.
 
 `script/release`는 DMG와 개발용 패키지 두 개를 첨부해요. 해시는 GitHub가

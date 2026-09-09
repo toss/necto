@@ -14,21 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  swift:
-    name: Swift & macOS (Xcode 26.4)
+  mac:
+    name: Mac Build & Tests
     if: github.server_url == 'https://github.com'
     runs-on: macos-26
     timeout-minutes: 30
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.4.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Show Swift version
-        run: swift --version
-      - name: Test SDK, Mac packages and SDK consumer
-        run: script/test swift
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.12.0
+      - name: Show Xcode and Swift versions
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Test Mac and CLI packages
+        run: swift test --package-path NectoMac
       - name: Test native integrations and Mac app
         run: script/test native
       - name: Build the Mac app for both architectures
@@ -36,6 +41,33 @@ jobs:
           xcodebuild -project Necto.xcodeproj -scheme Necto
           -destination 'generic/platform=macOS' ONLY_ACTIVE_ARCH=NO
           CODE_SIGNING_ALLOWED=NO build
+      - name: Test release artifacts
+        run: node --test script/tests/release.test.mjs
+
+  sdk:
+    name: SDK Build & Tests
+    if: github.server_url == 'https://github.com'
+    runs-on: macos-26
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.12.0
+      - name: Show Xcode and Swift versions
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Test SDK packages
+        run: swift test
+      - name: Test SDK consumer
+        run: swift test --package-path Tests/Fixtures/SDKConsumer
+      - name: Test package boundaries
+        run: node --test script/tests/package.test.mjs
       - name: Build the iOS example
         run: >-
           xcodebuild -project Necto.xcodeproj -scheme ExampleApp
@@ -43,15 +75,15 @@ jobs:
           CODE_SIGNING_ALLOWED=NO build
 
   web:
-    name: Web tests & documentation
+    name: Web Plugins Build & Tests
     if: github.server_url == 'https://github.com'
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22.12.0
       - name: Install dependencies
@@ -62,7 +94,22 @@ jobs:
         run: yarn build
       - name: Test web packages and panel contracts
         run: script/test web
-      - name: Test package boundaries and release artifacts
-        run: script/test release
+
+  docs:
+    name: Documentation Build
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.12.0
+      - name: Install dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
       - name: Build documentation
         run: yarn docs:build
