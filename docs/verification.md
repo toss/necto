@@ -202,7 +202,7 @@ The release argument sets `MARKETING_VERSION`; the script reads the built
 read this bundle value, not an independent source-code version.
 
 Public CI uses GitHub-hosted runners and builds the app and ExampleApp without signing.
-Its Xcode matrix checks the Swift 6.0 minimum and a newer toolchain; the web job uses
+The Swift job uses Xcode 26.4 on `macos-26`; the web job uses
 Node 22.12.0 and Yarn 4.6.0. GitHub Pages must be configured to deploy from Actions.
 Workflow files alone do not prove a successful run on those machines.
 

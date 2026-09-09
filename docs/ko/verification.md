@@ -189,7 +189,7 @@ npm 압축 파일에는 `LICENSE`를, DMG와 앱의 `Contents/Resources`에는
 별도 소스 코드 상수가 아니라 이 번들 버전을 사용해요.
 
 공개 CI는 GitHub-hosted runner에서 앱과 ExampleApp을 서명 없이 빌드해요.
-Xcode 매트릭스로 Swift 6.0 최소 버전과 최신 도구를 확인하며 웹 작업은 Node 22.12.0과
+Swift 작업은 `macos-26`에서 Xcode 26.4를, 웹 작업은 Node 22.12.0과
 Yarn 4.6.0을 사용해요. GitHub Pages는 Actions 배포로 설정해야 해요.
 워크플로 파일을 추가한 것만으로 외부 환경에서 실행에 성공했다고 볼 수는 없어요.
 
