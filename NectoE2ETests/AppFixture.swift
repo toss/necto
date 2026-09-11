@@ -57,7 +57,8 @@ final class AppFixture {
         try #require(UUID(uuidString: id) != nil)
         simulator = id
         _ = try await run("/usr/bin/xcrun", ["simctl", "boot", id])
-        _ = try await run("/usr/bin/xcrun", ["simctl", "bootstatus", id, "-b"], timeout: .seconds(120))
+        // A fresh CI simulator can spend several minutes migrating OS data on its first boot.
+        _ = try await run("/usr/bin/xcrun", ["simctl", "bootstatus", id, "-b"], timeout: .seconds(600))
         _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path])
         _ = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
         try await wait("GUI control socket") {
@@ -162,6 +163,22 @@ final class AppFixture {
                    output: String(decoding: try Data(contentsOf: output), as: UTF8.self),
                    error: String(decoding: try Data(contentsOf: error), as: UTF8.self))
         }
+
+        func logTail() -> String {
+            [output, error].map { url in
+                do {
+                    let file = try FileHandle(forReadingFrom: url)
+                    defer { try? file.close() }
+                    let size = try file.seekToEnd()
+                    try file.seek(toOffset: size > 8192 ? size - 8192 : 0)
+                    let text = String(decoding: try file.read(upToCount: 8192) ?? Data(), as: UTF8.self)
+                    let lines = text.split(separator: "\n").suffix(10).joined(separator: "\n")
+                    return "\(url.lastPathComponent) (last 10 lines, up to 8 KiB):\n\(lines)"
+                } catch {
+                    return "Could not read \(url.path): \(error)"
+                }
+            }.joined(separator: "\n")
+        }
     }
 
     private func launch(_ url: URL, _ arguments: [String], isolated: Bool = false) throws -> Command {
@@ -196,7 +213,10 @@ final class AppFixture {
         while command.process.isRunning {
             if ContinuousClock.now >= deadline {
                 kill(command.process.processIdentifier, SIGKILL)
-                throw Failure(message: "Command timed out: \(command.process.arguments ?? []). Logs: \(logs.path)")
+                throw Failure(message: """
+                    Command timed out: \(command.process.arguments ?? []). Logs: \(logs.path)
+                    \(command.logTail())
+                    """)
             }
             do { try await Task.sleep(for: .milliseconds(50)) }
             catch {
