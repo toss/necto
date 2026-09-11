@@ -26,6 +26,7 @@
 | 토큰, `NectoTheme`, `components.css` | `script/test native` 실행 후, 갤러리를 두 외형 모두에서 열기 |
 | 앱까지 도달하는 모든 변경 | `script/build` 실행 후, 앱 실행하기 |
 | SDK의 공개 API | 시뮬레이터를 부팅한 상태에서 `script/build`로 ExampleApp의 SDK 연동까지 빌드하기 |
+| 연결 수명주기, CLI의 디바이스 오퍼레이션 | `script/test e2e` |
 | 계약 변경 | 같은 커밋에서 픽스처 업데이트하기 |
 
 `script/test`는 Swift·Vitest 단위 테스트, 네이티브 캐시·WebView 통합 테스트,
@@ -43,6 +44,33 @@ xcodebuild -project Necto.xcodeproj -scheme NectoAppTests -destination 'platform
 ```
 
 ## 연결 검증하기
+
+### 시뮬레이터 E2E
+
+Necto를 종료한 뒤 `script/test e2e`를 실행하세요. 테스트 전용 번들 ID로 Mac 앱,
+CLI, ExampleApp을 빌드하고 새 iPhone 시뮬레이터에서 `NectoE2ETests` Xcode 스킴을
+실행해요. 회사 서명 인증서나 별도 테스트 도구는 필요하지 않아요.
+
+CLI로 기기와 플러그인을 조회하고 `plugin help`를 확인해요. UserDefaults에 고유한
+값을 쓰고 읽어 `once`를 검증하고, 성능 측정 이벤트 세 개를 JSONL로 받아 `stream`을
+검증해요. 구독 중 ExampleApp을 종료하면 CLI가 오류로 끝나고 기기가 목록에서
+사라져야 해요. ExampleApp을 다시 실행한 뒤 Necto를 재시작하지 않고 두 동작을 반복해요.
+
+실행마다 임시 Mac 홈과 새 시뮬레이터를 사용하고 끝나면 제거해요. 호스트끼리 SDK의
+루프백 포트를 공유하므로 다른 Necto는 종료해야 해요. 정해진 시간만큼 기다리는 대신
+제한 시간 안에 연결과 응답을 확인해요. 로그와 테스트 결과는 `Build/E2E/Logs`에 남아요.
+로컬에서는 별도로 실행하며 기본 `script/test`에는 포함하지 않아요.
+
+CI에서는 Mac·SDK 잡이 끝나면 `Simulator Connection & CLI E2E`를 실행해요.
+Mac 잡은 앱·CLI·테스트 번들을, SDK 잡은 ExampleApp을 전달해요. 같은 워크플로
+실행의 아티팩트를 받아 `test-without-building`으로 재빌드 없이 검증해요.
+실행 권한과 번들 내부 심볼릭 링크를 유지하도록 압축해서 전달해요.
+로컬에서도 `script/test e2e` 실행 후 `script/test-e2e run`으로 재빌드 없이 반복할 수 있어요.
+
+E2E가 실패하면 로그와 테스트 결과를 첨부해요.
+실제 GUI 호스트·CLI·SDK 전송 경로를 검증하며 WebView 조작, 레이아웃, USB는 제외해요.
+
+### 수동 연결 확인
 
 루프백 연결 경로는 시뮬레이터로 확인해요.
 
@@ -188,12 +216,13 @@ npm 압축 파일에는 `LICENSE`를, DMG와 앱의 `Contents/Resources`에는
 `CFBundleShortVersionString`과 다르면 중단해요. 호스트 정보와 업데이트 비교도
 별도 소스 코드 상수가 아니라 이 번들 버전을 사용해요.
 
-공개 CI는 GitHub-hosted runner에서 앱과 ExampleApp을 서명 없이 빌드해요.
+공개 CI는 GitHub-hosted runner를 사용해요. Mac 잡의 앱과 테스트 번들에는 ad-hoc
+서명을 사용하고 SDK 잡의 ExampleApp은 서명 없이 빌드해요.
 `Check`의 작업은 `Mac Build & Tests`, `SDK Build & Tests`,
-`Web Plugins Build & Tests`, `Documentation Build`로 나뉘어요.
-Mac과 SDK는 `macos-26`에서 Xcode 26.6을 사용하고
+`Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`, `Documentation Build`로 나뉘어요.
+Mac·SDK·E2E는 `macos-26`에서 Xcode 26.6을 사용하고
 웹과 문서 빌드는 `ubuntu-24.04`에서 실행해요.
-Node 22.12.0은 네 작업 모두에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
+Node 22.12.0은 E2E를 제외한 네 작업에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
 문서 배포는 별도 워크플로에서 수동으로 실행하며
 GitHub Pages는 Actions 배포로 설정해야 해요.
 워크플로 파일을 추가한 것만으로 외부 환경에서 실행에 성공했다고 볼 수는 없어요.

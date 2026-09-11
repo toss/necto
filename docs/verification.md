@@ -31,6 +31,7 @@ builds, release packaging tests, and a fresh vulnerability scan.
 | Tokens, `NectoTheme`, `components.css` | `script/test native`, then open the gallery in both appearances |
 | Anything that reaches the app | `script/build`, then launch it |
 | The SDK's public API | `script/build` with a simulator booted, including ExampleApp's SDK integration |
+| Connection lifecycle or CLI device operations | `script/test e2e` |
 | Contract change | Update fixtures in the same commit |
 
 `script/test` runs Swift and Vitest unit tests, native cache and WebView integration
@@ -47,6 +48,35 @@ xcodebuild -project Necto.xcodeproj -scheme NectoAppTests -destination 'platform
 ```
 
 ## Verifying a connection
+
+### Automated simulator E2E
+
+Quit Necto, then run `script/test e2e`. It builds the real Mac app, CLI and ExampleApp
+with separate test bundle IDs, creates a disposable iPhone simulator, and runs the
+`NectoE2ETests` Xcode scheme. No company signing certificate or extra test tool is needed.
+
+The test discovers the device and its plugins through the CLI, checks `plugin help`,
+writes and reads a unique UserDefaults value (`once`), and receives three performance
+events as JSONL (`stream`). It then terminates ExampleApp during a live subscription,
+checks that the CLI exits with an error and the target disappears, and relaunches
+ExampleApp to repeat both operations without restarting Necto.
+
+Each run uses a temporary Mac home and a new simulator, which are removed afterward.
+Other Necto instances must be closed because hosts share the SDK's loopback ports.
+Waits check observable state with deadlines, not fixed startup delays or performance
+thresholds. Build logs, command output and the test result bundle are in `Build/E2E/Logs`.
+E2E is opt-in locally and is not part of the default `script/test` run.
+
+CI runs `Simulator Connection & CLI E2E` after the Mac and SDK jobs. The Mac job
+uploads the app, CLI and test bundle; the SDK job uploads ExampleApp. E2E downloads
+those artifacts from the same workflow run and uses `test-without-building`.
+Archives preserve executable permissions and bundle symlinks. To rerun locally
+without rebuilding, use `script/test-e2e run` after `script/test e2e`.
+
+Failed E2E runs upload logs and test results. This covers the real GUI host, CLI and
+SDK transport path, not WebView interaction, layouts or USB.
+
+### Manual connection checks
 
 Use a simulator for the loopback connection path.
 
@@ -202,11 +232,13 @@ The release argument sets `MARKETING_VERSION`; the script reads the built
 `CFBundleShortVersionString` and refuses a mismatch. Host info and update comparisons
 read this bundle value, not an independent source-code version.
 
-Public CI uses GitHub-hosted runners and builds the app and ExampleApp without signing.
-`Check` runs four independent jobs: `Mac Build & Tests`, `SDK Build & Tests`,
-`Web Plugins Build & Tests`, and `Documentation Build`. Mac and SDK use Xcode 26.6
-on `macos-26`; web and documentation builds use `ubuntu-24.04`. All four jobs use
-Node 22.12.0, and web and documentation builds use Yarn 4.6.0.
+Public CI uses GitHub-hosted runners. The Mac job ad-hoc signs its app and test
+bundle; the SDK job builds ExampleApp without signing.
+`Check` runs five jobs: `Mac Build & Tests`, `SDK Build & Tests`,
+`Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`, and `Documentation Build`.
+Mac, SDK and E2E use Xcode 26.6 on `macos-26`; web and documentation builds use
+`ubuntu-24.04`. The four non-E2E jobs use Node 22.12.0, and web and documentation
+builds use Yarn 4.6.0.
 Documentation deployment remains a separate manual workflow. GitHub Pages must be
 configured to deploy from Actions.
 Workflow files alone do not prove a successful run on those machines.
