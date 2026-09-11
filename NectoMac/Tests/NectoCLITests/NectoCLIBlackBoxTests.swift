@@ -157,9 +157,10 @@ struct NectoCLIBlackBoxTests {
         let fixture = try CLIProcessFixture()
         defer { fixture.close() }
         let server = fixture.respond { request, session in
-            for value in 1...3 {
+            for value in 1...2 {
                 try await session.send(NectoControlResponse(id: request.id, kind: .event, value: ["tick": .number(Double(value))]))
             }
+            // Keep the stream open: reaching the limit must close it from the client side.
             await #expect(throws: (any Error).self) { try await session.receive(NectoControlRequest.self) }
         }
         let result = try await fixture.run(["plugin", "subscribe", "sample", "observe", "--desktop", "--limit", "2"])
@@ -167,8 +168,8 @@ struct NectoCLIBlackBoxTests {
         #expect(result.status == 0)
         #expect(result.error.isEmpty)
         let lines = result.output.split(separator: "\n")
-        #expect(lines.count == 2)
-        for line in lines { _ = try JSONDecoder().decode(NectoJSONValue.self, from: Data(line.utf8)) }
+        let events = try lines.map { try JSONDecoder().decode(NectoJSONValue.self, from: Data($0.utf8)) }
+        #expect(events == [["tick": 1], ["tick": 2]])
     }
 
     @Test("a quiet subscription timeout closes its connection and succeeds")

@@ -278,12 +278,13 @@ struct NectoControlServerTests {
         #expect(try Data(contentsOf: target) == Data("keep".utf8))
     }
 
-    @Test("a stale socket can be reclaimed after an unclean exit")
+    @Test("an abandoned socket file can be reclaimed")
     func staleSocket() async throws {
         let url = try temporarySocket()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-        let old = try boundSocket(at: url, listening: true)
-        Darwin.close(old)
+        // Never listen: concurrent process launches can briefly inherit the descriptor before exec.
+        let old = try boundSocket(at: url, listening: false)
+        #expect(Darwin.close(old) == 0)
         let server = NectoControlServer(socketURL: url, handler: StubHandler())
         defer { server.stop() }
         try server.start()

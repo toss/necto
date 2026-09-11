@@ -30,8 +30,8 @@ struct NectoConnectionProbeTests {
             task = Task {
                 do {
                     for try await session in listener.sessions() {
-                        sessions.append(session)
                         if sendsHello { try await hello(session) }
+                        sessions.append(session)
                     }
                 } catch {
                     if !Task.isCancelled { Issue.record(error) }
@@ -99,6 +99,8 @@ struct NectoConnectionProbeTests {
         await responding.start()
         await center.start()
         do {
+            // The host publishes its connection before the peer has necessarily read the ack.
+            try await waitUntil { await responding.count == 1 }
             try await body(center, silent, responding)
         } catch {
             await center.stop()
