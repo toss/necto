@@ -13,12 +13,11 @@ struct NectoCLI: AsyncParsableCommand {
         commandName: "necto",
         abstract: "Control a running Necto from the terminal.",
         discussion: """
-        Everything callable is discovered, not compiled in: `plugin list` shows what
-        the running Necto has installed right now, `plugin schema` shows what an
-        operation takes and returns, and `plugin invoke` calls it — the same path a
-        panel takes, checked by the same registry.
+        Use device list to find connected apps, then plugin list and plugin help with
+        --device and --app. Use --desktop for installed desktop plugins. send and
+        subscribe use the same schemas, registry and permissions as web panels.
         """,
-        subcommands: [Plugin.Install.self, Plugin.Delete.self, Targets.self, Plugin.self, Shell.self, FinishUpdate.self]
+        subcommands: [Plugin.Install.self, Plugin.Delete.self, Device.self, Targets.self, Plugin.self, Shell.self, Skills.self, FinishUpdate.self]
     )
 }
 
@@ -61,7 +60,8 @@ struct Shell: AsyncParsableCommand {
                 kind: .invoke,
                 pluginID: NectoCLIShell.pluginID,
                 operationID: NectoCLIShell.operationID,
-                input: ["command": .string(command)]
+                input: ["command": .string(command)],
+                desktop: true
             )
         }
 
@@ -110,7 +110,7 @@ struct Targets: AsyncParsableCommand {
 struct Plugin: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Discover and call what the running Necto has installed, and package a new one.",
-        subcommands: [List.self, Install.self, Delete.self, Schema.self, Invoke.self, Subscribe.self, Pack.self]
+        subcommands: [List.self, Help.self, Install.self, Delete.self, Schema.self, Invoke.self, Subscribe.self, Pack.self]
     )
 
     struct Delete: AsyncParsableCommand {
@@ -175,86 +175,79 @@ struct Plugin: AsyncParsableCommand {
     }
 
     struct List: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Installed plugins and their operations.")
+        static let configuration = CommandConfiguration(abstract: "List plugins belonging to an explicit app or the desktop.")
+        @OptionGroup var target: TargetOptions
+        @Flag(name: .long, help: "Print JSON.") var json = false
 
-        @Flag(name: .long, help: "Print JSON for machines instead of a table.")
-        var json = false
+        func request() throws -> NectoControlRequest {
+            try target.validate()
+            return .init(kind: .plugins, app: target.app, device: target.device, desktop: target.desktop)
+        }
 
         func run() async throws {
-            let value = try await Client().request(.init(kind: .plugins))
-            if json {
-                print(try encodeJSON(value))
-                return
+            let value = try await Client().request(try request())
+            if json { print(try encodeJSON(value)); return }
+            let plugins = value["plugins"]?.arrayValue ?? []
+            guard !plugins.isEmpty else { print("No plugins in this scope."); return }
+            for plugin in plugins {
+                print(displayText("\(plugin["id"]?.stringValue ?? "?")  \(plugin["version"]?.stringValue ?? "")"))
+                print(displayText("  \(plugin["description"]?.stringValue ?? "")"))
             }
+        }
+    }
 
-            for plugin in value["plugins"]?.arrayValue ?? [] {
-                let id = plugin["id"]?.stringValue ?? "?"
-                let version = plugin["version"]?.stringValue ?? ""
-                print("\(id)  \(version)")
-                for operation in plugin["operations"]?.arrayValue ?? [] {
-                    let operationID = operation["id"]?.stringValue ?? "?"
-                    let kind = operation["kind"]?.stringValue ?? ""
-                    let title = operation["description"]?.stringValue ?? ""
-                    print("  \(operationID.padded(28))\(kind.padded(8))\(title)")
-                }
-            }
+    struct Help: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(commandName: "help", abstract: "Read a plugin's descriptions and operation schemas.")
+        @Argument(help: "Plugin ID from plugin list.") var plugin: String
+        @Argument(help: "Operation ID. Omit to list the plugin's operations.") var operation: String?
+        @OptionGroup var target: TargetOptions
+        @Flag(name: .long, help: "Print structured descriptions and schemas as JSON.") var json = false
+
+        func request() throws -> NectoControlRequest {
+            try target.validate()
+            return .init(kind: .plugins, pluginID: plugin, operationID: operation,
+                         app: target.app, device: target.device, desktop: target.desktop)
+        }
+
+        func run() async throws {
+            let value = try await Client().request(try request())
+            if json { print(try encodeJSON(value)); return }
+            print(PluginHelp.render(value))
         }
     }
 
     struct Schema: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(
-            abstract: "What one operation takes and returns, from its manifest."
-        )
-
-        @Argument(help: "The plugin id, as `plugin list` shows it.")
-        var plugin: String
-
-        @Argument(help: "The operation id, as `plugin list` shows it.")
-        var operation: String
+        static let configuration = CommandConfiguration(abstract: "Print one operation's input and output schemas.")
+        @Argument var plugin: String
+        @Argument var operation: String
+        @OptionGroup var target: TargetOptions
 
         func run() async throws {
-            let value = try await Client().request(.init(kind: .plugins))
-            let found = (value["plugins"]?.arrayValue ?? [])
-                .first { $0["id"]?.stringValue == plugin }?["operations"]?.arrayValue?
-                .first { $0["id"]?.stringValue == operation }
-
-            guard let found else {
-                throw ValidationError("No operation '\(operation)' in plugin '\(plugin)'. Try `necto-cli plugin list`.")
-            }
-            print(try encodeJSON([
-                "input": found["inputSchema"] ?? .null,
-                "output": found["outputSchema"] ?? .null,
-            ]))
+            try target.validate()
+            let value = try await Client().request(.init(
+                kind: .plugins, pluginID: plugin, operationID: operation,
+                app: target.app, device: target.device, desktop: target.desktop
+            ))
+            guard let operation = value["operation"] else { throw Client.Failure.protocolError }
+            print(try encodeJSON(["input": operation["inputSchema"] ?? .null,
+                                  "output": operation["outputSchema"] ?? .null]))
         }
     }
 
     struct Invoke: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Call an operation that answers once.")
-
-        @Argument(help: "The plugin id.")
-        var plugin: String
-
-        @Argument(help: "The operation id from the plugin's manifest.")
-        var operation: String
-
-        @Option(name: .long, help: "The input, as JSON. Defaults to {}.")
-        var input: String?
-
-        @Option(name: .long, help: "Bundle id of the connected app to target, when several are connected.")
-        var app: String?
-
-        @Option(name: .long, help: "Device id from `necto-cli targets`, when the app runs on several devices.")
-        var device: String?
+        static let configuration = CommandConfiguration(
+            commandName: "send", abstract: "Call an operation that answers once (kind: once).",
+            aliases: ["invoke"]
+        )
+        @Argument(help: "Plugin ID.") var plugin: String
+        @Argument(help: "Operation ID from plugin help.") var operation: String
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var payload: InputOptions
 
         func request() throws -> NectoControlRequest {
-            .init(
-                kind: .invoke,
-                pluginID: plugin,
-                operationID: operation,
-                input: try parseInput(input),
-                app: app,
-                device: device
-            )
+            try target.validate()
+            return .init(kind: .invoke, pluginID: plugin, operationID: operation, input: try payload.value(),
+                         app: target.app, device: target.device, desktop: target.desktop)
         }
 
         func run() async throws {
@@ -265,42 +258,45 @@ struct Plugin: AsyncParsableCommand {
 
     struct Subscribe: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Follow a streaming operation. Prints one JSON object per line until interrupted."
+            abstract: "Subscribe to a stream. Prints JSON Lines until completion, a bound, or Ctrl+C."
         )
-
-        @Argument(help: "The plugin id.")
-        var plugin: String
-
-        @Argument(help: "The operation id from the plugin's manifest.")
-        var operation: String
-
-        @Option(name: .long, help: "The input, as JSON. Defaults to {}.")
-        var input: String?
-
-        @Option(name: .long, help: "Bundle id of the connected app to target, when several are connected.")
-        var app: String?
-
-        @Option(name: .long, help: "Device id from `necto-cli targets`, when the app runs on several devices.")
-        var device: String?
+        @Argument(help: "Plugin ID.") var plugin: String
+        @Argument(help: "Operation ID from plugin help.") var operation: String
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var payload: InputOptions
+        @Option(name: .long, help: "Stop successfully after this many events.") var limit: Int?
+        @Option(name: .long, help: "Stop successfully after a duration, for example 30s or 500ms.") var timeout: String?
 
         func request() throws -> NectoControlRequest {
-            .init(
-                kind: .subscribe,
-                pluginID: plugin,
-                operationID: operation,
-                input: try parseInput(input),
-                app: app,
-                device: device
-            )
+            try target.validate()
+            if let limit, limit <= 0 { throw ValidationError("--limit must be greater than zero.") }
+            _ = try duration()
+            return .init(kind: .subscribe, pluginID: plugin, operationID: operation, input: try payload.value(),
+                         app: target.app, device: target.device, desktop: target.desktop)
+        }
+
+        func duration() throws -> Duration? {
+            guard let timeout else { return nil }
+            let multiplier: Double
+            let number: Substring
+            if timeout.hasSuffix("ms") { multiplier = 0.001; number = timeout.dropLast(2) }
+            else if timeout.hasSuffix("s") { multiplier = 1; number = timeout.dropLast() }
+            else { throw ValidationError("--timeout requires a unit: 30s or 500ms.") }
+            guard let value = Double(number), value.isFinite,
+                  value * multiplier > 0, value * multiplier < Double(Int64.max) else {
+                throw ValidationError("--timeout must be a positive, representable duration in seconds or milliseconds.")
+            }
+            let duration = Duration.seconds(value * multiplier)
+            guard duration > .zero else {
+                throw ValidationError("--timeout is too small to represent.")
+            }
+            return duration
         }
 
         func run() async throws {
-            try await Client().stream(try request()) { event in
+            try await Client().stream(try request(), limit: limit, timeout: try duration()) { event in
                 if let line = try? encodeJSON(event, pretty: false) {
-                    print(line)
-                    // A stream is watched live — often through a pipe, where stdout
-                    // block-buffers — so every line is pushed out as it happens.
-                    fflush(stdout)
+                    FileHandle.standardOutput.write(Data((line + "\n").utf8))
                 }
             }
         }
@@ -432,22 +428,16 @@ struct Pack: AsyncParsableCommand {
 // MARK: - Helpers
 
 func parseInput(_ raw: String?) throws -> NectoJSONValue {
-    guard let raw, !raw.isEmpty else { return .object([:]) }
+    guard let raw else { return .object([:]) }
     do {
         return try JSONDecoder().decode(NectoJSONValue.self, from: Data(raw.utf8))
     } catch {
-        throw ValidationError("--input is not valid JSON: \(raw)")
+        throw ValidationError("--input must contain valid JSON.")
     }
 }
 
-private func encodeJSON(_ value: some Encodable, pretty: Bool = true) throws -> String {
+func encodeJSON(_ value: some Encodable, pretty: Bool = true) throws -> String {
     let encoder = JSONEncoder()
     encoder.outputFormatting = pretty ? [.prettyPrinted, .sortedKeys] : [.sortedKeys]
     return String(data: try encoder.encode(value), encoding: .utf8) ?? "{}"
-}
-
-private extension String {
-    func padded(_ width: Int) -> String {
-        count >= width ? self + "  " : self + String(repeating: " ", count: width - count)
-    }
 }

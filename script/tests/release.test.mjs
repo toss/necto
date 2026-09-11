@@ -81,6 +81,8 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0 } = {}) {
   writeFileSync(join(root, "node_modules/vite/package.json"), JSON.stringify({ name: "vite", version: "1.0.0" }));
   writeFileSync(join(root, "node_modules/vite/LICENSE.md"), "fixture Vite license\n");
   writeFileSync(join(root, "Build/bin/necto-cli"), "fixture CLI\n");
+  mkdirSync(join(root, "Build/bin/NectoMac_necto-cli.bundle/Skills/necto"), { recursive: true });
+  writeFileSync(join(root, "Build/bin/NectoMac_necto-cli.bundle/Skills/necto/SKILL.md"), "fixture skill\n");
   writeFileSync(join(root, "publications.jsonl"), "");
   writeFileSync(join(root, "commands.jsonl"), "");
   writeFileSync(join(root, "xcodebuild.jsonl"), "");
@@ -108,6 +110,7 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0 } = {}) {
 }
 
 function verifyArtifacts(root) {
+  assert.equal(readFileSync(join(root, "Build/Products/Necto.app/Contents/Resources/NectoMac_necto-cli.bundle/Skills/necto/SKILL.md"), "utf8"), "fixture skill\n");
   for (const name of artifacts) assert.ok(readFileSync(join(root, "Build", name)).length > 0);
   assert.equal(existsSync(join(root, "Build", `${artifacts[0]}.sha256`)), false);
   assert.equal(existsSync(join(root, "Build", `Necto-${version}-SHA256SUMS`)), false);

@@ -67,11 +67,11 @@ retained for updates, and the CLI waits for that plugin's completed installation
 The existing GUI release source's private/Enterprise authentication requirements apply.
 
 Remote installation is the default; `--remote` is optional and cannot be combined
-with `--local`. Settings → About has the command that puts both `necto` and the
-compatible `necto-cli` name on your `PATH`. Copy and run it again after updating if
-only the old command name is linked.
+with `--local`. Click **Install CLI** in Settings → General → Command line tool to
+register `necto` and the compatible `necto-cli` name. macOS asks for administrator
+approval. If only one name is linked, installing again adds the missing alias.
 
-To remove a test installation, find its ID with `necto plugin list`, then run
+To remove a test installation, find its ID with `necto plugin list --desktop`, then run
 `necto delete <pluginID> --json`. This moves the installed folder to Trash and revokes
 its registration and permissions. It does not remove the source folder or repository.
 See [the CLI guide](control-socket.md) for aliases, responses and cancellation behavior.

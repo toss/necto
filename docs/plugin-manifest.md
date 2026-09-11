@@ -204,6 +204,14 @@ Every entry in `operations` declares all of the following. Nothing is optional.
 `timeoutMs` is required. Setting it to `0` does not disable limits enforced separately
 by the shell provider.
 
+The CLI's `plugin help` uses these existing descriptions and schemas. Keep required
+fields, types, enums, and constraints in the schema. Use an operation's `description`
+for prerequisites, effects, and where inputs come from, for example:
+"First call records.list and pass a returned record's id as recordID."
+Schema properties may also have a `description`. This prose is displayed as help,
+not parsed as routing or permission rules. No separate help file or new field is
+required. See [CLI discovery](control-socket.md#the-discovery-chain).
+
 `kind` determines how it is called:
 
 - `once` answers a single time, via `send`

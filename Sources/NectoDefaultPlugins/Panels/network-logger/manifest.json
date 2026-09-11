@@ -106,7 +106,7 @@
     {
       "id": "records.detail",
       "title": "Request detail",
-      "description": "Returns headers, bodies and a cURL for one request",
+      "description": "Returns headers, bodies and a cURL command for one captured request. First call records.list and pass a returned record's id as recordID.",
       "kind": "once",
       "binding": {
         "name": "necto.device.network-records.detail",
@@ -116,7 +116,8 @@
         "type": "object",
         "properties": {
           "recordID": {
-            "type": "string"
+            "type": "string",
+            "description": "The id of a record returned by records.list."
           }
         },
         "required": [

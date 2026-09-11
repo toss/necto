@@ -30,7 +30,8 @@ let package = Package(
                 "NectoCLIService",
                 .product(name: "NectoSDK", package: "Necto"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-            ]
+            ],
+            resources: [.copy("Resources/Skills")]
         ),
         .testTarget(
             name: "NectoMacServiceTests",

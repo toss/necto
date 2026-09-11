@@ -79,6 +79,8 @@ private actor DeferredProvider: NectoOperationProvider {
     private var started: [CheckedContinuation<Void, Never>] = []
     private var released = false
 
+    var isWaitingForCallback: Bool { reply != nil && !released }
+
     func invoke(input: NectoJSONValue, context: NectoInvocationContext) async throws -> NectoJSONValue {
         if released { return ["ok": true] }
         return await withCheckedContinuation { continuation in
@@ -103,32 +105,28 @@ private actor DeferredProvider: NectoOperationProvider {
     let provider = DeferredProvider()
     await registry.registerHostProvider(provider)
     try await registry.install(manifest: makeManifest(timeoutMs: 40), sourceIdentity: "fixture")
-    // Releases the fixture even on the old implementation, so Red cannot hang the suite.
-    let watchdog = Task { try await Task.sleep(for: .seconds(1)); await provider.release() }
+    // Bounds a regression without using runner speed to decide whether the callback was awaited.
+    let watchdog = Task { try await Task.sleep(for: .seconds(10)); await provider.release() }
     defer { watchdog.cancel() }
-    let clock = ContinuousClock()
-    let start = clock.now
     do {
         _ = try await registry.invoke(pluginID: "network-logger", operationID: "records.list", target: nil)
         Issue.record("The invocation did not time out")
     } catch let error as NectoBridgeError {
         #expect(error.code == .timeout)
     }
-    let returnedBeforeCallback = clock.now - start < .milliseconds(500)
-    #expect(returnedBeforeCallback)
-    if returnedBeforeCallback {
-        await registry.registerHostProvider(StubProvider())
-        try await registry.install(manifest: makeManifest(pluginID: "another-plugin"), sourceIdentity: "another-fixture")
-        let independent = try await registry.invoke(pluginID: "another-plugin", operationID: "records.list", target: nil)
-        #expect(independent == ["ok": true])
-        do {
-            _ = try await registry.invoke(pluginID: "network-logger", operationID: "records.list", target: nil)
-            Issue.record("Retry launched while the cancelled provider still owned its work")
-        } catch let error as NectoBridgeError {
-            #expect(error.code == .operationUnavailable)
-        }
+    try #require(await provider.isWaitingForCallback)
+    await registry.registerHostProvider(StubProvider())
+    try await registry.install(manifest: makeManifest(pluginID: "another-plugin"), sourceIdentity: "another-fixture")
+    let independent = try await registry.invoke(pluginID: "another-plugin", operationID: "records.list", target: nil)
+    #expect(independent == ["ok": true])
+    do {
+        _ = try await registry.invoke(pluginID: "network-logger", operationID: "records.list", target: nil)
+        Issue.record("Retry launched while the cancelled provider still owned its work")
+    } catch let error as NectoBridgeError {
+        #expect(error.code == .operationUnavailable)
     }
     await provider.release()
+    let clock = ContinuousClock()
     let until = clock.now + .seconds(1)
     var recovered = false
     while clock.now < until {
@@ -149,13 +147,11 @@ private actor DeferredProvider: NectoOperationProvider {
         try await registry.invoke(pluginID: "network-logger", operationID: "records.list", target: nil)
     }
     await provider.waitUntilStarted()
-    let watchdog = Task { try await Task.sleep(for: .seconds(1)); await provider.release() }
+    let watchdog = Task { try await Task.sleep(for: .seconds(10)); await provider.release() }
     defer { watchdog.cancel() }
-    let clock = ContinuousClock()
-    let start = clock.now
     pending.cancel()
     await #expect(throws: (any Error).self) { try await pending.value }
-    #expect(clock.now - start < .milliseconds(500))
+    #expect(await provider.isWaitingForCallback)
     await provider.release()
 }
 
@@ -168,13 +164,11 @@ private actor DeferredProvider: NectoOperationProvider {
         try await registry.invoke(pluginID: "network-logger", operationID: "records.list", target: nil)
     }
     await provider.waitUntilStarted()
-    let watchdog = Task { try await Task.sleep(for: .seconds(1)); await provider.release() }
+    let watchdog = Task { try await Task.sleep(for: .seconds(10)); await provider.release() }
     defer { watchdog.cancel() }
-    let clock = ContinuousClock()
-    let start = clock.now
     await registry.uninstall(pluginID: "network-logger")
     await #expect(throws: (any Error).self) { try await pending.value }
-    #expect(clock.now - start < .milliseconds(500))
+    #expect(await provider.isWaitingForCallback)
     await provider.release()
 }
 
@@ -359,14 +353,11 @@ func subscriptionOpeningCannotSurviveRemovalOrCallerCancellation(remove: Bool) a
     #expect(output == ["ok": true])
 }
 
-@Test func reportsWhetherAnOperationRequiresATarget() async throws {
+@Test func scopedCatalogDoesNotMergeDesktopAndDevicePlugins() async throws {
     let registry = makeRegistry()
     try await registry.install(manifest: makeManifest(), sourceIdentity: "builtin")
 
-    #expect(await registry.operationRequiresTarget(
-        pluginID: "network-logger",
-        operationID: "records.list"
-    ) == false)
+    #expect(await registry.installedPlugins(for: nil).map(\.manifest.id) == ["network-logger"])
 
     let target = NectoTarget(deviceID: "device-1", appBundleID: "com.example.app")
     try await registry.installDevice(
@@ -374,10 +365,9 @@ func subscriptionOpeningCannotSurviveRemovalOrCallerCancellation(remove: Bool) a
         sourceIdentity: "device:com.example.app",
         for: target
     )
-    #expect(await registry.operationRequiresTarget(
-        pluginID: "device-variables",
-        operationID: "records.list"
-    ) == true)
+    #expect(await registry.installedPlugins(for: target).map(\.manifest.id) == ["device-variables"])
+    #expect(await registry.installedPlugins(for: nil).map(\.manifest.id) == ["network-logger"])
+    #expect(await registry.installedPlugins(for: NectoTarget(deviceID: "other", appBundleID: "com.example.app")).isEmpty)
 }
 
 /// There is no permission name between a plugin and a bridge, so a manifest that binds

@@ -20,7 +20,7 @@ public struct NectoControlRequest: Sendable, Codable {
     public enum Kind: String, Sendable, Codable {
         /// Connected apps and devices.
         case targets
-        /// Installed plugins with their operations — the whole discoverable surface.
+        /// Scoped plugin summaries, or operation help selected by plugin and operation IDs.
         case plugins
         /// Install from a local path or repository URL through the app's approval flow.
         case installPlugin
@@ -40,12 +40,12 @@ public struct NectoControlRequest: Sendable, Codable {
     public let pluginID: String?
     public let operationID: String?
     public let input: NectoJSONValue?
-    /// Which connected app to aim device operations at, as a bundle id. Absent means
-    /// "the only one connected", and more than one connected is an error that lists them.
+    /// The plugin's owning app, paired with an explicit device ID.
     public let app: String?
-    /// Which device, when the same app is connected on several. A device id from
-    /// `targets`. Absent means "the only device running that app".
+    /// A device ID returned by target discovery.
     public let device: String?
+    /// Select installed desktop plugins instead of plugins carried by an app.
+    public let desktop: Bool?
 
     public init(
         id: String = UUID().uuidString,
@@ -54,7 +54,8 @@ public struct NectoControlRequest: Sendable, Codable {
         operationID: String? = nil,
         input: NectoJSONValue? = nil,
         app: String? = nil,
-        device: String? = nil
+        device: String? = nil,
+        desktop: Bool? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -63,6 +64,7 @@ public struct NectoControlRequest: Sendable, Codable {
         self.input = input
         self.app = app
         self.device = device
+        self.desktop = desktop
     }
 }
 

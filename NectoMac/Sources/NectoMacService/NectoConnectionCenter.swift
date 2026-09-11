@@ -22,14 +22,24 @@ public actor NectoConnectionCenter {
         let session: NectoMessageSession
     }
 
+    private enum Endpoint: Hashable {
+        case local(port: UInt16)
+        case usb(device: NectoUSBDevice, port: UInt16)
+
+        var usbDeviceID: Int? {
+            if case let .usb(device, _) = self { return device.deviceID }
+            return nil
+        }
+    }
+
     private let port: UInt16
     private let probeInterval: Duration
+    private let deviceEvents: @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>
     private var onEnvelope: (@Sendable (NectoEnvelope, NectoTarget) -> Void)?
 
     private var connections: [String: Connection] = [:]
-    /// Devices usbmuxd has announced, connected or not, so the probe can retry them.
-    private var attached: [Int: NectoUSBDevice] = [:]
-    private var tasks: [Task<Void, Never>] = []
+    private var deviceWatcher: Task<Void, Never>?
+    private var probes: [Endpoint: Task<Void, Never>] = [:]
     private var sessionTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var observers: [UUID: AsyncStream<[NectoConnectedApp]>.Continuation] = [:]
 
@@ -37,8 +47,17 @@ public actor NectoConnectionCenter {
         port: UInt16 = NectoTransportDefaults.devicePort,
         probeInterval: Duration = .seconds(2)
     ) {
+        self.init(port: port, probeInterval: probeInterval, deviceEvents: NectoUSBHub.deviceEvents)
+    }
+
+    init(
+        port: UInt16,
+        probeInterval: Duration,
+        deviceEvents: @escaping @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>
+    ) {
         self.port = port
         self.probeInterval = probeInterval
+        self.deviceEvents = deviceEvents
     }
 
     public var connectedApps: [NectoConnectedApp] {
@@ -101,39 +120,41 @@ public actor NectoConnectionCenter {
     }
 
     public func start() {
-        guard tasks.isEmpty else { return }
+        guard deviceWatcher == nil else { return }
 
         notes?(.watchingForDevices)
-        tasks.append(Task { await watchDevices() })
-        tasks.append(Task { await probe() })
+        deviceWatcher = Task { await watchDevices() }
+        for candidate in Self.portsToDial(from: port, skipping: []) {
+            startProbe(.local(port: candidate))
+        }
     }
 
     public func stop() {
-        for task in tasks { task.cancel() }
-        tasks.removeAll()
+        deviceWatcher?.cancel()
+        deviceWatcher = nil
+        for probe in probes.values { probe.cancel() }
+        probes.removeAll()
         for connection in connections.values { connection.session.close() }
         for task in sessionTasks.values { task.cancel() }
         sessionTasks.removeAll()
         connections.removeAll()
-        attached.removeAll()
         usbDeviceIDs.removeAll()
         localPorts.removeAll()
         devicePorts.removeAll()
         publish()
     }
 
-    // MARK: Devices
-
     private func watchDevices() async {
         do {
-            for try await event in NectoUSBHub.deviceEvents() {
+            for try await event in deviceEvents() {
                 guard !Task.isCancelled else { return }
                 switch event {
                 case let .attached(device) where device.isUSB:
-                    attached[device.deviceID] = device
-                    await connectToDevice(device)
+                    for candidate in Self.portsToDial(from: port, skipping: []) {
+                        startProbe(.usb(device: device, port: candidate))
+                    }
                 case let .detached(deviceID):
-                    attached.removeValue(forKey: deviceID)
+                    cancelUSBProbes { $0 == deviceID }
                     removeConnections { $0.usbDeviceID == deviceID }
                 case .attached:
                     break
@@ -144,34 +165,33 @@ public actor NectoConnectionCenter {
             // usbmuxd went away. Devices stay unavailable until it comes back, and the
             // simulator path keeps working.
             notes?(.usbUnavailable(String(describing: error)))
-            attached.removeAll()
+            cancelUSBProbes { _ in true }
             removeConnections { $0.usbDeviceID != nil }
         }
     }
 
-    /// Dials every port on the device that does not already carry a session.
-    ///
-    /// An app that finds the first port taken slides to the next one, so a device
-    /// running two builds answers on two ports. Dialing only the first would reach
-    /// whichever app started first and leave the other one invisible.
-    private func connectToDevice(_ device: NectoUSBDevice) async {
-        for candidate in Self.portsToDial(from: port, skipping: connectedPorts(usbDeviceID: device.deviceID)) {
-            guard !Task.isCancelled else { return }
-            await connectToDevice(device, port: candidate)
+    private func cancelUSBProbes(where matches: (Int) -> Bool) {
+        for endpoint in probes.keys.filter({ $0.usbDeviceID.map(matches) == true }) {
+            probes.removeValue(forKey: endpoint)?.cancel()
         }
     }
 
     private func connectToDevice(_ device: NectoUSBDevice, port candidate: UInt16) async {
         do {
             let session = try await NectoUSBHub.connect(deviceID: device.deviceID, port: candidate)
-            try await accept(
-                session: session,
-                deviceID: device.serialNumber,
-                connection: .usb,
-                usbDeviceID: device.deviceID,
-                deviceName: await NectoUSBHub.deviceName(deviceID: device.deviceID),
-                devicePort: candidate
-            )
+            _ = try await withTaskCancellationHandler {
+                try await accept(
+                    session: session,
+                    deviceID: device.serialNumber,
+                    connection: .usb,
+                    usbDeviceID: device.deviceID,
+                    deviceName: await NectoUSBHub.deviceName(deviceID: device.deviceID),
+                    devicePort: candidate
+                )
+            } onCancel: {
+                // The SDK socket is already open while lockdownd supplies the name.
+                session.close()
+            }
         } catch {
             // The app is not listening yet. The probe loop keeps trying, because a
             // device usually stays plugged in while its app is started, stopped and
@@ -180,18 +200,17 @@ public actor NectoConnectionCenter {
         }
     }
 
-    // MARK: Probing
+    private func startProbe(_ endpoint: Endpoint) {
+        guard probes[endpoint] == nil else { return }
+        probes[endpoint] = Task { await probe(endpoint) }
+    }
 
-    /// Retries whatever is not connected yet.
-    ///
-    /// A simulator has nothing to announce it, and a device announces itself once when
-    /// the cable goes in, which is rarely the moment its app starts listening. Both
-    /// therefore need the same patient retry rather than a single attempt.
-    private func probe() async {
+    /// Each endpoint owns its retry interval; a silent app cannot stall another app
+    /// or prevent the USB watcher from handling a detach.
+    private func probe(_ endpoint: Endpoint) async {
         while !Task.isCancelled {
-            // Every port in the span, because each simulator app holds one of them.
-            for candidate in Self.portsToDial(from: port, skipping: Set(localPorts.values.compactMap { $0 })) {
-                guard !Task.isCancelled else { return }
+            switch endpoint {
+            case let .local(candidate) where !localPorts.values.contains(candidate):
                 do {
                     let session = try await NectoLocalConnector.connect(port: candidate)
                     try await accept(
@@ -204,10 +223,10 @@ public actor NectoConnectionCenter {
                 } catch {
                     // Nothing listening there. Try again after the interval.
                 }
-            }
-
-            for device in attached.values {
-                await connectToDevice(device)
+            case let .usb(device, candidate) where !connectedPorts(usbDeviceID: device.deviceID).contains(candidate):
+                await connectToDevice(device, port: candidate)
+            default:
+                break
             }
 
             try? await Task.sleep(for: probeInterval)
@@ -227,8 +246,6 @@ public actor NectoConnectionCenter {
             attachedTo == usbDeviceID ? devicePorts[id] : nil
         })
     }
-
-    // MARK: Handshake
 
     @discardableResult
     func accept(
@@ -301,8 +318,6 @@ public actor NectoConnectionCenter {
         guard connections[app.id]?.session === session else { return }
         removeConnections { $0.id == app.id }
     }
-
-    // MARK: Bookkeeping
 
     private var usbDeviceIDs: [String: Int?] = [:]
     /// Which loopback port each simulator connection came in on, so the probe skips

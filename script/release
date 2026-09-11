@@ -89,8 +89,10 @@ echo
 echo "==> command line tool"
 # Copy before signing so the CLI is included in the bundle's signature.
 swift build --package-path NectoMac -c release --arch arm64 --arch x86_64 --product necto-cli >/dev/null
-cp "$(swift build --package-path NectoMac -c release --arch arm64 --arch x86_64 --product necto-cli --show-bin-path)/necto-cli" \
-  "$APP/Contents/MacOS/necto-cli"
+CLI_BUILD_DIR="$(swift build --package-path NectoMac -c release --arch arm64 --arch x86_64 --product necto-cli --show-bin-path)"
+cp "$CLI_BUILD_DIR/necto-cli" "$APP/Contents/MacOS/necto-cli"
+mkdir -p "$APP/Contents/Resources"
+cp -R "$CLI_BUILD_DIR/NectoMac_necto-cli.bundle" "$APP/Contents/Resources/"
 
 node script/licenses.mjs "$APP"
 

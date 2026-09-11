@@ -74,7 +74,8 @@ answer when the app is not running.
 
 ## Verifying a plugin
 
-For CLI lifecycle changes, first run the command shown in Settings → About and check
+For CLI lifecycle changes, click **Install CLI** in Settings → General → Command
+line tool, approve the macOS authentication prompt, and check
 `necto --help`, `necto install --help`, `necto delete --help`, and the `necto-cli`
 aliases. Check that mixed `--local --remote` flags and URLs passed with `--local`
 fail. Then check `necto install <repo>`, `necto install <folder> --local`,

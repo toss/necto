@@ -8,7 +8,7 @@
 별도의 `surface: "cli"` 권한 플래그가 요청에 전달되지는 않아요.
 
 `necto-cli shell run`은 Necto의 내부 CLI 매니페스트를 호출하고 Settings의 전용
-Shell Access 항목을 사용해요. 일반 `plugin invoke`와 `plugin subscribe`는
+Shell Access 항목을 사용해요. 일반 `plugin send`와 `plugin subscribe`는
 `pluginID`로 지정한 플러그인의 주체로 실행해요. 그 플러그인이 셸 오퍼레이션을
 노출한다면 해당 플러그인의 셸 권한도 사용해요. 소켓은 로컬 OS 사용자 권한으로
 실행되는 프로세스를 신뢰하며 플러그인 소유자를 인증하거나 일반 CLI 호출을
@@ -28,21 +28,28 @@ Shell Access 항목을 사용해요. 일반 `plugin invoke`와 `plugin subscribe
 
 ```json
 { "id": "r1", "kind": "targets" }
-{ "id": "r2", "kind": "plugins" }
+{ "id": "r2", "kind": "plugins", "device": "sim-1", "app": "com.example.app" }
+{ "id": "h1", "kind": "plugins", "device": "sim-1", "app": "com.example.app", "pluginID": "network-logger", "operationID": "records.detail" }
+{ "id": "h2", "kind": "plugins", "desktop": true }
 { "id": "i1", "kind": "installPlugin", "input": { "path": "/absolute/path/to/dist" } }
 { "id": "i2", "kind": "installPlugin", "input": { "repositoryURL": "https://github.com/owner/plugins" } }
 { "id": "d1", "kind": "deletePlugin", "pluginID": "com.example.plugin" }
 { "id": "r3", "kind": "invoke",    "pluginID": "url-scheme", "operationID": "links.open",
-  "input": { "url": "https://example.com" }, "app": "com.example.app" }
-{ "id": "r4", "kind": "subscribe", "pluginID": "plugin-sample", "operationID": "host.ticks" }
+  "input": { "url": "https://example.com" }, "device": "sim-1", "app": "com.example.app" }
+{ "id": "r4", "kind": "subscribe", "pluginID": "plugin-sample", "operationID": "host.ticks", "device": "sim-1", "app": "com.example.app" }
 { "id": "r4", "kind": "cancel" }
 ```
 
-- `pluginID`와 `operationID`는 `plugins`가 반환하는 설치된 매니페스트의 id예요.
-  목록을 코드에 고정하지 않고 현재 호출할 수 있는 오퍼레이션을 조회해요.
-- `app`은 디바이스 오퍼레이션을 처리할 앱의 번들 ID예요. 같은 앱이 여러 기기에서
-  실행 중이면 `targets`에 나온 기기 ID를 `device`로 함께 지정해요.
-  조건에 맞는 연결 대상이 정확히 하나가 아니면 요청이 실패해요.
+- `plugins`는 선택한 대상의 플러그인 요약을 반환해요. `pluginID`를 추가하면
+  오퍼레이션 목록을, `operationID`까지 추가하면 해당 오퍼레이션의 스키마를 반환해요.
+- `plugins`, `invoke`, `subscribe`에는 `device`와 `app`을 모두 지정하거나
+  `desktop: true`를 지정해야 해요. 앱에 포함된 플러그인은 Mac에서 처리하는
+  오퍼레이션을 호출할 때도 같은 기기·앱을 지정해요. `desktop`은 별도로 설치한
+  데스크톱 플러그인용이에요. 다른 앱이나 GUI 선택으로 대체하지 않아요.
+- 조회 결과에는 `scope`, `target`과 함께 `plugins`, `plugin` 또는 `plugin`과
+  `operation`이 담겨요. 오퍼레이션은 `available`로 호출 가능 여부를 알려주고
+  불가능하면 `unavailableReason`도 반환해요. 업데이트 후에는 help를 다시 조회하세요.
+  실제 호출은 Registry가 현재 매니페스트로 검증해요.
 - `cancel`은 멈추려는 대기 요청이나 구독의 `id`를 재사용해요.
 
 `installPlugin`에는 로컬 폴더·ZIP의 절대 경로 `path` 또는 HTTPS `repositoryURL` 중
@@ -89,35 +96,72 @@ Settings와 같은 경로로 설치 폴더를 휴지통으로 옮기고 권한·
 ## CLI 사용 순서
 
 ```bash
-necto-cli plugin list                      # installed plugins and their operations
+necto device list --json
+necto plugin list --device <device-id> --app <bundle-id> --json
+necto plugin help <plugin> --device <device-id> --app <bundle-id>
+necto plugin help <plugin> <op> --device <device-id> --app <bundle-id> --json
+necto plugin send <plugin> <op> --device <device-id> --app <bundle-id> --input '{}'
+necto plugin subscribe <plugin> <op> --device <device-id> --app <bundle-id> --limit 10 --timeout 30s
+necto plugin list --desktop
+necto plugin help <plugin> <op> --desktop
+necto plugin send <plugin> <op> --desktop --input-file input.json
+
 necto install owner/plugins --json         # remote is the default
 necto install https://github.com/owner/plugins --remote
 necto install https://github.com/owner/plugins/releases/tag/v1.2.0
 necto install ./dist --local               # approve in Necto; wait for installation
 necto install ./my-plugin.zip --local
 necto delete com.example.plugin --json     # ID from plugin list; moves files to Trash
-necto-cli plugin schema <plugin> <op>      # what one operation takes and returns
-necto-cli plugin invoke <plugin> <op> --input '{}'
-necto-cli plugin invoke <plugin> <op> --input '{}' --app <bundle-id> --device <device-id>
-necto-cli plugin subscribe <plugin> <op>   # one JSON object per line, ^C cancels
-necto-cli targets --json                   # includes bundle ids and device ids
-necto-cli shell run 'git status --short'   # shell policy is managed in Necto Settings
+necto shell run 'git status --short'       # shell policy is managed in Necto Settings
 ```
 
-자리표시자는 `plugin list`와 `targets --json`에서 확인한 값으로 바꾸고,
-`--input`은 오퍼레이션의 `schema`에 맞춰 작성해요. `schema`와 `invoke`는 기본으로
-JSON을 출력하고 `subscribe`는 이벤트마다 JSON 한 줄을 출력해요.
-`targets`와 `plugin list`에서 JSON이 필요할 때만 `--json`을 붙이세요.
-`subscribe`에도 `--app`, `--device`를 지정할 수 있어요.
+자리표시자는 조회한 ID로 바꾸세요. `device list --json`은 기기별 `id`, `name`과
+연결된 앱 목록 `apps`를 반환해요. 앱에는 `bundleID`, `name`이 들어 있어요.
+`plugin help`는 기존 매니페스트의 설명과 스키마를 읽으며 별도 도움말 파일은 필요 없어요.
+입력은 스키마의 필수 필드·타입·제약에 맞춰 작성해요. 설명은 사용 순서를 안내할 뿐
+호출 경로나 권한을 정하지 않아요.
+
+`send`는 JSON을, `subscribe`는 이벤트마다 JSON 한 줄을 출력해요. 구독은 완료되거나
+양수 `--limit`, `--timeout`(`30s`, `500ms` 등)에 도달하면 종료 코드 `0`으로 끝나요.
+Ctrl+C는 구독을 중지하고 `130`으로 종료해요. 서버 오류나 예상치 못한 연결 해제는
+실패로 처리하며 오류는 stderr로 출력해요. 연결이 닫히면 호스트도 해당 구독을 취소해요.
+
+큰 JSON은 `--input-file <path>`, 표준 입력은 `--input-file -`로 전달하세요.
+`--input`과 함께 사용할 수 없으며 입력을 생략하면 `{}`를 보내요.
+`plugin invoke`는 `send`의 별칭으로 유지해요. `plugin schema`도 같은 대상 옵션을
+받아 입출력 스키마만 출력해요. `targets --json`은 기존의 평탄한 타깃 목록을 유지해요.
+이전에 대상을 자동 선택하던 명령에는 이제 대상 옵션이 필요하므로 스크립트도 수정하세요.
+
+## 코딩 에이전트 스킬
+
+```bash
+necto skills install --codex
+necto skills install --claude
+necto skills install --codex --claude
+```
+
+두 에이전트는 같은 `SKILL.md`를 사용해요. Codex는 `~/.agents/skills/necto`,
+Claude Code는 `~/.claude/skills/necto`에 설치해요. 스킬은 특정 플러그인 목록 대신
+현재 연결된 플러그인을 조회하고 스키마에 맞춰 호출하는 방법을 안내해요.
+매니페스트를 바꾸거나 플러그인별 스킬을 따로 설치하지 않아요.
+
+Necto가 꺼져 있어도 설치할 수 있어요. 같은 내용으로 다시 실행하면 변경하지 않고
+내용이 다른 파일을 교체하려면 `--force`가 필요해요. Necto의 `SKILL.md`만 쓰며
+다른 스킬과 설정은 건드리지 않아요. 에이전트가 스킬을 찾지 못하면 세션을 다시 여세요.
+
+## CLI 설정과 플러그인 설치
 
 `install`의 기본 모드는 `--remote`예요. `owner/repo`는 GitHub.com으로 해석하고
 HTTPS 저장소·릴리스 URL도 받을 수 있어요. 로컬 폴더와 ZIP은 `--local`이 필요하며
 `--local`과 `--remote`를 함께 사용할 수 없어요. `necto plugin install`과
 `necto-cli plugin install`도 같은 옵션을 지원해요.
 
-Settings → About에 표시된 명령을 복사해 실행하면 앱에 포함된 실행 파일을 가리키는
-`necto`와 `necto-cli` 링크를 `PATH`에 등록해요. 앱 업데이트 후 기존 `necto-cli`만
-있다면 해당 명령을 다시 실행하세요. 기존 CLI 명령도 계속 사용할 수 있어요.
+설정 → 일반 → 명령줄 도구에서 **CLI 설치**를 누르고 macOS 관리자 인증을 진행하세요.
+앱에 포함된 실행 파일을 가리키는 `necto`와 `necto-cli` 링크를 `/usr/local/bin`에 만들어요.
+기존 파일이나 다른 실행 파일을 가리키는 링크는 덮어쓰지 않아요.
+CLI와 번들 스킬은 앱과 함께 업데이트돼요.
+에이전트에 설치한 스킬도 업데이트하려면 `skills install`을 다시 실행하세요.
+내용이 달라 `--force`가 필요하다면 변경 내용을 먼저 확인하세요.
 
 `necto plugin delete <pluginID>`와 `necto-cli plugin delete <pluginID>`도 지원해요.
 삭제 명령은 별도 설치 승인을 다시 묻지 않으며 GitHub 저장소를 삭제하지 않아요.

@@ -401,6 +401,12 @@ const generalPage = () => `
       </div>
       <span class="necto-row-value">1</span>
     </div>
+    <div class="necto-row">
+      <div class="necto-row-label">Command line tool
+        <p class="necto-row-hint">Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval.</p>
+      </div>
+      <button type="button" class="necto-button necto-button-quiet">Install CLI</button>
+    </div>
   </div>`;
 
 const pluginsPage = () => `

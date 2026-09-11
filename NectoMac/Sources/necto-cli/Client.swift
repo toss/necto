@@ -18,15 +18,18 @@ struct Client {
         case notRunning
         case remote(code: String, message: String)
         case protocolError
+        case disconnected
 
         var description: String {
             switch self {
             case .notRunning:
                 "Could not reach Necto. Is the app running?"
             case let .remote(code, message):
-                "\(code): \(message)"
+                displayText("\(code): \(message)")
             case .protocolError:
                 "Necto answered something this version of necto-cli does not understand"
+            case .disconnected:
+                "Necto disconnected before the stream completed."
             }
         }
     }
@@ -67,61 +70,98 @@ struct Client {
     }
 
     /// Follows a stream, calling `onEvent` per event, until `end`, an error, or ^C.
-    func stream(_ request: NectoControlRequest, onEvent: @escaping (NectoJSONValue) -> Void) async throws {
+    func stream(
+        _ request: NectoControlRequest, limit: Int? = nil, timeout: Duration? = nil,
+        onEvent: @escaping (NectoJSONValue) -> Void
+    ) async throws {
         let session = try await connect()
-
-        // ^C should tell Necto to stop the stream, not just vanish. The signal handler
-        // sends the cancel and the normal loop below sees the `end` that follows.
-        Interrupt.install { [session] in
-            Task { try? await session.send(NectoControlRequest(id: request.id, kind: .cancel)) }
+        let control = StreamControl(session: session)
+        let interrupt = Interrupt { control.stop(.interrupted) }
+        let timer = timeout.map { duration in
+            Task {
+                do { try await Task.sleep(for: duration) }
+                catch { return }
+                control.stop(.timeout)
+            }
         }
         defer {
-            Interrupt.remove()
+            timer?.cancel()
+            interrupt.remove()
             session.close()
         }
-
-        try await session.send(request)
-
-        while true {
-            guard let response = try? await session.receive(NectoControlResponse.self) else { return }
-            guard response.id == request.id else { continue }
-
-            switch response.kind {
-            case .event:
-                if let value = response.value { onEvent(value) }
-            case .end:
-                return
-            case .error:
-                throw Failure.remote(
-                    code: response.error?.code ?? "FAILED",
-                    message: response.error?.message ?? "The stream failed"
-                )
-            case .result:
-                throw Failure.protocolError
+        try await withTaskCancellationHandler {
+            do {
+                try await session.send(request)
+                var count = 0
+                while true {
+                    let response: NectoControlResponse
+                    do { response = try await session.receive(NectoControlResponse.self) }
+                    catch { throw Failure.disconnected }
+                    if control.reason != nil { break }
+                    guard response.id == request.id else { continue }
+                    switch response.kind {
+                    case .event:
+                        if let value = response.value {
+                            onEvent(value)
+                            count += 1
+                            if let limit, count >= limit { return }
+                        }
+                    case .end:
+                        return
+                    case .error:
+                        throw Failure.remote(
+                            code: response.error?.code ?? "FAILED",
+                            message: response.error?.message ?? "The stream failed"
+                        )
+                    case .result:
+                        throw Failure.protocolError
+                    }
+                }
+            } catch {
+                if control.reason == nil { throw error }
             }
+            switch control.reason {
+            case .interrupted: throw ExitCode(130)
+            case .cancelled: throw CancellationError()
+            case .timeout: return
+            case nil: throw Failure.disconnected
+            }
+        } onCancel: {
+            control.stop(.cancelled)
         }
     }
 }
 
-/// SIGINT plumbing for `subscribe`.
-private enum Interrupt {
-    nonisolated(unsafe) private static var source: DispatchSourceSignal?
+private final class StreamControl: @unchecked Sendable {
+    enum Reason { case timeout, interrupted, cancelled }
+    private let lock = NSLock()
+    private var stopped: Reason?
+    private let session: NectoMessageSession
 
-    static func install(_ handle: @escaping @Sendable () -> Void) {
+    init(session: NectoMessageSession) { self.session = session }
+
+    var reason: Reason? { lock.withLock { stopped } }
+
+    func stop(_ reason: Reason) {
+        lock.withLock { if stopped == nil { stopped = reason } }
+        // This command owns its connection; the host cancels its requests on EOF.
+        session.close()
+    }
+}
+
+private final class Interrupt {
+    private let source: DispatchSourceSignal
+
+    init(_ handle: @escaping @Sendable () -> Void) {
         signal(SIGINT, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGINT)
-        source.setEventHandler {
-            handle()
-            // Give the cancel a moment to travel, then leave the way ^C means.
-            DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { exit(130) }
-        }
+        source.setEventHandler(handler: handle)
         source.resume()
         self.source = source
     }
 
-    static func remove() {
-        source?.cancel()
-        source = nil
+    func remove() {
+        source.cancel()
         signal(SIGINT, SIG_DFL)
     }
 }

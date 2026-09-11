@@ -8,7 +8,7 @@ and payload validation and the same providers. An operation must be declared in 
 installed manifest. Requests do not carry a separate `surface: "cli"` authorization flag.
 
 `necto-cli shell run` invokes Necto's internal CLI manifest and uses its dedicated
-Shell Access entry in Settings. General `plugin invoke` and `plugin subscribe`
+Shell Access entry in Settings. General `plugin send` and `plugin subscribe`
 requests instead run as the plugin selected by `pluginID`, including that plugin's
 shell permissions when it exposes a shell operation. The socket trusts processes
 running as the local OS user; it does not authenticate plugin ownership or isolate
@@ -29,21 +29,28 @@ general CLI calls from plugin grants. See [shell access](bridges.md#shell-access
 
 ```json
 { "id": "r1", "kind": "targets" }
-{ "id": "r2", "kind": "plugins" }
+{ "id": "r2", "kind": "plugins", "device": "sim-1", "app": "com.example.app" }
+{ "id": "h1", "kind": "plugins", "device": "sim-1", "app": "com.example.app", "pluginID": "network-logger", "operationID": "records.detail" }
+{ "id": "h2", "kind": "plugins", "desktop": true }
 { "id": "i1", "kind": "installPlugin", "input": { "path": "/absolute/path/to/dist" } }
 { "id": "i2", "kind": "installPlugin", "input": { "repositoryURL": "https://github.com/owner/plugins" } }
 { "id": "d1", "kind": "deletePlugin", "pluginID": "com.example.plugin" }
 { "id": "r3", "kind": "invoke",    "pluginID": "url-scheme", "operationID": "links.open",
-  "input": { "url": "https://example.com" }, "app": "com.example.app" }
-{ "id": "r4", "kind": "subscribe", "pluginID": "plugin-sample", "operationID": "host.ticks" }
+  "input": { "url": "https://example.com" }, "device": "sim-1", "app": "com.example.app" }
+{ "id": "r4", "kind": "subscribe", "pluginID": "plugin-sample", "operationID": "host.ticks", "device": "sim-1", "app": "com.example.app" }
 { "id": "r4", "kind": "cancel" }
 ```
 
-- `pluginID` and `operationID` are the ids from `plugins` — the installed manifests.
-  Query this list to discover currently callable operations instead of hardcoding them.
-- `app` selects a connected app by bundle ID for device operations. If that app runs
-  on several devices, also set `device` to the device ID from `targets`.
-  The selection must identify exactly one connected target; otherwise the request fails.
+- `plugins` returns plugin summaries for the selected scope. Add `pluginID` to get
+  operation summaries; add `operationID` as well to get that operation's full schemas.
+- `plugins`, `invoke`, and `subscribe` require both `device` and `app`, or
+  `desktop: true`. The pair identifies the app carrying the plugin, even when an
+  operation binds a desktop bridge. Desktop scope selects independently installed
+  plugins. These scopes never fall back to each other or use the GUI selection.
+- Discovery results include `scope` and `target`, followed by `plugins`, `plugin`,
+  or `plugin` plus `operation`. Operation details include `available` and, when
+  unavailable, `unavailableReason`. Read help again after a plugin update; the
+  Registry validates calls against the current manifest.
 - `cancel` reuses the `id` of the pending request or subscription it stops.
 
 `installPlugin` accepts exactly one absolute local folder/ZIP `path` or HTTPS
@@ -95,34 +102,71 @@ device plugins fail without deleting files. Installation and deletion are serial
 by the same coordinator; a pending install/approval must finish first.
 
 ```bash
-necto-cli plugin list                      # installed plugins and their operations
+necto device list --json
+necto plugin list --device <device-id> --app <bundle-id> --json
+necto plugin help <plugin> --device <device-id> --app <bundle-id>
+necto plugin help <plugin> <op> --device <device-id> --app <bundle-id> --json
+necto plugin send <plugin> <op> --device <device-id> --app <bundle-id> --input '{}'
+necto plugin subscribe <plugin> <op> --device <device-id> --app <bundle-id> --limit 10 --timeout 30s
+necto plugin list --desktop
+necto plugin help <plugin> <op> --desktop
+necto plugin send <plugin> <op> --desktop --input-file input.json
+
 necto install owner/plugins --json         # remote is the default
 necto install https://github.com/owner/plugins --remote
 necto install https://github.com/owner/plugins/releases/tag/v1.2.0
 necto install ./dist --local               # approve in Necto; wait for installation
 necto install ./my-plugin.zip --local
 necto delete com.example.plugin --json     # ID from plugin list; moves files to Trash
-necto-cli plugin schema <plugin> <op>      # what one operation takes and returns
-necto-cli plugin invoke <plugin> <op> --input '{}'
-necto-cli plugin invoke <plugin> <op> --input '{}' --app <bundle-id> --device <device-id>
-necto-cli plugin subscribe <plugin> <op>   # one JSON object per line, ^C cancels
-necto-cli targets --json                   # includes bundle ids and device ids
-necto-cli shell run 'git status --short'   # shell policy is managed in Necto Settings
+necto shell run 'git status --short'       # shell policy is managed in Necto Settings
 ```
 
-Replace the placeholders with values from `plugin list` and `targets --json`, and
-build `--input` from the operation's `schema`. `schema` and `invoke` already print
-JSON; `subscribe` prints one JSON event per line. For `targets` and `plugin list`,
-use `--json` to select JSON instead of the default human-readable output.
-`subscribe` also accepts `--app` and `--device`.
+Replace placeholders with IDs from discovery. `device list --json` groups connected
+apps (`bundleID`, `name`) under each device (`id`, `name`). `plugin help` reads existing
+manifest descriptions and schemas; it does not require a separate help file.
+Build inputs from the schema's required fields, types, and constraints. Descriptions
+explain workflows but do not define routing or permissions.
+
+`send` prints JSON. `subscribe` prints JSON Lines and stops on completion, a positive
+`--limit`, `--timeout` (for example `30s` or `500ms`), or Ctrl+C. Completion and bounds
+exit with `0`; Ctrl+C exits with `130`. Remote errors and unexpected disconnects exit
+nonzero. Errors go to stderr. Closing the CLI connection cancels its active stream.
+
+Use `--input-file <path>` for large JSON or `--input-file -` for stdin; it cannot be
+combined with `--input`. No input means `{}`. `plugin invoke` remains an alias for
+`send`; `plugin schema` prints just the input/output schemas with the same required
+scope flags. `targets --json` retains the flat target list. Commands that formerly
+guessed a target now require an explicit scope; update scripts accordingly.
+
+## Coding agent skills
+
+```bash
+necto skills install --codex
+necto skills install --claude
+necto skills install --codex --claude
+```
+
+Both agents use the same bundled `SKILL.md`. Codex installs to
+`~/.agents/skills/necto`; Claude Code installs to `~/.claude/skills/necto`. The skill
+teaches discovery and schema-based calls rather than listing specific plugins.
+It does not change a manifest or install plugin-specific skills.
+
+Installation works without a running Necto app. Repeating it with identical content
+does nothing; replacing changed content requires `--force`. The command only writes
+the Necto `SKILL.md`, leaving other skills and configuration alone. Reload the agent's
+session if it does not discover the new skill.
+
+## CLI setup and plugin installation
 
 `install` defaults to `--remote`; `owner/repo` resolves on GitHub.com and HTTPS
 repository/release URLs are accepted. Filesystem folders and ZIPs require `--local`.
 `--local` and `--remote` are mutually exclusive. `necto plugin install` and
-`necto-cli plugin install` accept the same options. Copy and run the command shown in
-Settings → About to link both `necto` and `necto-cli` to the bundled executable on
-your `PATH`. Existing commands remain usable; after updating Necto, run that command
-again if only `necto-cli` is available.
+`necto-cli plugin install` accept the same options. In Settings → General → Command
+line tool, click **Install CLI** and approve the macOS administrator prompt. This
+links `necto` and `necto-cli` in `/usr/local/bin` to the bundled executable. Existing
+files or links to another executable are not overwritten. The CLI and its bundled
+skill update with the app. Run `skills install`
+again to update an installed skill; review the difference before using `--force`.
 
 `necto plugin delete <pluginID>` and `necto-cli plugin delete <pluginID>` are also supported.
 Deletion is explicit and does
