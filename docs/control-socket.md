@@ -138,6 +138,24 @@ combined with `--input`. No input means `{}`. `plugin invoke` remains an alias f
 scope flags. `targets --json` retains the flat target list. Commands that formerly
 guessed a target now require an explicit scope; update scripts accordingly.
 
+## Coding agent skills
+
+```bash
+necto skills install --codex
+necto skills install --claude
+necto skills install --codex --claude
+```
+
+Both agents use the same bundled `SKILL.md`. Codex installs to
+`~/.agents/skills/necto`; Claude Code installs to `~/.claude/skills/necto`. The skill
+teaches discovery and schema-based calls rather than listing specific plugins.
+It does not change a manifest or install plugin-specific skills.
+
+Installation works without a running Necto app. Repeating it with identical content
+does nothing; replacing changed content requires `--force`. The command only writes
+the Necto `SKILL.md`, leaving other skills and configuration alone. Reload the agent's
+session if it does not discover the new skill.
+
 ## CLI setup and plugin installation
 
 `install` defaults to `--remote`; `owner/repo` resolves on GitHub.com and HTTPS

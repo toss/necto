@@ -211,7 +211,91 @@ struct NectoCLIBlackBoxTests {
         #expect(result.status == 130)
     }
 
+    @Test("skills install for both agents without Necto and protect user edits")
+    func skillInstallation() async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let arguments = ["skills", "install", "--codex", "--claude"]
+        let installed = try await fixture.run(arguments)
+        #expect(installed.status == 0)
+        let paths = [".agents/skills/necto/SKILL.md", ".claude/skills/necto/SKILL.md"]
+        for path in paths {
+            let contents = try String(contentsOf: fixture.directory.appending(path: path), encoding: .utf8)
+            #expect(contents.contains("necto plugin help"))
+            #expect(contents.contains("necto device list"))
+        }
+        let repeated = try await fixture.run(arguments)
+        #expect(repeated.status == 0)
+        let codex = fixture.directory.appending(path: paths[0])
+        try Data("user-owned instructions\n".utf8).write(to: codex)
+        let refused = try await fixture.run(["skills", "install", "--codex"])
+        #expect(refused.status != 0)
+        #expect(try String(contentsOf: codex, encoding: .utf8) == "user-owned instructions\n")
+        let replaced = try await fixture.run(["skills", "install", "--codex", "--force"])
+        #expect(replaced.status == 0)
+        #expect(try String(contentsOf: codex, encoding: .utf8).contains("necto plugin help"))
+    }
 
+    @Test("skill resources resolve through PATH aliases and relocated app bundles", arguments: ["build-path", "app-direct", "app-path"])
+    func relocatedSkillInstallation(mode: String) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let builtExecutable = try CLIProcessFixture.executable()
+        var executable = builtExecutable
+        var resource: URL?
+        if mode != "build-path" {
+            let contents = fixture.directory.appending(path: "Necto.app/Contents")
+            let macOS = contents.appending(path: "MacOS")
+            let resources = contents.appending(path: "Resources")
+            try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+            executable = macOS.appending(path: "necto-cli")
+            try FileManager.default.copyItem(at: builtExecutable, to: executable)
+            let bundleName = "NectoMac_necto-cli.bundle"
+            let copiedResource = resources.appending(path: bundleName)
+            try FileManager.default.copyItem(at: builtExecutable.deletingLastPathComponent().appending(path: bundleName), to: copiedResource)
+            resource = copiedResource
+        }
+        var arguments = ["skills", "install", "--codex"]
+        var launcher = executable
+        var path: String?
+        if mode.hasSuffix("path") {
+            let bin = fixture.directory.appending(path: "bin")
+            try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+            try FileManager.default.createSymbolicLink(at: bin.appending(path: "necto"), withDestinationURL: executable)
+            launcher = URL(filePath: "/bin/bash")
+            arguments = ["-c", "exec necto \"$@\"", "necto-test"] + arguments
+            path = bin.path
+        }
+        let installed = try await fixture.run(arguments, executable: launcher, path: path)
+        #expect(installed.status == 0, "\(installed.error)")
+        let destination = fixture.directory.appending(path: ".agents/skills/necto/SKILL.md")
+        #expect(try String(contentsOf: destination, encoding: .utf8).contains("necto plugin help"))
+        if let resource {
+            try FileManager.default.moveItem(at: resource, to: fixture.directory.appending(path: "removed-resource.bundle"))
+            let missingResource = try await fixture.run(arguments, executable: launcher, path: path)
+            #expect(missingResource.status != 0)
+            #expect(missingResource.error.contains("bundled Necto skill is missing"))
+        }
+    }
+
+    @Test("skill installation refuses symlink destinations even with force", arguments: [false, true])
+    func skillSymlinkRefusal(fileLink: Bool) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let outside = fixture.directory.appending(path: "user-owned")
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        let protectedFile = outside.appending(path: "SKILL.md")
+        try Data("must remain unchanged".utf8).write(to: protectedFile)
+        let parent = fixture.directory.appending(path: fileLink ? ".agents/skills/necto" : ".agents/skills")
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: parent.appending(path: fileLink ? "SKILL.md" : "necto"),
+                                                  withDestinationURL: fileLink ? protectedFile : outside)
+        let result = try await fixture.run(["skills", "install", "--codex", "--force"])
+        #expect(result.status != 0)
+        #expect(result.error.contains("symbolic link"))
+        #expect(try String(contentsOf: protectedFile, encoding: .utf8) == "must remain unchanged")
+    }
 }
 
 private final class CLITestBundleMarker: NSObject {}

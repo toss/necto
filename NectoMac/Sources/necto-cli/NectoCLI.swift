@@ -17,7 +17,7 @@ struct NectoCLI: AsyncParsableCommand {
         --device and --app. Use --desktop for installed desktop plugins. send and
         subscribe use the same schemas, registry and permissions as web panels.
         """,
-        subcommands: [Plugin.Install.self, Plugin.Delete.self, Device.self, Targets.self, Plugin.self, Shell.self, FinishUpdate.self]
+        subcommands: [Plugin.Install.self, Plugin.Delete.self, Device.self, Targets.self, Plugin.self, Shell.self, Skills.self, FinishUpdate.self]
     )
 }
 

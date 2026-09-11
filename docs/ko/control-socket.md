@@ -132,6 +132,23 @@ Ctrl+C는 구독을 중지하고 `130`으로 종료해요. 서버 오류나 예�
 받아 입출력 스키마만 출력해요. `targets --json`은 기존의 평탄한 타깃 목록을 유지해요.
 이전에 대상을 자동 선택하던 명령에는 이제 대상 옵션이 필요하므로 스크립트도 수정하세요.
 
+## 코딩 에이전트 스킬
+
+```bash
+necto skills install --codex
+necto skills install --claude
+necto skills install --codex --claude
+```
+
+두 에이전트는 같은 `SKILL.md`를 사용해요. Codex는 `~/.agents/skills/necto`,
+Claude Code는 `~/.claude/skills/necto`에 설치해요. 스킬은 특정 플러그인 목록 대신
+현재 연결된 플러그인을 조회하고 스키마에 맞춰 호출하는 방법을 안내해요.
+매니페스트를 바꾸거나 플러그인별 스킬을 따로 설치하지 않아요.
+
+Necto가 꺼져 있어도 설치할 수 있어요. 같은 내용으로 다시 실행하면 변경하지 않고,
+내용이 다른 파일을 교체하려면 `--force`가 필요해요. Necto의 `SKILL.md`만 쓰며
+다른 스킬과 설정은 건드리지 않아요. 에이전트가 스킬을 찾지 못하면 세션을 다시 여세요.
+
 ## CLI 설정과 플러그인 설치
 
 `install`의 기본 모드는 `--remote`예요. `owner/repo`는 GitHub.com으로 해석하고
