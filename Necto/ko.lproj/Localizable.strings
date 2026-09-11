@@ -177,8 +177,13 @@
 "%@ may run this exact command without asking again." = "%@이(가) 이 명령어를 다시 묻지 않고 실행할 수 있습니다.";
 "Add" = "추가";
 "Command line tool" = "명령줄 도구";
-"Run this once to call Necto, and package plugins, from a terminal." = "한 번 실행하면 터미널에서 Necto를 부르고 플러그인을 패키징할 수 있습니다.";
-"Copy command" = "명령어 복사";
+"Install CLI" = "CLI 설치";
+"Use necto or necto-cli in your terminal." = "터미널에서 necto 또는 necto-cli를 사용할 수 있습니다.";
+"Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval." = "/usr/local/bin에 necto와 necto-cli를 연결합니다. 설치할 때 macOS에서 관리자 승인을 요청합니다.";
+"Could not install the CLI. %@" = "CLI를 설치하지 못했습니다. %@";
+"This app does not contain the CLI." = "이 앱에는 CLI가 포함되어 있지 않습니다.";
+"Another item exists at %@. Move it before installing the CLI." = "%@에 다른 파일이나 링크가 있습니다. 해당 항목을 옮긴 뒤 CLI를 설치해 주세요.";
+"The CLI links could not be verified. Try installing again." = "CLI 연결을 확인하지 못했습니다. 다시 설치해 주세요.";
 "Install from GitHub" = "GitHub에서 설치";
 "Reading…" = "읽는 중…";
 "Install from a file" = "파일에서 설치";

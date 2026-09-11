@@ -156,9 +156,12 @@ HTTPS 저장소·릴리스 URL도 받을 수 있어요. 로컬 폴더와 ZIP은 
 `--local`과 `--remote`를 함께 사용할 수 없어요. `necto plugin install`과
 `necto-cli plugin install`도 같은 옵션을 지원해요.
 
-Settings → About에 표시된 명령을 복사해 실행하면 앱에 포함된 실행 파일을 가리키는
-`necto`와 `necto-cli` 링크를 `PATH`에 등록해요. 앱 업데이트 후 기존 `necto-cli`만
-있다면 해당 명령을 다시 실행하세요. 기존 CLI 명령도 계속 사용할 수 있어요.
+설정 → 일반 → 명령줄 도구에서 **CLI 설치**를 누르고 macOS 관리자 인증을 진행하세요.
+앱에 포함된 실행 파일을 가리키는 `necto`와 `necto-cli` 링크를 `/usr/local/bin`에 만들어요.
+기존 파일이나 다른 실행 파일을 가리키는 링크는 덮어쓰지 않아요.
+CLI와 번들 스킬은 앱과 함께 업데이트돼요.
+에이전트에 설치한 스킬도 업데이트하려면 `skills install`을 다시 실행하세요.
+내용이 달라 `--force`가 필요하다면 변경 내용을 먼저 확인하세요.
 
 `necto plugin delete <pluginID>`와 `necto-cli plugin delete <pluginID>`도 지원해요.
 삭제 명령은 별도 설치 승인을 다시 묻지 않으며 GitHub 저장소를 삭제하지 않아요.

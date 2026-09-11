@@ -177,8 +177,13 @@
 "%@ may run this exact command without asking again." = "%@ may run this exact command without asking again.";
 "Add" = "Add";
 "Command line tool" = "Command line tool";
-"Run this once to call Necto, and package plugins, from a terminal." = "Run this once to call Necto, and package plugins, from a terminal.";
-"Copy command" = "Copy command";
+"Install CLI" = "Install CLI";
+"Use necto or necto-cli in your terminal." = "Use necto or necto-cli in your terminal.";
+"Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval." = "Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval.";
+"Could not install the CLI. %@" = "Could not install the CLI. %@";
+"This app does not contain the CLI." = "This app does not contain the CLI.";
+"Another item exists at %@. Move it before installing the CLI." = "Another item exists at %@. Move it before installing the CLI.";
+"The CLI links could not be verified. Try installing again." = "The CLI links could not be verified. Try installing again.";
 "Install from GitHub" = "Install from GitHub";
 "Reading…" = "Reading…";
 "Install from a file" = "Install from a file";

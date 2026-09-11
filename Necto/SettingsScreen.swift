@@ -46,7 +46,6 @@ struct SettingsScreen: View {
     @State private var entries: [NectoDiagnosticsLog.Entry] = []
     @State private var droppedLines = 0
     @State private var didCopy = false
-    @State private var didCopyCommand = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -85,7 +84,11 @@ struct SettingsScreen: View {
         }
         .padding(.leading, 12)
         .background(NectoTheme.background)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if page == .general { model.cliInstaller.refresh() }
+        }
         .task(id: page) {
+            if page == .general { model.cliInstaller.refresh() }
             if page != .shellAccess { selectedShellCaller = nil }
             if page == .plugins { await model.checkPluginUpdates() }
             guard page == .diagnostics else { return }
@@ -196,44 +199,28 @@ struct SettingsScreen: View {
             NectoRowValue(value: "1", scale: scale)
         }
 
-        // The tool is in the app already. Linking it is the person's to run, not
-        // Necto's to do for them: /usr/local/bin is not ours to write to, and a
-        // password prompt for a convenience is a bad trade.
-        if let command = Self.commandLineToolLink {
+        if model.cliInstaller.isAvailable {
             NectoRow(
                 label: NectoL10n.text("Command line tool"),
-                hint: NectoL10n.text("Run this once to call Necto, and package plugins, from a terminal."),
+                hint: NectoL10n.text(model.cliInstaller.isInstalled
+                    ? "Use necto or necto-cli in your terminal."
+                    : "Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval."),
                 scale: scale
             ) {
-                Button(didCopyCommand ? NectoL10n.text("Copied") : NectoL10n.text("Copy command")) {
-                    copyCommandLineToolLink(command)
+                Button(NectoL10n.text(model.cliInstaller.isInstalling ? "Installing…"
+                    : model.cliInstaller.isInstalled ? "Installed" : "Install CLI")) {
+                    Task { await model.cliInstaller.install() }
                 }
                 .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+                .disabled(model.cliInstaller.isInstalling || model.cliInstaller.isInstalled)
+                .accessibilityIdentifier("settings.cli.install")
             }
-        }
-    }
-
-    /// Nil for a build that carries no tool — a debug run from Xcode, where the
-    /// person can build it themselves and the row would only mislead.
-    ///
-    /// `/usr/local/bin` is owned by root and on a clean Apple Silicon Mac does not
-    /// exist yet, so the command says `sudo` and makes the directory. Handing over a
-    /// line that fails without explaining why is worse than asking for a password the
-    /// person types themselves.
-    private static var commandLineToolLink: String? {
-        let tool = Bundle.main.bundleURL.appending(path: "Contents/MacOS/necto-cli")
-        guard FileManager.default.isExecutableFile(atPath: tool.path) else { return nil }
-        return "sudo mkdir -p /usr/local/bin && sudo ln -sf \"\(tool.path)\" /usr/local/bin/necto && sudo ln -sf \"\(tool.path)\" /usr/local/bin/necto-cli"
-    }
-
-    private func copyCommandLineToolLink(_ command: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(command, forType: .string)
-
-        didCopyCommand = true
-        Task {
-            try? await Task.sleep(for: .seconds(1.4))
-            didCopyCommand = false
+            if let error = model.cliInstaller.error {
+                Text(error)
+                    .font(.necto(.label, scale: scale))
+                    .foregroundStyle(NectoTheme.danger)
+                    .textSelection(.enabled)
+            }
         }
     }
 

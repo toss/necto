@@ -161,10 +161,12 @@ session if it does not discover the new skill.
 `install` defaults to `--remote`; `owner/repo` resolves on GitHub.com and HTTPS
 repository/release URLs are accepted. Filesystem folders and ZIPs require `--local`.
 `--local` and `--remote` are mutually exclusive. `necto plugin install` and
-`necto-cli plugin install` accept the same options. Copy and run the command shown in
-Settings → About to link both `necto` and `necto-cli` to the bundled executable on
-your `PATH`. Existing commands remain usable; after updating Necto, run that command
-again if only `necto-cli` is available.
+`necto-cli plugin install` accept the same options. In Settings → General → Command
+line tool, click **Install CLI** and approve the macOS administrator prompt. This
+links `necto` and `necto-cli` in `/usr/local/bin` to the bundled executable. Existing
+files or links to another executable are not overwritten. The CLI and its bundled
+skill update with the app. Run `skills install`
+again to update an installed skill; review the difference before using `--force`.
 
 `necto plugin delete <pluginID>` and `necto-cli plugin delete <pluginID>` are also supported.
 Deletion is explicit and does

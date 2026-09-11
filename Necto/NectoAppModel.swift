@@ -69,6 +69,7 @@ final class NectoAppModel {
     private(set) var connectedApps: [NectoConnectedApp] = []
 
     let backgroundPanels = NectoBackgroundPanels()
+    let cliInstaller = NectoCLIInstaller()
     private(set) var presentationWindowID: UUID?
     @ObservationIgnored private var windows: [UUID: WeakWindow] = [:]
 
