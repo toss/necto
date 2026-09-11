@@ -33,7 +33,7 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Test Mac and CLI packages
-        run: swift test --package-path NectoMac
+        run: swift test --package-path NectoMac --verbose
       - name: Test native integrations and Mac app
         run: script/test native
       - name: Build the Mac app, CLI and E2E tests
@@ -69,9 +69,9 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Test SDK packages
-        run: swift test
+        run: swift test --verbose
       - name: Test SDK consumer
-        run: swift test --package-path Tests/Fixtures/SDKConsumer
+        run: swift test --package-path Tests/Fixtures/SDKConsumer --verbose
       - name: Test package boundaries
         run: node --test script/tests/package.test.mjs
       - name: Build the iOS example
