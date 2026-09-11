@@ -12,6 +12,49 @@ import Testing
 
 @Suite("necto-cli commands")
 struct NectoCLICommandTests {
+    @Test("explicit empty input is invalid rather than the omitted input default")
+    func rejectsExplicitEmptyInput() throws {
+        let parsed = try NectoCLI.parseAsRoot(["plugin", "send", "sample", "read", "--desktop", "--input", ""])
+        let command = try #require(parsed as? Plugin.Invoke)
+        #expect(throws: ValidationError.self) { try command.request() }
+    }
+
+    @Test("stream timeout rejects underflow and overflow", arguments: ["1e-320ms", "1e100s", "infs", "0s"])
+    func invalidTimeoutRange(timeout: String) throws {
+        let parsed = try NectoCLI.parseAsRoot(["plugin", "subscribe", "sample", "observe", "--desktop", "--timeout", timeout])
+        let command = try #require(parsed as? Plugin.Subscribe)
+        #expect(throws: ValidationError.self) { try command.duration() }
+    }
+
+    @Test("stream timeout accepts durations longer than one day")
+    func longTimeout() throws {
+        let parsed = try NectoCLI.parseAsRoot(["plugin", "subscribe", "sample", "observe", "--desktop", "--timeout", "90000s"])
+        let command = try #require(parsed as? Plugin.Subscribe)
+        #expect(try command.duration() == .seconds(90_000))
+    }
+
+    @Test("human help retains and shell quotes the selected target")
+    func quotedHelpTarget() {
+        let text = PluginHelp.render([
+            "scope": "device", "target": ["deviceID": "phone's sim", "appBundleID": "com.example.app"],
+            "plugin": ["id": "sample", "version": "1.0.0"],
+            "operation": ["id": "records.detail", "kind": "once", "inputSchema": ["type": "object"], "outputSchema": ["type": "object"]],
+        ])
+        #expect(text.contains("necto plugin send 'sample' 'records.detail' --device 'phone'\"'\"'s sim' --app 'com.example.app'"))
+        #expect(!text.contains("<device-id>"))
+    }
+
+    @Test("operation help renders timeout values outside the signed integer range")
+    func extremeTimeoutHelp() {
+        let text = PluginHelp.render([
+            "scope": "desktop", "plugin": ["id": "sample", "version": "1.0.0"],
+            "operation": ["id": "read", "kind": "once", "timeoutMs": .number(Double(Int.max)),
+                          "inputSchema": ["type": "object"], "outputSchema": ["type": "object"]],
+        ])
+        #expect(text.contains("Operation timeout:"))
+        #expect(text.contains("ms"))
+    }
+
     @Test("delete identifies an installed plugin without accepting filesystem paths")
     func buildsDeleteRequest() throws {
         for arguments in [["delete", "com.example.plugin", "--json"], ["plugin", "delete", "com.example.plugin"]] {
@@ -106,7 +149,7 @@ struct NectoCLICommandTests {
     ])
     func buildsInvokeRequest(plugin: String, operation: String, input: String) throws {
         let parsed = try NectoCLI.parseAsRoot([
-            "plugin", "invoke", plugin, operation,
+            "plugin", "send", plugin, operation,
             "--input", input,
             "--app", "com.example.app",
             "--device", "simulator-1",
@@ -125,7 +168,7 @@ struct NectoCLICommandTests {
 
     @Test("an omitted input becomes an empty object")
     func defaultsInput() throws {
-        let parsed = try NectoCLI.parseAsRoot(["plugin", "invoke", "files", "files.roots"])
+        let parsed = try NectoCLI.parseAsRoot(["plugin", "send", "files", "files.roots", "--device", "simulator-1", "--app", "com.example.app"])
         let command = try #require(parsed as? Plugin.Invoke)
         #expect(try command.request().input == .object([:]))
     }
@@ -133,7 +176,7 @@ struct NectoCLICommandTests {
     @Test("invalid JSON is rejected before opening the control socket")
     func rejectsInvalidInput() throws {
         let parsed = try NectoCLI.parseAsRoot([
-            "plugin", "invoke", "files", "files.write", "--input", "{not-json}",
+            "plugin", "send", "files", "files.write", "--input", "{not-json}", "--desktop",
         ])
         let command = try #require(parsed as? Plugin.Invoke)
         #expect(throws: ValidationError.self) { try command.request() }
@@ -142,7 +185,7 @@ struct NectoCLICommandTests {
     @Test("subscribe builds a stream request")
     func buildsSubscribeRequest() throws {
         let parsed = try NectoCLI.parseAsRoot([
-            "plugin", "subscribe", "performance-monitor", "performance.observe", "--input", #"{"interval":0.5}"#,
+            "plugin", "subscribe", "performance-monitor", "performance.observe", "--input", #"{"interval":0.5}"#, "--device", "simulator-1", "--app", "com.example.app",
         ])
         let command = try #require(parsed as? Plugin.Subscribe)
         let request = try command.request()

@@ -19,6 +19,7 @@ private struct StubHandler: NectoControlHandling {
     var streamForever = false
     var invokeForever = false
     var installForever = false
+    var echoScope = false
 
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue {
         let path: String
@@ -40,8 +41,14 @@ private struct StubHandler: NectoControlHandling {
         ["targets": .array([["appBundleID": "com.example.app"]])]
     }
 
-    func plugins() async -> NectoJSONValue {
-        ["plugins": .array([["id": "sample"]])]
+    func plugins(app: String?, device: String?, desktop: Bool, pluginID: String?, operationID: String?) async throws -> NectoJSONValue {
+        if echoScope {
+            return ["app": app.map(NectoJSONValue.string) ?? .null,
+                    "device": device.map(NectoJSONValue.string) ?? .null,
+                    "desktop": .bool(desktop), "plugin": pluginID.map(NectoJSONValue.string) ?? .null,
+                    "operation": operationID.map(NectoJSONValue.string) ?? .null]
+        }
+        return ["plugins": .array([["id": "sample"]])]
     }
 
     func invoke(
@@ -49,7 +56,8 @@ private struct StubHandler: NectoControlHandling {
         operationID: String,
         input: NectoJSONValue,
         app _: String?,
-        device _: String?
+        device _: String?,
+        desktop _: Bool
     ) async throws -> NectoJSONValue {
         guard pluginID == "sample" else {
             throw NectoBridgeError(code: .operationUnavailable, message: "No plugin '\(pluginID)'")
@@ -67,6 +75,7 @@ private struct StubHandler: NectoControlHandling {
         input _: NectoJSONValue,
         app _: String?,
         device _: String?,
+        desktop _: Bool,
         onEvent: @escaping @Sendable (NectoJSONValue) -> Void
     ) async throws {
         onEvent(["tick": 1])
@@ -104,6 +113,19 @@ private func makeServer(
 
 @Suite("Control socket", .timeLimit(.minutes(1)))
 struct NectoControlServerTests {
+    @Test("discovery forwards ownership and operation selectors")
+    func discoveryScopeRoundTrip() async throws {
+        let (server, url) = try makeServer(StubHandler(echoScope: true))
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        try await client.session.send(NectoControlRequest(id: "help", kind: .plugins,
+            pluginID: "shared", operationID: "read", app: "app.a", device: "one", desktop: false))
+        let response = try await client.receive()
+        #expect(response.value == ["app": "app.a", "device": "one", "desktop": false,
+                                   "plugin": "shared", "operation": "read"])
+        try await client.session.send(NectoControlRequest(id: "desktop", kind: .plugins, desktop: true))
+        #expect(try await client.receive().value?["desktop"] == true)
+    }
     @Test("delete returns the app result and does not succeed for an unknown ID")
     func deleteRoundTrip() async throws {
         let (server, url) = try makeServer()

@@ -71,7 +71,7 @@ with `--local`. Settings → About has the command that puts both `necto` and th
 compatible `necto-cli` name on your `PATH`. Copy and run it again after updating if
 only the old command name is linked.
 
-To remove a test installation, find its ID with `necto plugin list`, then run
+To remove a test installation, find its ID with `necto plugin list --desktop`, then run
 `necto delete <pluginID> --json`. This moves the installed folder to Trash and revokes
 its registration and permissions. It does not remove the source folder or repository.
 See [the CLI guide](control-socket.md) for aliases, responses and cancellation behavior.

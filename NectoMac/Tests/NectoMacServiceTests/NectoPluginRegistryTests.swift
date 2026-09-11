@@ -359,14 +359,11 @@ func subscriptionOpeningCannotSurviveRemovalOrCallerCancellation(remove: Bool) a
     #expect(output == ["ok": true])
 }
 
-@Test func reportsWhetherAnOperationRequiresATarget() async throws {
+@Test func scopedCatalogDoesNotMergeDesktopAndDevicePlugins() async throws {
     let registry = makeRegistry()
     try await registry.install(manifest: makeManifest(), sourceIdentity: "builtin")
 
-    #expect(await registry.operationRequiresTarget(
-        pluginID: "network-logger",
-        operationID: "records.list"
-    ) == false)
+    #expect(await registry.installedPlugins(for: nil).map(\.manifest.id) == ["network-logger"])
 
     let target = NectoTarget(deviceID: "device-1", appBundleID: "com.example.app")
     try await registry.installDevice(
@@ -374,10 +371,9 @@ func subscriptionOpeningCannotSurviveRemovalOrCallerCancellation(remove: Bool) a
         sourceIdentity: "device:com.example.app",
         for: target
     )
-    #expect(await registry.operationRequiresTarget(
-        pluginID: "device-variables",
-        operationID: "records.list"
-    ) == true)
+    #expect(await registry.installedPlugins(for: target).map(\.manifest.id) == ["device-variables"])
+    #expect(await registry.installedPlugins(for: nil).map(\.manifest.id) == ["network-logger"])
+    #expect(await registry.installedPlugins(for: NectoTarget(deviceID: "other", appBundleID: "com.example.app")).isEmpty)
 }
 
 /// There is no permission name between a plugin and a bridge, so a manifest that binds

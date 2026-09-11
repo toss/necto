@@ -14,7 +14,7 @@ import Foundation
 /// and installations to its existing installer and approval flow.
 public protocol NectoControlHandling: Sendable {
     func targets() async -> NectoJSONValue
-    func plugins() async -> NectoJSONValue
+    func plugins(app: String?, device: String?, desktop: Bool, pluginID: String?, operationID: String?) async throws -> NectoJSONValue
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue
     func deletePlugin(id: String) async throws -> NectoJSONValue
     func invoke(
@@ -22,7 +22,8 @@ public protocol NectoControlHandling: Sendable {
         operationID: String,
         input: NectoJSONValue,
         app: String?,
-        device: String?
+        device: String?,
+        desktop: Bool
     ) async throws -> NectoJSONValue
     /// Returns when the stream ends. Cancellation of the surrounding task is the stop.
     func subscribe(
@@ -31,6 +32,7 @@ public protocol NectoControlHandling: Sendable {
         input: NectoJSONValue,
         app: String?,
         device: String?,
+        desktop: Bool,
         onEvent: @escaping @Sendable (NectoJSONValue) -> Void
     ) async throws
 }
@@ -262,7 +264,11 @@ public final class NectoControlServer: @unchecked Sendable {
                 responder.send(.init(id: request.id, kind: .result, value: await handler.targets()))
 
             case .plugins:
-                responder.send(.init(id: request.id, kind: .result, value: await handler.plugins()))
+                let value = try await handler.plugins(
+                    app: request.app, device: request.device, desktop: request.desktop == true,
+                    pluginID: request.pluginID, operationID: request.operationID
+                )
+                responder.send(.init(id: request.id, kind: .result, value: value))
 
             case .installPlugin:
                 let source = try NectoPluginInstallSource(input: request.input ?? .null)
@@ -280,7 +286,8 @@ public final class NectoControlServer: @unchecked Sendable {
                     operationID: request.operationID ?? "",
                     input: request.input ?? .object([:]),
                     app: request.app,
-                    device: request.device
+                    device: request.device,
+                    desktop: request.desktop == true
                 )
                 responder.send(.init(id: request.id, kind: .result, value: value))
 
@@ -290,7 +297,8 @@ public final class NectoControlServer: @unchecked Sendable {
                     operationID: request.operationID ?? "",
                     input: request.input ?? .object([:]),
                     app: request.app,
-                    device: request.device
+                    device: request.device,
+                    desktop: request.desktop == true
                 ) { event in
                     responder.send(.init(id: request.id, kind: .event, value: event))
                 }

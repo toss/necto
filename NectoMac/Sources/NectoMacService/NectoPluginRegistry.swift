@@ -170,12 +170,10 @@ public actor NectoPluginRegistry {
         return unique.values.sorted { $0.manifest.id < $1.manifest.id }
     }
 
-    /// Whether one operation needs a connected target, without invoking it.
-    /// The CLI uses this before deciding whether target disambiguation is relevant.
-    public func operationRequiresTarget(pluginID: String, operationID: String) -> Bool? {
-        let candidate = installed[pluginID]
-            ?? deviceInstalled.values.compactMap({ $0[pluginID] }).first
-        return candidate?.manifest.operation(id: operationID)?.binding.requiresTarget
+    /// An exact ownership scope, without falling back to another app or desktop installation.
+    public func installedPlugins(for target: NectoTarget?) -> [InstalledPlugin] {
+        let plugins = target.map { deviceInstalled[$0] ?? [:] } ?? installed
+        return plugins.values.sorted { $0.manifest.id < $1.manifest.id }
     }
 
     public func registerHostProvider(_ provider: any NectoOperationProvider) {

@@ -75,7 +75,7 @@ CLI는 선택한 플러그인의 설치가 끝날 때까지 기다려요.
 Settings → About의 명령을 복사해 실행하면 `necto`와 호환 이름인 `necto-cli`를
 `PATH`에 등록해요. 앱 업데이트 후 기존 이름만 있다면 해당 명령을 다시 실행하세요.
 
-시험 설치를 제거하려면 `necto plugin list`에서 ID를 확인한 뒤
+시험 설치를 제거하려면 `necto plugin list --desktop`에서 ID를 확인한 뒤
 `necto delete <pluginID> --json`을 실행하세요. 설치 폴더를 휴지통으로 옮기고 등록을
 해제하며 권한을 회수해요. 설치 원본 폴더나 저장소는 제거하지 않아요.
 별칭, 응답, 취소 동작은 [CLI 가이드](control-socket.md)를 참고하세요.
