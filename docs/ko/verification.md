@@ -48,7 +48,7 @@ xcodebuild -project Necto.xcodeproj -scheme NectoAppTests -destination 'platform
 ### 시뮬레이터 E2E
 
 Necto를 종료한 뒤 `script/test e2e`를 실행하세요. 테스트 전용 번들 ID로 Mac 앱,
-CLI, ExampleApp을 빌드하고 새 iPhone 시뮬레이터에서 `NectoE2ETests` Xcode 스킴을
+CLI, ExampleApp을 빌드하고 기존 iPhone 17 Pro 시뮬레이터에서 `NectoE2ETests` Xcode 스킴을
 실행해요. 회사 서명 인증서나 별도 테스트 도구는 필요하지 않아요.
 
 CLI로 기기와 플러그인을 조회하고 `plugin help`를 확인해요. UserDefaults에 고유한
@@ -56,7 +56,11 @@ CLI로 기기와 플러그인을 조회하고 `plugin help`를 확인해요. Use
 검증해요. 구독 중 ExampleApp을 종료하면 CLI가 오류로 끝나고 기기가 목록에서
 사라져야 해요. ExampleApp을 다시 실행한 뒤 Necto를 재시작하지 않고 두 동작을 반복해요.
 
-실행마다 임시 Mac 홈과 새 시뮬레이터를 사용하고 끝나면 제거해요. 호스트끼리 SDK의
+CI와 로컬 모두 부팅 상태와 관계없이 `iPhone 17 Pro`를 사용해요. 여러 iOS 버전에
+있으면 최신 버전을 선택하고, 해당 기기가 없으면 바로 실패해요.
+설치 전에는 테스트용 ExampleApp(`im.toss.necto.e2e.example`)만 초기화하고,
+끝나면 해당 앱과 임시 Mac 홈을 제거해요. 시뮬레이터는 켜둔 채로 유지하며
+초기화하거나 삭제하지 않아요. 다른 앱도 그대로 두어요. 호스트끼리 SDK의
 루프백 포트를 공유하므로 다른 Necto는 종료해야 해요. 정해진 시간만큼 기다리는 대신
 제한 시간 안에 연결과 응답을 확인해요. 로그와 테스트 결과는 `Build/E2E/Logs`에 남아요.
 로컬에서는 별도로 실행하며 기본 `script/test`에는 포함하지 않아요.

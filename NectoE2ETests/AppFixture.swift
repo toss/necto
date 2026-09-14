@@ -39,26 +39,17 @@ final class AppFixture {
         try #require(Bundle(url: example)?.bundleIdentifier == Self.exampleID)
         try #require(FileManager.default.isExecutableFile(atPath: executable.path))
 
-        let available = try await run("/usr/bin/xcrun", ["simctl", "list", "runtimes", "--json"])
-        let runtimes = try #require(available.json()["runtimes"] as? [[String: Any]])
-        let availableRuntimes = runtimes.filter {
-            ($0["isAvailable"] as? Bool == true) && ($0["identifier"] as? String)?.contains(".iOS-") == true
-        }.sorted {
-            ($0["version"] as? String ?? "").compare($1["version"] as? String ?? "", options: .numeric) == .orderedDescending
-        }
-        let runtime = try #require(availableRuntimes.first, "Install an iOS Simulator runtime in Xcode")
-        let types = try #require(runtime["supportedDeviceTypes"] as? [[String: Any]])
-        let phone = try #require(types.first { ($0["productFamily"] as? String) == "iPhone" })
-        let created = try await run("/usr/bin/xcrun", [
-            "simctl", "create", "Necto E2E", try #require(phone["identifier"] as? String),
-            try #require(runtime["identifier"] as? String),
-        ])
-        let id = created.output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let available = try await run("/usr/bin/xcrun", ["simctl", "list", "devices", "available", "--json"])
+        let devices = try #require(available.json()["devices"] as? [String: [[String: Any]]])
+        let phone = try #require(Self.selectSimulator(devices), "No available iPhone 17 Pro simulator. Add one in Xcode before running E2E.")
+        let id = try #require(phone["udid"] as? String)
         try #require(UUID(uuidString: id) != nil)
-        simulator = id
-        _ = try await run("/usr/bin/xcrun", ["simctl", "boot", id])
-        // A fresh CI simulator can spend several minutes migrating OS data on its first boot.
+        print("E2E simulator: iPhone 17 Pro (\(id))")
+        // Pre-created CI devices may still need their first boot; -b also accepts booted devices.
         _ = try await run("/usr/bin/xcrun", ["simctl", "bootstatus", id, "-b"], timeout: .seconds(600))
+        simulator = id
+        // Reset only our test app, including leftovers from interrupted runs.
+        _ = try await run("/usr/bin/xcrun", ["simctl", "uninstall", id, Self.exampleID])
         _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path])
         _ = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
         try await wait("GUI control socket") {
@@ -66,6 +57,16 @@ final class AppFixture {
             return result.status == 0
         }
         try await launchExample()
+    }
+
+    static func selectSimulator(_ devices: [String: [[String: Any]]]) -> [String: Any]? {
+        devices.keys.filter {
+            $0.hasPrefix("com.apple.CoreSimulator.SimRuntime.iOS-")
+        }.sorted {
+            $0.compare($1, options: .numeric) == .orderedDescending
+        }.flatMap { devices[$0] ?? [] }.first {
+            $0["name"] as? String == "iPhone 17 Pro"
+        }
     }
 
     func launchExample() async throws {
@@ -244,8 +245,7 @@ final class AppFixture {
             _ = try? await finish(command, timeout: .seconds(5))
         }
         if let simulator {
-            _ = try? await run("/usr/bin/xcrun", ["simctl", "shutdown", simulator])
-            do { _ = try await run("/usr/bin/xcrun", ["simctl", "delete", simulator]) }
+            do { _ = try await run("/usr/bin/xcrun", ["simctl", "uninstall", simulator, Self.exampleID]) }
             catch { Issue.record(error) }
         }
         do { try FileManager.default.removeItem(at: home) }

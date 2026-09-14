@@ -52,7 +52,7 @@ xcodebuild -project Necto.xcodeproj -scheme NectoAppTests -destination 'platform
 ### Automated simulator E2E
 
 Quit Necto, then run `script/test e2e`. It builds the real Mac app, CLI and ExampleApp
-with separate test bundle IDs, creates a disposable iPhone simulator, and runs the
+with separate test bundle IDs, selects an existing iPhone 17 Pro simulator, and runs the
 `NectoE2ETests` Xcode scheme. No company signing certificate or extra test tool is needed.
 
 The test discovers the device and its plugins through the CLI, checks `plugin help`,
@@ -61,7 +61,11 @@ events as JSONL (`stream`). It then terminates ExampleApp during a live subscrip
 checks that the CLI exits with an error and the target disappears, and relaunches
 ExampleApp to repeat both operations without restarting Necto.
 
-Each run uses a temporary Mac home and a new simulator, which are removed afterward.
+Both CI and local runs use `iPhone 17 Pro` on the newest available iOS runtime that
+has one, regardless of boot state. If none exists, the test fails immediately.
+It resets only the test ExampleApp (`im.toss.necto.e2e.example`) before installation
+and removes it and the temporary Mac home afterward. The simulator is left booted;
+it is never erased or deleted, and other installed apps are left intact.
 Other Necto instances must be closed because hosts share the SDK's loopback ports.
 Waits check observable state with deadlines, not fixed startup delays or performance
 thresholds. Build logs, command output and the test result bundle are in `Build/E2E/Logs`.
