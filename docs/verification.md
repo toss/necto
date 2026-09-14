@@ -63,9 +63,11 @@ ExampleApp to repeat both operations without restarting Necto.
 
 Both CI and local runs use `iPhone 17 Pro` on the newest available iOS runtime that
 has one, regardless of boot state. If none exists, the test fails immediately.
-It resets only the test ExampleApp (`im.toss.necto.e2e.example`) before installation
-and removes it and the temporary Mac home afterward. The simulator is left booted;
-it is never erased or deleted, and other installed apps are left intact.
+It opens Simulator and waits for boot to finish before installing the test ExampleApp
+(`im.toss.necto.e2e.example`). An installation left by an interrupted run is replaced;
+each test writes its own values. The app and temporary Mac home are removed afterward.
+The simulator is left booted; it is never erased or deleted, and other installed apps
+are left intact.
 Other Necto instances must be closed because hosts share the SDK's loopback ports.
 Waits check observable state with deadlines, not fixed startup delays or performance
 thresholds. Build logs, command output and the test result bundle are in `Build/E2E/Logs`.

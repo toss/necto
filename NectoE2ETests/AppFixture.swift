@@ -46,11 +46,14 @@ final class AppFixture {
         try #require(UUID(uuidString: id) != nil)
         print("E2E simulator: iPhone 17 Pro (\(id))")
         // Pre-created CI devices may still need their first boot; -b also accepts booted devices.
-        _ = try await run("/usr/bin/xcrun", ["simctl", "bootstatus", id, "-b"], timeout: .seconds(600))
+        let boot = try launch(URL(filePath: "/usr/bin/xcrun"), ["simctl", "bootstatus", id, "-b"])
+        _ = try await run("/usr/bin/open", ["-a", "Simulator", "--args", "-CurrentDeviceUDID", id])
+        let bootResult = try await finish(boot, timeout: .seconds(600))
+        try #require(bootResult.status == 0, "Simulator boot failed: \(bootResult.error)")
+        print("E2E: simulator ready")
         simulator = id
-        // Reset only our test app, including leftovers from interrupted runs.
-        _ = try await run("/usr/bin/xcrun", ["simctl", "uninstall", id, Self.exampleID])
-        _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path])
+        _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path], timeout: .seconds(120))
+        print("E2E: Example installed")
         _ = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
         try await wait("GUI control socket") {
             let result = try await self.cli(["device", "list", "--json"], scoped: false)
@@ -245,7 +248,7 @@ final class AppFixture {
             _ = try? await finish(command, timeout: .seconds(5))
         }
         if let simulator {
-            do { _ = try await run("/usr/bin/xcrun", ["simctl", "uninstall", simulator, Self.exampleID]) }
+            do { _ = try await run("/usr/bin/xcrun", ["simctl", "uninstall", simulator, Self.exampleID], timeout: .seconds(120)) }
             catch { Issue.record(error) }
         }
         do { try FileManager.default.removeItem(at: home) }
