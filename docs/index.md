@@ -11,7 +11,7 @@ hero:
       link: /setup
     - theme: alt
       text: GitHub
-      link: https://github.com/toss/toss-necto
+      link: https://github.com/toss/necto
 
 features:
   - title: Devices and simulators

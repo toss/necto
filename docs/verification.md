@@ -247,13 +247,15 @@ Documentation deployment remains a separate manual workflow. GitHub Pages must b
 configured to deploy from Actions.
 Workflow files alone do not prove a successful run on those machines.
 
-`script/release` attaches the DMG and two developer-package tarballs. GitHub computes
-their digests; no `.sha256` sidecar or `SHA256SUMS` file is generated. After publishing,
-confirm the DMG asset has a `sha256:<64 hexadecimal digits>` digest in the release API.
-The updater rejects missing or malformed digests and compares the downloaded DMG
-against that value before mounting it. Check a matching download and a modified file.
-There is no checksum-sidecar fallback; older updaters that require it are not supported.
-Already-published assets are not changed by this script.
+`script/release` attaches the DMG, its `.sha256` file and two developer-package tarballs.
+The checksum uses `shasum -a 256` format with the DMG's filename, without a directory.
+The updater reads the version tag from a `HEAD /releases/latest` redirect, then fetches
+the checksum and DMG from that exact release. It does not call the GitHub API or use
+`gh` credentials. After publishing, verify the redirect and both versioned asset URLs
+without authentication. Missing or malformed checksums must fail; modified DMGs must
+be rejected before mounting. Verify same-version and older releases are not offered.
+Users moving from 0.4.x to the public 0.1.0 release must install it manually once;
+automatic updates never downgrade. Already-published assets are not changed by this script.
 
 ## Verifying update handoff
 

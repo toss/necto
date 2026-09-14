@@ -8,7 +8,7 @@
 
 ## 배포된 앱 설치하기
 
-[릴리스 페이지](https://github.com/toss/toss-necto/releases)에서
+[릴리스 페이지](https://github.com/toss/necto/releases)에서
 `Necto-<version>.dmg`를 내려받아 열고 Necto를 Applications로 옮기세요.
 무결성을 직접 확인하려면 `shasum -a 256 Necto-<version>.dmg` 결과를
 GitHub가 해당 파일에 표시하는 SHA-256 값과 비교하세요. 체크섬은 다운로드가
@@ -18,8 +18,9 @@ GitHub가 해당 파일에 표시하는 SHA-256 값과 비교하세요. 체크�
 배포해요. 저장소의 릴리스 페이지에서만 내려받으세요. Necto는 Gatekeeper를
 우회하기 위해 시스템 보안 설정을 바꾸지 않아요.
 
-앱 업데이트는 `gh`나 GitHub 로그인 없이 HTTPS로 받아요. 교체 전에 DMG의 해시를
-GitHub 릴리스 파일의 `digest`와 비교하고, 새 앱의 서명 무결성, 번들 ID와
+앱 업데이트는 `gh`나 GitHub 로그인 없이 HTTPS로 받아요. GitHub API 대신
+`/releases/latest`가 이동하는 주소에서 버전 태그를 읽어요. 교체 전에 DMG의 해시를
+같은 릴리스의 `.sha256` 파일과 비교하고, 새 앱의 서명 무결성, 번들 ID와
 더 최신 버전인지 확인해요. ad-hoc 서명 앱도
 업데이트할 수 있어요. 다만 이 검사는 파일 손상이나 다른 앱을 걸러내는 것으로,
 저장소 계정이 탈취돼 악성 릴리스가 게시되는 경우까지 막지는 못해요.
@@ -33,8 +34,8 @@ GitHub 릴리스 파일의 `digest`와 비교하고, 새 앱의 서명 무결성
 ## 빌드하고 실행하기
 
 ```bash
-git clone https://github.com/toss/toss-necto.git
-cd toss-necto
+git clone https://github.com/toss/necto.git
+cd necto
 corepack enable
 script/build   # 웹 패키지, Swift 패키지, 앱 순서로 빌드
 open Build/Products/Debug/Necto.app

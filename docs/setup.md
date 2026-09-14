@@ -6,7 +6,7 @@ using [install.md](install.md).
 
 ## Wiring it up
 
-Add `https://github.com/toss/toss-necto.git` in Xcode's Package Dependencies.
+Add `https://github.com/toss/necto.git` in Xcode's Package Dependencies.
 Select the `NectoSDK` product for your app target. It includes the SDK and built-in
 plugin modules; keep the imports for the modules you use, as shown below.
 Register the plugins once during app startup, then start the SDK:
@@ -42,7 +42,7 @@ If your app or plugin package explicitly depends on `NectoDefaultPlugins`,
 products, replace those product dependencies with `NectoSDK`. In a `Package.swift`:
 
 ```swift
-.product(name: "NectoSDK", package: "toss-necto")
+.product(name: "NectoSDK", package: "necto")
 ```
 
 The module names, imports and registration APIs are unchanged. This is a package

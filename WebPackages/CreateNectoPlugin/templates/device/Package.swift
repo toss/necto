@@ -18,7 +18,7 @@ let package = Package(
         .target(
             name: "__PLUGIN_MODULE__",
             dependencies: [
-                .product(name: "NectoSDK", package: "toss-necto"),
+                .product(name: "NectoSDK", package: "necto"),
             ],
             resources: [
                 .copy("Panel"),

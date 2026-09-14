@@ -8,7 +8,7 @@ You can also use the bundled example app, which already includes the SDK.
 ## Published app
 
 Download `Necto-<version>.dmg` from the
-[release page](https://github.com/toss/toss-necto/releases), open the image,
+[release page](https://github.com/toss/necto/releases), open the image,
 and drag Necto into Applications. For a manual integrity check, compare
 `shasum -a 256 Necto-<version>.dmg` with the SHA-256 digest GitHub displays for
 that asset. The checksum detects a mismatched download; it does not authenticate
@@ -18,9 +18,11 @@ The app and its embedded CLI use ad-hoc signing, without a company Developer ID
 certificate or Apple notarization. Download only from the repository's release page.
 Necto does not change system security settings to bypass Gatekeeper.
 
-App updates use anonymous HTTPS, without `gh` or a GitHub login. Before replacing
-the app, Necto checks the DMG against GitHub's release asset `digest`, the new app's signature integrity, its bundle
-ID and a newer version. Ad-hoc builds support these updates. These checks detect
+App updates use anonymous HTTPS, without `gh` or a GitHub login. Necto reads the
+version tag from the `/releases/latest` redirect without calling the GitHub API.
+Before replacing the app, it checks the DMG against the same release's `.sha256`
+file, the new app's signature integrity, its bundle ID and a newer version.
+Ad-hoc builds support these updates. These checks detect
 corruption and incompatible apps, not a malicious release published through a
 compromised repository account; the release repository is the trust source.
 
@@ -32,8 +34,8 @@ compromised repository account; the release repository is the trust source.
 ## Build and launch
 
 ```bash
-git clone https://github.com/toss/toss-necto.git
-cd toss-necto
+git clone https://github.com/toss/necto.git
+cd necto
 corepack enable
 script/build   # web packages, Swift packages, then the app
 open Build/Products/Debug/Necto.app

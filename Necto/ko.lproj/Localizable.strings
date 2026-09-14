@@ -108,6 +108,7 @@
 "The update's integrity, app ID or version could not be verified. Nothing was installed." = "업데이트 파일의 무결성, 앱 ID 또는 버전을 확인하지 못했습니다. 아무것도 설치하지 않았습니다.";
 "The release does not provide valid app assets." = "릴리스에 유효한 앱 파일이 없습니다.";
 "The update download failed (HTTP %d)." = "업데이트 다운로드에 실패했습니다(HTTP %d).";
+"The update check failed (HTTP %d)." = "업데이트 확인에 실패했습니다(HTTP %d).";
 "The update download exceeded its size limit." = "업데이트 다운로드가 용량 제한을 초과했습니다.";
 
 /* Bridge permission wording */

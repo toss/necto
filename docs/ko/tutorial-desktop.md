@@ -13,7 +13,7 @@ Mac이 가진 정보만 사용하므로 `necto.desktop.*`에 바인딩하고 Nec
 디버깅 대상 앱에 포함돼요. 두 종류의 차이는 [plugin-manifest.md](plugin-manifest.md),
 사용 가능한 브리지는 [bridges.md](bridges.md)를 참고하세요.
 
-Node 22.12 이상과 빌드된 [Necto 앱](https://github.com/toss/toss-necto#getting-started)이 필요해요.
+Node 22.12 이상과 빌드된 [Necto 앱](https://github.com/toss/necto#getting-started)이 필요해요.
 
 ## 폴더 구성
 
@@ -35,7 +35,7 @@ mkdir public src
     "build": "vite build"
   },
   "dependencies": {
-    "@necto/bridge": "https://github.com/toss/toss-necto/releases/download/0.4.0/necto-bridge-0.4.0.tgz"
+    "@necto/bridge": "https://github.com/toss/necto/releases/download/0.1.0/necto-bridge-0.1.0.tgz"
   },
   "devDependencies": {
     "vite": "^6.0.0"
@@ -278,7 +278,7 @@ void main();
 패널은 `render`로 화면을 갱신해요. 입력과 출력은 코드에 전달되기 전에
 매니페스트 스키마로 검증하며 실패하면 `code`를 담은 `Error`로
 거부돼요. 전체 API와 모든 에러 코드는
-[WebPackages/Bridge/README.md](https://github.com/toss/toss-necto/blob/main/WebPackages/Bridge/README.md)에 정리되어 있어요.
+[WebPackages/Bridge/README.md](https://github.com/toss/necto/blob/main/WebPackages/Bridge/README.md)에 정리되어 있어요.
 
 ## 네이티브처럼 보이게 만들기
 
@@ -378,4 +378,4 @@ Reload로 변경을 반영해요. 새 폴더나 수정된 폴더는 Reload 후 �
 - 플러그인이 바인딩할 수 있는 모든 것: [bridges.md](bridges.md)
 - 매니페스트, 오퍼레이션 하나하나: [plugin-manifest.md](plugin-manifest.md)
 - 토큰, 컴포넌트, 갤러리: [design.md](design.md)
-- 브리지 클라이언트의 전체 API: [WebPackages/Bridge/README.md](https://github.com/toss/toss-necto/blob/main/WebPackages/Bridge/README.md)
+- 브리지 클라이언트의 전체 API: [WebPackages/Bridge/README.md](https://github.com/toss/necto/blob/main/WebPackages/Bridge/README.md)

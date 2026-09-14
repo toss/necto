@@ -15,7 +15,6 @@ test("creates a device plugin with an ExampleApp and Xcode project", async () =>
     name: "Uptime",
     type: "device",
     cwd,
-    bridgeSpec: "file:../necto-bridge.tgz",
     nectoVersion: "9.8.7",
   });
 
@@ -25,7 +24,11 @@ test("creates a device plugin with an ExampleApp and Xcode project", async () =>
   assert.equal(manifest.id, result.pluginID);
   assert.equal(manifest.name, "Uptime");
   assert.match(await readFile(resolve(cwd, "Uptime", "Sources", "UptimePlugin", "UptimePlugin.swift"), "utf8"), /let id = "com\.example\.uptime"/);
-  assert.match(await readFile(resolve(cwd, "Uptime", "Package.swift"), "utf8"), /exact: "9\.8\.7"/);
+  const swiftPackage = await readFile(resolve(cwd, "Uptime", "Package.swift"), "utf8");
+  assert.match(swiftPackage, /\.package\(url: "https:\/\/github\.com\/toss\/necto\.git", exact: "9\.8\.7"\)/);
+  assert.match(swiftPackage, /\.product\(name: "NectoSDK", package: "necto"\)/);
+  const panelPackage = JSON.parse(await readFile(resolve(cwd, "Uptime", "package.json"), "utf8"));
+  assert.equal(panelPackage.dependencies["@necto/bridge"], "https://github.com/toss/necto/releases/download/9.8.7/necto-bridge-9.8.7.tgz");
   assert.match(await readFile(resolve(cwd, "Uptime", "Uptime.xcodeproj", "project.pbxproj"), "utf8"), /UptimePlugin/);
   assert.match(await readFile(resolve(cwd, "Uptime", "ExampleApp", "ExampleApp.swift"), "utf8"), /NectoSDK\.register\(UptimePlugin\(\)\)/);
   assert.equal(await containsTemplateToken(resolve(cwd, "Uptime", "Package.swift")), false);

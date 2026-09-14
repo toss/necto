@@ -6,7 +6,7 @@ Mac 앱 설치 방법은 [install.md](install.md)를 참고하세요.
 
 ## 연결하기
 
-Xcode의 Package Dependencies에 `https://github.com/toss/toss-necto.git`을 추가해요.
+Xcode의 Package Dependencies에 `https://github.com/toss/necto.git`을 추가해요.
 앱 타깃에는 `NectoSDK` product 하나만 선택해요. SDK와 기본 플러그인 모듈이
 함께 들어 있어요. 코드에서는 아래처럼 사용하는 모듈을 `import`해요.
 앱 시작 시 플러그인을 한 번 등록한 다음 SDK를 시작하세요.
@@ -41,7 +41,7 @@ events.report(NectoEvent(level: .info, tag: "App", message: "App started"))
 `NectoSDK` 하나로 바꿔 주세요. `Package.swift`에서는 다음과 같이 지정해요.
 
 ```swift
-.product(name: "NectoSDK", package: "toss-necto")
+.product(name: "NectoSDK", package: "necto")
 ```
 
 모듈 이름과 `import`, 등록 API는 그대로예요. 다만 기존 product를 참조하는

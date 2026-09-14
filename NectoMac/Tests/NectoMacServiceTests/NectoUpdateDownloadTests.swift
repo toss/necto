@@ -9,6 +9,56 @@ import Testing
 
 @Suite("Update HTTP downloads", .timeLimit(.minutes(1)))
 struct NectoUpdateDownloadTests {
+    @Test("reads a release tag using HEAD without following the redirect")
+    func latestRelease() async throws {
+        let version = try await serve(
+            "HTTP/1.1 302 Found\r\nLocation: https://github.com/toss/necto/releases/tag/0.1.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            expectedMethod: "HEAD"
+        ) { url in
+            try await NectoAppRelease.latestVersion(at: url)
+        }
+        #expect(version.description == "0.1.1")
+    }
+
+    @Test("reports release lookup HTTP errors separately from downloads", arguments: [403, 404, 429, 500])
+    func lookupFailure(status: Int) async throws {
+        _ = try await serve(
+            "HTTP/1.1 \(status) Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            expectedMethod: "HEAD"
+        ) { url in
+            await #expect(throws: NectoAppRelease.Failure.checkFailed(status)) {
+                try await NectoAppRelease.latestVersion(at: url)
+            }
+        }
+    }
+
+    @Test("rejects a missing tag, unrelated redirect and non-release page", arguments: [
+        "HTTP/1.1 302 Found\r\n",
+        "HTTP/1.1 200 OK\r\n",
+        "HTTP/1.1 302 Found\r\nLocation: https://github.com/login\r\n",
+        "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:1/forbidden\r\n",
+    ])
+    func invalidLookup(response: String) async throws {
+        _ = try await serve(response + "Content-Length: 0\r\nConnection: close\r\n\r\n", expectedMethod: "HEAD") { url in
+            await #expect(throws: NectoAppRelease.Failure.invalidRelease) {
+                try await NectoAppRelease.latestVersion(at: url)
+            }
+        }
+    }
+
+    @Test("cancels a stalled release lookup")
+    func lookupCancellation() async throws {
+        try await serve("", keepOpen: true, expectedMethod: "HEAD") { url in
+            let task = Task { try await NectoAppRelease.latestVersion(at: url) }
+            defer { task.cancel() }
+            try await Task.sleep(for: .milliseconds(100))
+            let start = ContinuousClock.now
+            task.cancel()
+            await #expect(throws: (any Error).self) { try await task.value }
+            #expect(start.duration(to: .now) < .seconds(1))
+        }
+    }
+
     @Test("saves a successful HTTP response")
     func response() async throws {
         let file = try await serve("HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\ntest") { url in
@@ -22,6 +72,15 @@ struct NectoUpdateDownloadTests {
     func httpFailure() async throws {
         _ = try await serve("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n") { url in
             await #expect(throws: (any Error).self) { try await NectoAppRelease.download(url, maximumBytes: 64) }
+        }
+    }
+
+    @Test("rejects empty successful downloads")
+    func emptyDownload() async throws {
+        _ = try await serve("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n") { url in
+            await #expect(throws: NectoAppRelease.Failure.invalidRelease) {
+                try await NectoAppRelease.download(url, maximumBytes: 256)
+            }
         }
     }
 
@@ -62,7 +121,8 @@ struct NectoUpdateDownloadTests {
     }
 
     private func serve<T: Sendable>(
-        _ response: String, keepOpen: Bool = false, operation: @Sendable (URL) async throws -> T
+        _ response: String, keepOpen: Bool = false, expectedMethod: String = "GET",
+        operation: @Sendable (URL) async throws -> T
     ) async throws -> T {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
@@ -81,7 +141,8 @@ struct NectoUpdateDownloadTests {
         listener.newConnectionHandler = { connection in
             accepted.continuation.yield(connection)
             connection.start(queue: queue)
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 8_192) { _, _, _, _ in
+            connection.receive(minimumIncompleteLength: 5, maximumLength: 8_192) { data, _, _, _ in
+                if let data { #expect(String(decoding: data, as: UTF8.self).hasPrefix("\(expectedMethod) ")) }
                 connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in
                     if !keepOpen { connection.cancel() }
                 })

@@ -23,7 +23,7 @@ Necto는 iOS 앱을 위한 macOS 디버깅 도구예요. 플러그인으로 네�
 
 ## 시작하기
 
-[Releases](https://github.com/toss/toss-necto/releases)에서 DMG를 내려받아
+[Releases](https://github.com/toss/necto/releases)에서 DMG를 내려받아
 Necto를 응용 프로그램 폴더로 옮기세요. 체크섬 확인과 ad-hoc 서명 정책은
 [설치 안내](docs/ko/install.md)에 있어요.
 
@@ -45,13 +45,13 @@ open Build/Products/Debug/Necto.app
 
 ## 플러그인 만들기
 
-`create-necto-plugin`과 `@necto/bridge` 배포 파일이 포함된 [공개 릴리스](https://github.com/toss/toss-necto/releases)를
-선택하세요. 아래 예제는 `0.4.0`으로 고정되어 있어요.
+`create-necto-plugin`과 `@necto/bridge` 배포 파일이 포함된 [공개 릴리스](https://github.com/toss/necto/releases)를
+선택하세요. 아래 예제는 `0.1.0`으로 고정되어 있어요.
 
 ```bash
-NECTO_VERSION=0.4.0
+NECTO_VERSION=0.1.0
 npx --yes \
-  --package="https://github.com/toss/toss-necto/releases/download/${NECTO_VERSION}/create-necto-plugin-${NECTO_VERSION}.tgz" \
+  --package="https://github.com/toss/necto/releases/download/${NECTO_VERSION}/create-necto-plugin-${NECTO_VERSION}.tgz" \
   create-necto-plugin Uptime --type device
 ```
 

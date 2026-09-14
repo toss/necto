@@ -21,9 +21,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/toss/toss-necto.git",
+    "url": "git+https://github.com/toss/necto.git",
     "directory": "WebPackages/CreateNectoPlugin"
   },
-  "homepage": "https://github.com/toss/toss-necto/tree/main/WebPackages/CreateNectoPlugin#readme",
-  "bugs": "https://github.com/toss/toss-necto/issues"
+  "homepage": "https://github.com/toss/necto/tree/main/WebPackages/CreateNectoPlugin#readme",
+  "bugs": "https://github.com/toss/necto/issues"
 }
