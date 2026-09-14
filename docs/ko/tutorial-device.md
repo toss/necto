@@ -158,7 +158,7 @@ JSON을 주고받으며 런타임이 입력과 출력을 스키마로 검증해�
 
 ## 디바이스에서 응답하기
 
-[`NectoPluginable`](https://github.com/toss/toss-necto/blob/main/Sources/NectoSDK/NectoPluginable.swift)을
+[`NectoPluginable`](https://github.com/toss/necto/blob/main/Sources/NectoSDK/NectoPluginable.swift)을
 채택하면 `id`와 `register(_:)`를 구현해야 해요. `panel`의 기본값은 `nil`이며
 패널을 포함하는 플러그인은 이 프로퍼티로 모듈 리소스의 `Panel` 디렉터리를 지정해요.
 
@@ -225,7 +225,7 @@ public struct UptimePlugin: NectoPluginable {
     "build": "vite build"
   },
   "dependencies": {
-    "@necto/bridge": "https://github.com/toss/toss-necto/releases/download/0.4.0/necto-bridge-0.4.0.tgz"
+    "@necto/bridge": "https://github.com/toss/necto/releases/download/0.1.0/necto-bridge-0.1.0.tgz"
   },
   "devDependencies": {
     "vite": "^6.0.0"
@@ -433,4 +433,4 @@ Refresh를 누르면 다시 조회해요. 패널은 연결된 앱에서 가져�
 - [harness.md](harness.md) — 플러그인 구현 규칙과 목 호스트로 패널을 검증하는 방법이에요.
 - [setup.md](setup.md) — 내 앱에 플러그인을 연결하고 Release 빌드에서 SDK 호출을
   제외하는 방법이에요.
-- [CONTRIBUTING.md](https://github.com/toss/toss-necto/blob/main/CONTRIBUTING-ko.md) — 플러그인을 기여하는 방법이에요.
+- [CONTRIBUTING.md](https://github.com/toss/necto/blob/main/CONTRIBUTING-ko.md) — 플러그인을 기여하는 방법이에요.

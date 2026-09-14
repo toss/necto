@@ -12,11 +12,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/toss/toss-necto.git",
+    "url": "git+https://github.com/toss/necto.git",
     "directory": "WebPackages/Bridge"
   },
-  "homepage": "https://github.com/toss/toss-necto/tree/main/WebPackages/Bridge#readme",
-  "bugs": "https://github.com/toss/toss-necto/issues",
+  "homepage": "https://github.com/toss/necto/tree/main/WebPackages/Bridge#readme",
+  "bugs": "https://github.com/toss/necto/issues",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

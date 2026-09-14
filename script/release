@@ -3,8 +3,8 @@
 # Cut a release: verify, build the app and public web packages, tag, and publish
 # one GitHub release with every artifact attached.
 #
-#   script/release 0.4.2            # ad-hoc sign, tag and publish
-#   script/release 0.4.2 --dry-run  # build locally without publishing
+#   script/release 0.1.0            # ad-hoc sign, tag and publish
+#   script/release 0.1.0 --dry-run  # build locally without publishing
 #
 # Both modes use ad-hoc signing without a company certificate or notarization.
 set -euo pipefail
@@ -23,10 +23,11 @@ run_xcodebuild() {
 
 VERSION="${1:-}"
 DRY_RUN="${2:-}"
+REPOSITORY="toss/necto"
 
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
    [[ -n "$DRY_RUN" && "$DRY_RUN" != "--dry-run" ]] || [[ $# -gt 2 ]]; then
-  echo "Usage: script/release <version> [--dry-run]   e.g. script/release 0.4.2" >&2
+  echo "Usage: script/release <version> [--dry-run]   e.g. script/release 0.1.0" >&2
   exit 1
 fi
 
@@ -109,6 +110,8 @@ cp -R "$APP" "$STAGE/"
 cp "$APP/Contents/Resources/THIRD_PARTY_NOTICES.txt" "$STAGE/THIRD_PARTY_NOTICES.txt"
 ln -s /Applications "$STAGE/Applications"
 hdiutil create -volname "Necto $VERSION" -srcfolder "$STAGE" -ov -format UDZO -quiet "$ARCHIVE"
+CHECKSUM="$ARCHIVE.sha256"
+(cd Build && shasum -a 256 "Necto-$VERSION.dmg") > "$CHECKSUM"
 rm -rf "$STAGE"
 
 echo
@@ -120,6 +123,7 @@ SCAFFOLD_ARCHIVE="Build/create-necto-plugin-$VERSION.tgz"
 
 echo
 echo "archived: $ARCHIVE ($(du -h "$ARCHIVE" | cut -f1 | tr -d ' '))"
+echo "archived: $CHECKSUM"
 echo "archived: $BRIDGE_ARCHIVE"
 echo "archived: $SCAFFOLD_ARCHIVE"
 
@@ -131,8 +135,10 @@ fi
 echo
 echo "==> tag and release"
 git tag "$VERSION"
-git push origin "$VERSION"
-gh release create "$VERSION" "$ARCHIVE" "$BRIDGE_ARCHIVE" "$SCAFFOLD_ARCHIVE" \
+git push "https://github.com/$REPOSITORY.git" "$VERSION"
+gh release create "$VERSION" "$ARCHIVE" "$CHECKSUM" "$BRIDGE_ARCHIVE" "$SCAFFOLD_ARCHIVE" \
+  --repo "$REPOSITORY" \
+  --verify-tag \
   --title "Necto $VERSION" \
   --generate-notes
 

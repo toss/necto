@@ -177,6 +177,7 @@ final class NectoUpdater {
             switch failure {
             case .invalidRelease: return NectoL10n.text("The release does not provide valid app assets.")
             case .checksumMismatch: return NectoL10n.text("The download did not match its published hash. Nothing was installed.")
+            case let .checkFailed(status): return NectoL10n.format("The update check failed (HTTP %d).", status)
             case let .downloadFailed(status): return NectoL10n.format("The update download failed (HTTP %d).", status)
             case .tooLarge: return NectoL10n.text("The update download exceeded its size limit.")
             }

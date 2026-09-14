@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,6 +13,7 @@ import test from "node:test";
 const version = "9.8.7";
 const artifacts = [
   `Necto-${version}.dmg`,
+  `Necto-${version}.dmg.sha256`,
   `necto-bridge-${version}.tgz`,
   `create-necto-plugin-${version}.tgz`,
 ];
@@ -91,6 +93,7 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0 } = {}) {
   for (const name of ["git", "gh", "xcodebuild", "swift", "codesign", "yarn", "hdiutil", "plutil", "xcrun"]) {
     symlinkSync(tool, join(root, "bin", name));
   }
+  if (env.NECTO_RELEASE_FAIL_TOOL === "shasum") symlinkSync(tool, join(root, "bin/shasum"));
   for (const name of ["test", "pack-web-package.mjs"]) {
     symlinkSync(tool, join(root, "script", name));
   }
@@ -112,11 +115,12 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0 } = {}) {
 function verifyArtifacts(root) {
   assert.equal(readFileSync(join(root, "Build/Products/Necto.app/Contents/Resources/NectoMac_necto-cli.bundle/Skills/necto/SKILL.md"), "utf8"), "fixture skill\n");
   for (const name of artifacts) assert.ok(readFileSync(join(root, "Build", name)).length > 0);
-  assert.equal(existsSync(join(root, "Build", `${artifacts[0]}.sha256`)), false);
+  const hash = createHash("sha256").update(readFileSync(join(root, "Build", artifacts[0]))).digest("hex");
+  assert.equal(readFileSync(join(root, "Build", `${artifacts[0]}.sha256`), "utf8"), `${hash}  ${artifacts[0]}\n`);
   assert.equal(existsSync(join(root, "Build", `Necto-${version}-SHA256SUMS`)), false);
 }
 
-test("a dry run builds the app and web packages without checksum sidecars or publishing", (t) => {
+test("a dry run builds the app, checksum and web packages without publishing", (t) => {
   const root = runRelease(t, { flags: ["--dry-run"] });
   verifyArtifacts(root);
   assert.equal(readFileSync(join(root, "publications.jsonl"), "utf8"), "");
@@ -133,17 +137,21 @@ test("a dry run builds the app and web packages without checksum sidecars or pub
   );
 });
 
-test("a release attaches only the app and web packages", (t) => {
+test("a release publishes the tag and artifacts to the official repository", (t) => {
   const root = runRelease(t);
   verifyArtifacts(root);
   const calls = readFileSync(join(root, "publications.jsonl"), "utf8")
     .trim().split("\n").map((line) => JSON.parse(line));
   const release = calls.find(([name]) => name === "gh");
   assert.ok(release, "the release must be published");
+  assert.deepEqual(calls.find(([name, action]) => name === "git" && action === "push"),
+    ["git", "push", "https://github.com/toss/necto.git", version]);
+  assert.equal(release[release.indexOf("--repo") + 1], "toss/necto");
+  assert.ok(release.includes("--verify-tag"));
   assert.deepEqual(
     release.filter((argument) => argument.startsWith("Build/")).sort(),
     artifacts.map((name) => `Build/${name}`).sort(),
-    "GitHub provides asset digests; no separate checksum files should be attached",
+    "the release must include the DMG checksum used by API-free updates",
   );
 });
 
@@ -170,6 +178,7 @@ for (const [name, env, flags] of [
   ["signing failure", { NECTO_RELEASE_FAIL_TOOL: "codesign" }],
   ["build failure", { NECTO_RELEASE_FAIL_TOOL: "xcodebuild" }],
   ["archive failure", { NECTO_RELEASE_FAIL_TOOL: "hdiutil" }],
+  ["checksum failure", { NECTO_RELEASE_FAIL_TOOL: "shasum" }],
   ["unknown option", {}, ["--dryrun"]],
   ["extra arguments", {}, ["--dry-run", "unexpected"]],
 ]) {

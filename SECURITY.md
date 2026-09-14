@@ -1,6 +1,6 @@
 # Security
 
-Report ordinary bugs and feature requests in [Issues](https://github.com/toss/toss-necto/issues).
+Report ordinary bugs and feature requests in [Issues](https://github.com/toss/necto/issues).
 
 For a potential vulnerability, use **Security → Advisories → Report a vulnerability**
 if that option is available. Otherwise, open an issue requesting a private reporting

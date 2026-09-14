@@ -24,7 +24,7 @@ requests, events and performance metrics, or add tools for your app.
 
 ## Getting started
 
-Download the DMG from [Releases](https://github.com/toss/toss-necto/releases) and
+Download the DMG from [Releases](https://github.com/toss/necto/releases) and
 drag Necto into Applications. See the [installation guide](docs/install.md) for
 checksum verification and the app's ad-hoc signing policy.
 
@@ -46,13 +46,13 @@ To integrate the SDK into your app and exclude SDK calls from Release builds, se
 
 ## Create a plugin
 
-Select a [published release](https://github.com/toss/toss-necto/releases) that includes
-the generator and bridge archives. This example pins `0.4.0`:
+Select a [published release](https://github.com/toss/necto/releases) that includes
+the generator and bridge archives. This example pins `0.1.0`:
 
 ```bash
-NECTO_VERSION=0.4.0
+NECTO_VERSION=0.1.0
 npx --yes \
-  --package="https://github.com/toss/toss-necto/releases/download/${NECTO_VERSION}/create-necto-plugin-${NECTO_VERSION}.tgz" \
+  --package="https://github.com/toss/necto/releases/download/${NECTO_VERSION}/create-necto-plugin-${NECTO_VERSION}.tgz" \
   create-necto-plugin Uptime --type device
 ```
 

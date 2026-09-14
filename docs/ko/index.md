@@ -11,7 +11,7 @@ hero:
       link: /ko/setup
     - theme: alt
       text: GitHub
-      link: https://github.com/toss/toss-necto
+      link: https://github.com/toss/necto
 
 features:
   - title: 기기와 시뮬레이터 연결

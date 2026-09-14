@@ -15,7 +15,7 @@ in Necto itself, while a *device* plugin binds `necto.device.*` and rides inside
 the app it debugs. [plugin-manifest.md](plugin-manifest.md) has the full story of
 the two kinds; [bridges.md](bridges.md) lists everything a plugin can bind to.
 
-You need Node 22.12 or later and a built [Necto app](https://github.com/toss/toss-necto#getting-started).
+You need Node 22.12 or later and a built [Necto app](https://github.com/toss/necto#getting-started).
 
 ## The folder
 
@@ -37,7 +37,7 @@ mkdir public src
     "build": "vite build"
   },
   "dependencies": {
-    "@necto/bridge": "https://github.com/toss/toss-necto/releases/download/0.4.0/necto-bridge-0.4.0.tgz"
+    "@necto/bridge": "https://github.com/toss/necto/releases/download/0.1.0/necto-bridge-0.1.0.tgz"
   },
   "devDependencies": {
     "vite": "^6.0.0"
@@ -282,7 +282,7 @@ receiving until you stop. The stream starts with the current list and sends the
 full list on every change, so the panel updates the table through `render`. Input
 and output are validated against the manifest schemas before they reach your
 code, and failures reject with an `Error` carrying a `code` —
-[WebPackages/Bridge/README.md](https://github.com/toss/toss-necto/blob/main/WebPackages/Bridge/README.md) documents the full API and every
+[WebPackages/Bridge/README.md](https://github.com/toss/necto/blob/main/WebPackages/Bridge/README.md) documents the full API and every
 error code.
 
 ## Make it look native
@@ -388,4 +388,4 @@ Remove the operation, rebuild, and the plugin installs again.
 - Everything a plugin can bind to: [bridges.md](bridges.md)
 - The manifest, operation by operation: [plugin-manifest.md](plugin-manifest.md)
 - Tokens, components and the gallery: [design.md](design.md)
-- The bridge client's full API: [WebPackages/Bridge/README.md](https://github.com/toss/toss-necto/blob/main/WebPackages/Bridge/README.md)
+- The bridge client's full API: [WebPackages/Bridge/README.md](https://github.com/toss/necto/blob/main/WebPackages/Bridge/README.md)

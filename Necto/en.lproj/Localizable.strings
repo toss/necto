@@ -108,6 +108,7 @@
 "The update's integrity, app ID or version could not be verified. Nothing was installed." = "The update's integrity, app ID or version could not be verified. Nothing was installed.";
 "The release does not provide valid app assets." = "The release does not provide valid app assets.";
 "The update download failed (HTTP %d)." = "The update download failed (HTTP %d).";
+"The update check failed (HTTP %d)." = "The update check failed (HTTP %d).";
 "The update download exceeded its size limit." = "The update download exceeded its size limit.";
 
 /* Bridge permission wording */

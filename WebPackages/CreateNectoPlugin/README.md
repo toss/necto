@@ -16,6 +16,6 @@ The release tarball can be run directly without publishing it to an npm registry
 
 ```bash
 npx --yes \
-  --package=https://github.com/toss/toss-necto/releases/download/0.4.0/create-necto-plugin-0.4.0.tgz \
+  --package=https://github.com/toss/necto/releases/download/0.1.0/create-necto-plugin-0.1.0.tgz \
   create-necto-plugin Uptime --type device
 ```

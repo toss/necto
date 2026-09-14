@@ -6,8 +6,8 @@ A Necto plugin is a web page plus a `manifest.json`. The manifest declares the
 operations the plugin may call; this package is how you call them.
 
 ```bash
-NECTO_VERSION=0.4.0
-npm install "https://github.com/toss/toss-necto/releases/download/${NECTO_VERSION}/necto-bridge-${NECTO_VERSION}.tgz"
+NECTO_VERSION=0.1.0
+npm install "https://github.com/toss/necto/releases/download/${NECTO_VERSION}/necto-bridge-${NECTO_VERSION}.tgz"
 ```
 
 ## Usage

@@ -158,7 +158,7 @@ covers when `binding.version` moves.
 
 ## Answering on the device
 
-[`NectoPluginable`](https://github.com/toss/toss-necto/blob/main/Sources/NectoSDK/NectoPluginable.swift)
+[`NectoPluginable`](https://github.com/toss/necto/blob/main/Sources/NectoSDK/NectoPluginable.swift)
 requires you to implement `id` and `register(_:)`. Its `panel` property defaults to
 `nil`; plugins with a panel override it to point to the `Panel` directory in the
 module's resources.
@@ -225,7 +225,7 @@ bundles `@necto/bridge` with vite so it can run without downloading external fil
     "build": "vite build"
   },
   "dependencies": {
-    "@necto/bridge": "https://github.com/toss/toss-necto/releases/download/0.4.0/necto-bridge-0.4.0.tgz"
+    "@necto/bridge": "https://github.com/toss/necto/releases/download/0.1.0/necto-bridge-0.1.0.tgz"
   },
   "devDependencies": {
     "vite": "^6.0.0"
@@ -432,4 +432,4 @@ and verification steps in [harness.md](harness.md).
 - [harness.md](harness.md) — implementation rules and mock-host verification.
 - [setup.md](setup.md) — wiring plugins into your own app and excluding SDK calls
   from Release builds.
-- [CONTRIBUTING.md](https://github.com/toss/toss-necto/blob/main/CONTRIBUTING.md) — how to contribute your plugin.
+- [CONTRIBUTING.md](https://github.com/toss/necto/blob/main/CONTRIBUTING.md) — how to contribute your plugin.
