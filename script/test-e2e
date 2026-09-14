@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+mode="${1:-all}"
+case "$mode" in
+  all|build-mac|build-sdk|run) ;;
+  *) echo "Usage: script/test-e2e [build-mac|build-sdk|run]" >&2; exit 2 ;;
+esac
+
+if [[ "$mode" == all || "$mode" == run ]]; then
+  if pgrep -x Necto >/dev/null; then
+    echo "Quit Necto before running E2E; two hosts compete for the same SDK ports." >&2
+    exit 1
+  fi
+fi
+
+mkdir -p Build/E2E/Logs
+run_dir="$(mktemp -d "$PWD/Build/E2E/Logs/run.XXXXXX")"
+echo "E2E logs: $run_dir"
+run() {
+  local name="$1"
+  shift
+  echo "==> $name"
+  if ! "$@" >"$run_dir/$name.log" 2>&1; then
+    tail -n 30 "$run_dir/$name.log"
+    return 1
+  fi
+}
+
+build_paths=(SYMROOT="$PWD/Build/E2E/Products" OBJROOT="$PWD/Build/E2E/Intermediates")
+if [[ "$mode" == all || "$mode" == build-mac ]]; then
+  run cli swift build --package-path NectoMac --product necto-cli
+  run mac xcodebuild -project Necto.xcodeproj -scheme Necto \
+    -destination 'generic/platform=macOS' ONLY_ACTIVE_ARCH=NO -derivedDataPath Build/E2E/DerivedData \
+    "${build_paths[@]}" PRODUCT_BUNDLE_IDENTIFIER=im.toss.necto.e2e.host build
+  run tests xcodebuild -project Necto.xcodeproj -scheme NectoE2ETests \
+    -destination 'platform=macOS' -derivedDataPath Build/E2E/DerivedData \
+    "${build_paths[@]}" build-for-testing
+  cp NectoMac/.build/debug/necto-cli Build/E2E/Products/Debug/necto-cli
+fi
+
+if [[ "$mode" == all || "$mode" == build-sdk ]]; then
+  run example xcodebuild -project Necto.xcodeproj -scheme ExampleApp \
+    -destination 'generic/platform=iOS Simulator' ONLY_ACTIVE_ARCH=NO -derivedDataPath Build/E2E/DerivedData \
+    "${build_paths[@]}" PRODUCT_BUNDLE_IDENTIFIER=im.toss.necto.e2e.example CODE_SIGNING_ALLOWED=NO build
+fi
+
+if [[ "$mode" == all || "$mode" == run ]]; then
+  shopt -s nullglob
+  test_runs=(Build/E2E/Products/NectoE2ETests_*.xctestrun)
+  if [[ ${#test_runs[@]} -ne 1 ]]; then
+    echo "Expected one E2E test bundle. Build it with script/test e2e or download the CI artifacts." >&2
+    exit 1
+  fi
+  xcodebuild -xctestrun "${test_runs[0]}" -destination 'platform=macOS' \
+    -parallel-testing-enabled NO -resultBundlePath "$run_dir/Connection.xcresult" test-without-building
+fi

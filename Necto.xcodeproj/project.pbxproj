@@ -24,6 +24,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AE00000000000000000001 /* NectoE2ETests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NectoE2ETests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF1000000000000000000017 /* NectoCLIInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoCLIInstaller.swift; sourceTree = SOURCE_ROOT; };
 		AF1000000000000000000001 /* NectoDevicePluginStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoDevicePluginStore.swift; sourceTree = SOURCE_ROOT; };
 		AF1000000000000000000003 /* NectoInstalledPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoInstalledPlugin.swift; sourceTree = SOURCE_ROOT; };
@@ -42,6 +43,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		AE00000000000000000002 /* NectoE2ETests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = NectoE2ETests; sourceTree = "<group>"; };
 		AF00000000000000000005 /* NectoAppTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = NectoAppTests; sourceTree = "<group>"; };
 		AA00000000000000000001 /* Necto */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Necto; sourceTree = "<group>"; };
 		AA00000000000000000002 /* ExampleApp */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ExampleApp; sourceTree = "<group>"; };
@@ -88,6 +90,7 @@
 				AA00000000000000000001 /* Necto */,
 				AA00000000000000000002 /* ExampleApp */,
 				AF00000000000000000005 /* NectoAppTests */,
+				AE00000000000000000002 /* NectoE2ETests */,
 				9794CFC36CF998818A1564B1 /* Packages */,
 				D9F327EE657F7B4405B9E7FE /* Products */,
 			);
@@ -107,6 +110,7 @@
 				B7B65F74B879EC9BB4A82269 /* Necto.app */,
 				25CF17BF6F214F22D88B9758 /* ExampleApp.app */,
 				AF00000000000000000004 /* NectoAppTests.xctest */,
+				AE00000000000000000001 /* NectoE2ETests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -114,6 +118,18 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		AE00000000000000000003 /* NectoE2ETests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AE00000000000000000004 /* Build configuration list for PBXNativeTarget "NectoE2ETests" */;
+			buildPhases = (AE00000000000000000005 /* Sources */,);
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (AE00000000000000000002 /* NectoE2ETests */,);
+			name = NectoE2ETests;
+			productName = NectoE2ETests;
+			productReference = AE00000000000000000001 /* NectoE2ETests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		AF00000000000000000007 /* NectoAppTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AF00000000000000000008 /* Build configuration list for PBXNativeTarget "NectoAppTests" */;
@@ -211,6 +227,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				AE00000000000000000003 /* NectoE2ETests */,
 				AF00000000000000000007 /* NectoAppTests */,
 				BE24859BE8B47B420587D610 /* Necto */,
 				352F52FD4E6EC5932B9E0D51 /* ExampleApp */,
@@ -237,6 +254,12 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		AE00000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AF00000000000000000009 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -271,6 +294,28 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		AE00000000000000000006 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@loader_path/../Frameworks",);
+				PRODUCT_BUNDLE_IDENTIFIER = im.toss.necto.e2e.tests;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		AE00000000000000000007 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@loader_path/../Frameworks",);
+				PRODUCT_BUNDLE_IDENTIFIER = im.toss.necto.e2e.tests;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
 		AF0000000000000000000A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -507,6 +552,12 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		AE00000000000000000004 /* Build configuration list for PBXNativeTarget "NectoE2ETests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (AE00000000000000000006 /* Debug */, AE00000000000000000007 /* Release */,);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		AF00000000000000000008 /* Build configuration list for PBXNativeTarget "NectoAppTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

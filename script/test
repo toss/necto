@@ -3,18 +3,22 @@
 # Run unit tests and release artifact contract tests.
 #
 # Usage:
-#   script/test          run everything
+#   script/test          run default checks (excluding E2E)
 #   script/test swift    Swift packages only
 #   script/test web      web packages only
 #   script/test release  package and release contracts, without building or publishing
 #   script/test native   Mac app unit and WebView integration tests
+#   script/test e2e      real GUI, CLI and ExampleApp on a disposable simulator
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 scope="${1:-all}"
+if [[ "$scope" == "e2e" ]]; then
+  exec script/test-e2e
+fi
 case "${scope}" in
   all|swift|web|release|native) ;;
-  *) echo "Usage: script/test [swift|web|release|native]" >&2; exit 2 ;;
+  *) echo "Usage: script/test [swift|web|release|native|e2e]" >&2; exit 2 ;;
 esac
 failed=()
 

@@ -33,16 +33,22 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Test Mac and CLI packages
-        run: swift test --package-path NectoMac
+        run: swift test --package-path NectoMac --verbose
       - name: Test native integrations and Mac app
         run: script/test native
-      - name: Build the Mac app for both architectures
-        run: >-
-          xcodebuild -project Necto.xcodeproj -scheme Necto
-          -destination 'generic/platform=macOS' ONLY_ACTIVE_ARCH=NO
-          CODE_SIGNING_ALLOWED=NO build
+      - name: Build the Mac app, CLI and E2E tests
+        run: script/test-e2e build-mac
       - name: Test release artifacts
         run: node --test script/tests/release.test.mjs
+      - name: Archive Mac E2E products
+        working-directory: Build/E2E/Products
+        run: tar -czf ../mac.tar.gz Debug/Necto.app Debug/necto-cli Debug/NectoE2ETests.xctest NectoE2ETests_*.xctestrun
+      - uses: actions/upload-artifact@v7
+        with:
+          name: e2e-mac
+          path: Build/E2E/mac.tar.gz
+          if-no-files-found: error
+          retention-days: 1
 
   sdk:
     name: SDK Build & Tests
@@ -63,16 +69,60 @@ jobs:
           xcodebuild -version
           swift --version
       - name: Test SDK packages
-        run: swift test
+        run: swift test --verbose
       - name: Test SDK consumer
-        run: swift test --package-path Tests/Fixtures/SDKConsumer
+        run: swift test --package-path Tests/Fixtures/SDKConsumer --verbose
       - name: Test package boundaries
         run: node --test script/tests/package.test.mjs
       - name: Build the iOS example
-        run: >-
-          xcodebuild -project Necto.xcodeproj -scheme ExampleApp
-          -destination 'generic/platform=iOS Simulator' ONLY_ACTIVE_ARCH=NO
-          CODE_SIGNING_ALLOWED=NO build
+        run: script/test-e2e build-sdk
+      - name: Archive simulator E2E products
+        run: tar -czf Build/E2E/sdk.tar.gz -C Build/E2E/Products Debug-iphonesimulator/ExampleApp.app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: e2e-sdk
+          path: Build/E2E/sdk.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  e2e:
+    name: Simulator Connection & CLI E2E
+    needs: [mac, sdk]
+    if: github.server_url == 'https://github.com'
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Show Xcode and Swift versions
+        run: |
+          xcodebuild -version
+          swift --version
+      - uses: actions/download-artifact@v8
+        with:
+          name: e2e-mac
+          path: Build/E2E
+      - uses: actions/download-artifact@v8
+        with:
+          name: e2e-sdk
+          path: Build/E2E
+      - name: Extract E2E products
+        run: |
+          mkdir -p Build/E2E/Products
+          tar -xzf Build/E2E/mac.tar.gz -C Build/E2E/Products
+          tar -xzf Build/E2E/sdk.tar.gz -C Build/E2E/Products
+      - name: Test simulator connection and CLI
+        run: script/test-e2e run
+      - name: Upload E2E results on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: simulator-e2e-results
+          path: Build/E2E/Logs
+          retention-days: 7
 
   web:
     name: Web Plugins Build & Tests
