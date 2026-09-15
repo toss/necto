@@ -127,3 +127,15 @@ h3.stepped { margin: var(--necto-space-5) 0 var(--necto-space-1); font-size: 14p
   .gallery-network-list th:nth-child(n+4),
   .gallery-network-list td:nth-child(n+4) { display: none; }
 }
+.gallery-plugin-group { display:flex; align-items:center; justify-content:space-between; }
+.gallery-plugin-search { margin-left:auto; display:flex; padding:0; border:0; background:none; color:inherit; cursor:pointer; }
+.gallery-plugin-search-popover {
+  width:280px;
+  padding:var(--necto-space-2);
+  border:1px solid var(--necto-border);
+  border-radius:var(--necto-radius-control);
+  background:var(--necto-bg);
+  color:var(--necto-text);
+}
+.gallery-plugin-search-popover > .necto-field { width:100%; margin-bottom:var(--necto-space-2); }
+.gallery-plugin-search-popover > div { max-height:calc(10 * var(--necto-row-height)); overflow-y:auto; }

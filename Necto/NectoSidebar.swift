@@ -37,6 +37,102 @@ struct SidebarGroup: View {
     }
 }
 
+struct SidebarPluginSearch: View {
+    let devicePlugins: [NectoInstalledPlugin]
+    let desktopPlugins: [NectoInstalledPlugin]
+    let disabledPluginIDs: Set<String>
+    let scale: CGFloat
+    @Binding var selection: String?
+    @Binding var isSearching: Bool
+    @State private var query = ""
+    @FocusState private var searchIsFocused: Bool
+
+    private var deviceResults: [NectoInstalledPlugin] { filtered(devicePlugins) }
+    private var desktopResults: [NectoInstalledPlugin] { filtered(desktopPlugins) }
+
+    private func filtered(_ plugins: [NectoInstalledPlugin]) -> [NectoInstalledPlugin] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty ? plugins : plugins.filter { $0.manifest.name.localizedStandardContains(query) }
+    }
+
+    var body: some View {
+        Button {
+            isSearching = true
+        } label: {
+            Image(systemName: "magnifyingglass")
+        }
+        .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+        .help(NectoL10n.text("Search plugins"))
+        .accessibilityLabel(NectoL10n.text("Search plugins"))
+        .accessibilityIdentifier("sidebar.plugin.search.open")
+        .popover(isPresented: $isSearching, arrowEdge: .bottom) {
+            searchPopover
+        }
+    }
+
+    private var searchPopover: some View {
+        VStack(spacing: 8) {
+            NectoField(placeholder: NectoL10n.text("Search plugins"), text: $query, scale: scale)
+                .focused($searchIsFocused)
+                .accessibilityIdentifier("sidebar.plugin.search")
+                .onSubmit {
+                    if let first = (deviceResults + desktopResults).first { select(first.id) }
+                }
+                .padding(.horizontal, 8)
+
+            if deviceResults.isEmpty && desktopResults.isEmpty {
+                Text("No plugins found")
+                    .font(.necto(.caption, scale: scale))
+                    .foregroundStyle(NectoTheme.textTertiary)
+                    .frame(height: NectoTheme.rowHeight * scale)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        resultGroup(NectoL10n.text("Device Plugins"), plugins: deviceResults)
+                        resultGroup(NectoL10n.text("Desktop Plugins"), plugins: desktopResults)
+                    }
+                }
+                .frame(height: CGFloat(min(deviceResults.count + desktopResults.count + 2, 10)) * NectoTheme.rowHeight * scale)
+            }
+        }
+        .padding(.vertical, 8)
+        .frame(width: 280)
+        .background(NectoTheme.background)
+        .onAppear {
+            query = ""
+            searchIsFocused = true
+        }
+        .onExitCommand { isSearching = false }
+    }
+
+    @ViewBuilder
+    private func resultGroup(_ title: String, plugins: [NectoInstalledPlugin]) -> some View {
+        if !plugins.isEmpty {
+            SidebarGroup(title: title, scale: scale)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(plugins) { plugin in
+                let isDisabled = disabledPluginIDs.contains(plugin.id)
+                Button { select(plugin.id) } label: {
+                    SidebarItem(
+                        title: plugin.manifest.name,
+                        systemImage: plugin.manifest.icon.systemName,
+                        trailing: isDisabled ? NectoL10n.text("off") : plugin.manifest.version,
+                        isSelected: selection == plugin.id,
+                        scale: scale,
+                        isDimmed: isDisabled
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func select(_ id: String) {
+        selection = id
+        isSearching = false
+    }
+}
+
 /// One row in the sidebar, drawn the same way whatever it points at, so a device and a
 /// plugin do not read as two different kinds of control.
 struct SidebarItem: View {
@@ -89,8 +185,7 @@ struct SidebarItem: View {
     }
 }
 
-/// Turns off the chrome `NSTableView` draws over our own, and gives its enclosing
-/// scroll view a narrow, fixed scrollbar track.
+/// Turns off the selection chrome `NSTableView` draws over our own.
 ///
 /// The highlight is a full-width band with square ends, which is not the selection in
 /// docs/design.md — the row draws that itself, inset and rounded.
@@ -126,19 +221,6 @@ private struct ListChromeOff: NSViewRepresentable {
             }
             if let table = current as? NSTableView {
                 table.selectionHighlightStyle = .none
-            }
-            if let scrollView = current as? NSScrollView {
-                // An overlay scroller changes the List's content inset when selection
-                // scrolls a row into view. A legacy scroller reserves one stable gutter.
-                if scrollView.scrollerStyle != .legacy {
-                    scrollView.scrollerStyle = .legacy
-                }
-                if scrollView.autohidesScrollers {
-                    scrollView.autohidesScrollers = false
-                }
-                if scrollView.verticalScroller?.controlSize != .mini {
-                    scrollView.verticalScroller?.controlSize = .mini
-                }
                 return
             }
             ancestor = current.superview

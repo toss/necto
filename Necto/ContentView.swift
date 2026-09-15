@@ -17,6 +17,7 @@ struct ContentView: View {
     private var ownsPresentation: Bool { model.presentationWindowID == window.id }
 
     @StateObject private var find = NectoFindSession()
+    @State private var isSearchingPlugins = false
     @AppStorage(NectoTextSize.key) private var textPoints = Double(NectoTextSize.base)
     @AppStorage(NectoFontPreference.uiKey) private var uiFontFamily = NectoFontPreference.defaultUI
     @AppStorage(NectoFontPreference.codeKey) private var codeFontFamily = NectoFontPreference.defaultCode
@@ -200,7 +201,7 @@ struct ContentView: View {
                 } header: {
                     // The category words, straight from the architecture: what the
                     // selected device's app carries, then what this Mac installed.
-                    SidebarGroup(title: NectoL10n.text("Device Plugins"), scale: scale)
+                    pluginGroup("Device Plugins", showsSearch: true)
                         .plainRow()
                         .listRowBackground(NectoTheme.sidebar)
                 }
@@ -226,7 +227,10 @@ struct ContentView: View {
                         model.movePlugins(from: from, to: to)
                     }
                 } header: {
-                    SidebarGroup(title: NectoL10n.text("Desktop Plugins"), scale: scale)
+                    pluginGroup(
+                        "Desktop Plugins",
+                        showsSearch: window.activeDevicePlugins.isEmpty && window.disabledDevicePlugins.isEmpty
+                    )
                         .plainRow()
                         // A section header is sticky and gets a material behind it
                         // unless it is told otherwise.
@@ -235,7 +239,6 @@ struct ContentView: View {
             }
         }
         .listStyle(.plain)
-        .scrollIndicators(.visible, axes: .vertical)
         .focusEffectDisabled()
         .listSectionSeparator(.hidden)
         .contentMargins(.all, 0, for: .scrollContent)
@@ -243,6 +246,31 @@ struct ContentView: View {
         // AppKit rejects a zero minimum; use the same height as the rows themselves.
         .environment(\.defaultMinListRowHeight, NectoTheme.rowHeight * scale)
         .clipped()
+    }
+
+    @ViewBuilder
+    private func pluginGroup(_ title: String, showsSearch: Bool) -> some View {
+        let header = HStack(spacing: 0) {
+            SidebarGroup(title: NectoL10n.text(title), scale: scale)
+            Spacer(minLength: 0)
+            if showsSearch {
+                SidebarPluginSearch(
+                    devicePlugins: window.activeDevicePlugins + window.disabledDevicePlugins,
+                    desktopPlugins: model.enabledPlugins,
+                    disabledPluginIDs: Set(window.disabledDevicePlugins.map(\.id)),
+                    scale: scale, selection: sidebarSelection, isSearching: $isSearchingPlugins
+                )
+                .padding(.trailing, 2)
+                .padding(.top, 8)
+            }
+        }
+        if showsSearch {
+            header.accessibilityAction(named: Text(NectoL10n.text("Search plugins"))) {
+                isSearchingPlugins = true
+            }
+        } else {
+            header
+        }
     }
 
     /// Below the scroll view rather than inside it: a `Spacer` in a scroll view has no

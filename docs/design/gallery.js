@@ -218,6 +218,10 @@ const gearIcon = `<svg class="necto-icon" viewBox="0 0 16 16" aria-hidden="true"
 const lights = `<span class="win-lights"><i></i><i></i><i></i></span>`;
 const heading = `<span class="win-heading">${netIcon}<span>Network</span></span>`;
 
+const pluginSearchButton = `<button type="button" class="gallery-plugin-search" aria-label="Search plugins" popovertarget="gallery-plugin-search-popover">
+  <svg class="necto-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4"/><path d="m10 10 4 4"/></svg>
+</button>`;
+
 const sidebar = (onSettings = false) => `
   <div class="necto-sidebar">
     <div class="win-bar">${lights}</div>
@@ -242,11 +246,12 @@ const sidebar = (onSettings = false) => `
       <span class="necto-trailing">iOS 27.0</span><span class="necto-conn necto-conn-off" title="Not connected"></span>
     </button>
 
-    <div class="necto-sidebar-group">Device Plugins</div>
+    <div class="necto-sidebar-group gallery-plugin-group"><span>Device Plugins</span>${pluginSearchButton}</div>
     <button type="button" class="necto-sidebar-item">${sampleIcon}<span>Plugin Sample</span><span class="necto-trailing">1.0.0</span></button>
     <button type="button" class="necto-sidebar-item" aria-selected="${!onSettings}">${netIcon}<span>Network</span><span class="necto-trailing">1.0.0</span></button>
     <button type="button" class="necto-sidebar-item">${logIcon}<span>Events</span><span class="necto-trailing">0.4.1</span></button>
     <button type="button" class="necto-sidebar-item">${gaugeIcon}<span>Performance</span><span class="necto-trailing">0.2.0</span></button>
+    <button type="button" class="necto-sidebar-item" style="color:var(--necto-text-tertiary)">${logIcon}<span>Recording</span><span class="necto-trailing">off</span></button>
 
     <div class="necto-sidebar-group">Desktop Plugins</div>
     <button type="button" class="necto-sidebar-item">${sampleIcon}<span>Target Notes</span><span class="necto-trailing">0.1.0</span></button>
@@ -256,6 +261,55 @@ const sidebar = (onSettings = false) => `
       <button type="button" class="necto-sidebar-item" aria-selected="${onSettings}">${gearIcon}<span>Settings</span></button>
     </div>
   </div>`;
+
+const pluginSearch = document.createElement("div");
+pluginSearch.id = "gallery-plugin-search-popover";
+pluginSearch.className = "gallery-plugin-search-popover";
+pluginSearch.setAttribute("popover", "auto");
+document.body.append(pluginSearch);
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest(".gallery-plugin-search");
+  if (!trigger) return;
+  const groups = Array.from(trigger.closest(".necto-sidebar").querySelectorAll(".necto-sidebar-group"));
+  pluginSearch.replaceChildren();
+  const input = document.createElement("input");
+  input.className = "necto-field";
+  input.placeholder = "Search plugins";
+  input.setAttribute("aria-label", "Search plugins");
+  pluginSearch.append(input);
+  const results = document.createElement("div");
+  pluginSearch.append(results);
+  const render = () => {
+    results.replaceChildren();
+    for (const group of groups) {
+      const rows = [];
+      for (let row = group.nextElementSibling; row?.classList.contains("necto-sidebar-item"); row = row.nextElementSibling) {
+        if (row.querySelector("span").textContent.toLowerCase().includes(input.value.trim().toLowerCase())) rows.push(row);
+      }
+      if (rows.length) {
+        const heading = document.createElement("div");
+        heading.className = "necto-sidebar-group";
+        heading.textContent = group.textContent.trim();
+        results.append(heading);
+      }
+      for (const row of rows) {
+        const result = row.cloneNode(true);
+        result.addEventListener("click", () => {
+          trigger.closest(".necto-sidebar").querySelectorAll(".necto-sidebar-item[aria-selected]").forEach(item => item.removeAttribute("aria-selected"));
+          row.setAttribute("aria-selected", "true");
+          pluginSearch.hidePopover();
+        });
+        results.append(result);
+      }
+    }
+    if (!results.children.length) results.innerHTML = '<p class="necto-caption">No plugins found</p>';
+  };
+  input.addEventListener("input", render);
+  render();
+});
+pluginSearch.addEventListener("toggle", (event) => {
+  if (event.newState === "open") pluginSearch.querySelector("input").focus();
+});
 
 const networkPane = (bar) => `
   <div class="necto-app">
@@ -392,7 +446,7 @@ const generalPage = () => `
       <div class="necto-row-label">Necto</div>
       <div class="necto-toolbar-group" style="padding: 0">
         <button type="button" class="necto-button necto-button-quiet">Check for updates</button>
-        <span class="necto-row-value">0.4.2</span>
+        <span class="necto-row-value">0.1.0</span>
       </div>
     </div>
     <div class="necto-row">
@@ -406,6 +460,19 @@ const generalPage = () => `
         <p class="necto-row-hint">Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval.</p>
       </div>
       <button type="button" class="necto-button necto-button-quiet">Install CLI</button>
+    </div>
+    <h3 class="necto-section-title">Agent skills</h3>
+    <div class="necto-row">
+      <div class="necto-row-label">Codex
+        <p class="necto-row-hint">Use Necto from Codex.</p>
+      </div>
+      <button type="button" class="necto-button necto-button-quiet">Update</button>
+    </div>
+    <div class="necto-row">
+      <div class="necto-row-label">Claude Code
+        <p class="necto-row-hint">Use Necto from Claude Code.</p>
+      </div>
+      <button type="button" class="necto-button necto-button-quiet">Add</button>
     </div>
   </div>`;
 
@@ -434,7 +501,7 @@ const pluginsPage = () => `
 
     <div class="necto-row">
       <div class="necto-row-label">Install
-        <p class="necto-row-hint">A folder or zip of a built desktop plugin. Device plugins ride in the app's Swift package.</p>
+        <p class="necto-row-hint">Install a built desktop plugin from a folder or zip file. Necto does not verify the source or check for updates for file installs. Device plugins must be included in the app's Swift package.</p>
       </div>
       <div class="necto-toolbar-group" style="padding: 0">
         <button type="button" class="necto-button">Choose…</button>
@@ -443,7 +510,7 @@ const pluginsPage = () => `
 
     <div class="necto-row">
       <div class="necto-row-label">Plugins folder
-        <p class="necto-row-hint">New or changed folders need review after Reload. Deleting a folder removes its permissions.</p>
+        <p class="necto-row-hint">After adding or changing a plugin folder, reload and approve the plugin. Deleting its folder also removes its permissions.</p>
       </div>
       <div class="necto-toolbar-group" style="padding: 0">
         <button type="button" class="necto-button necto-button-quiet">Open</button>

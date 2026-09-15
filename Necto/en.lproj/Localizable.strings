@@ -70,7 +70,7 @@
 "Update from file…" = "Update from file…";
 "The ID matches, but Necto cannot verify the author of local files. Only update if you trust their source. This keeps existing permissions and settings, including Shell Access." = "The ID matches, but Necto cannot verify the author of local files. Only update if you trust their source. This keeps existing permissions and settings, including Shell Access.";
 "This folder has no installation identity yet. Confirm its source to register it as a new installation. Previous permissions are not inherited." = "This folder has no installation identity yet. Confirm its source to register it as a new installation. Previous permissions are not inherited.";
-"New or changed folders need review after Reload. Deleting a folder removes its permissions." = "New or changed folders need review after Reload. Deleting a folder removes its permissions.";
+"After adding or changing a plugin folder, reload and approve the plugin. Deleting its folder also removes its permissions." = "After adding or changing a plugin folder, reload and approve the plugin. Deleting its folder also removes its permissions.";
 "Review required" = "Review required";
 "Review" = "Review";
 "These files are new or have changed. They will not run until you approve their source." = "These files are new or have changed. They will not run until you approve their source.";
@@ -177,6 +177,9 @@
 "Add an approved command" = "Add an approved command";
 "%@ may run this exact command without asking again." = "%@ may run this exact command without asking again.";
 "Add" = "Add";
+"Agent skills" = "Agent skills";
+"Could not install the skill." = "Could not install the skill.";
+"Use Necto from %@." = "Use Necto from %@.";
 "Command line tool" = "Command line tool";
 "Install CLI" = "Install CLI";
 "Use necto or necto-cli in your terminal." = "Use necto or necto-cli in your terminal.";
@@ -188,7 +191,7 @@
 "Install from GitHub" = "Install from GitHub";
 "Reading…" = "Reading…";
 "Install from a file" = "Install from a file";
-"A folder or zip of a built desktop plugin. Nothing checks where a file came from, and it has no update to follow. Device plugins are not installed here — they ride in the app's own Swift package." = "A folder or zip of a built desktop plugin. Nothing checks where a file came from, and it has no update to follow. Device plugins are not installed here — they ride in the app's own Swift package.";
+"Install a built desktop plugin from a folder or zip file. Necto does not verify the source or check for updates for file installs. Device plugins must be included in the app's Swift package." = "Install a built desktop plugin from a folder or zip file. Necto does not verify the source or check for updates for file installs. Device plugins must be included in the app's Swift package.";
 "Install from %@" = "Install from %@";
 "The release says nothing about this one. What it binds is on the next screen." = "The release says nothing about this one. What it binds is on the next screen.";
 "'%@' is not a GitHub repository address." = "'%@' is not a GitHub repository address.";
@@ -199,7 +202,7 @@
 "GitHub answered %@ and would not say more." = "GitHub answered %@ and would not say more.";
 "This holds several plugins (%@). Install them one at a time, or give Necto the repository they were published from." = "This holds several plugins (%@). Install them one at a time, or give Necto the repository they were published from.";
 "Updates" = "Updates";
-"Plugins installed from a repository are checked when this page opens. Only releases that publish a manifest beside the archive can be checked without downloading them." = "Plugins installed from a repository are checked when this page opens. Only releases that publish a manifest beside the archive can be checked without downloading them.";
+"Checks for newer versions of plugins installed from a repository when you open this page. To check without downloading the archive, the release must include a separate manifest file." = "Checks for newer versions of plugins installed from a repository when you open this page. To check without downloading the archive, the release must include a separate manifest file.";
 "Checking…" = "Checking…";
 "Check again" = "Check again";
 "Newer releases" = "Newer releases";
@@ -215,7 +218,7 @@
 "That release." = "That release.";
 "A release page, pasted as it is." = "A release page, pasted as it is.";
 "Could not read that" = "Could not read that";
-"A repository's latest release, or one release of it." = "A repository's latest release, or one release of it.";
+"Install the latest release from a repository, or choose a specific release." = "Install the latest release from a repository, or choose a specific release.";
 "Add…" = "Add…";
 
 "Keeps running while other panels are visible. Disabling the plugin stops it." = "Keeps running while other panels are visible. Disabling the plugin stops it.";
@@ -226,3 +229,6 @@
 
 "This plugin is displayed in another window." = "This plugin is displayed in another window.";
 "Activate this window to bring it here." = "Activate this window to bring it here.";
+
+"Search plugins" = "Search plugins";
+"No plugins found" = "No plugins found";
