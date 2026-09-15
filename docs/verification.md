@@ -206,11 +206,36 @@ and at both text sizes. Check readability in addition to contrast ratios.
 
 ## Verifying release artifacts
 
+### Releasing from GitHub Actions
+
+After the `Check` workflow succeeds on `main`, open **Actions → Release → Run
+workflow**, select `main`, and enter a version such as `0.1.0`. Manual runs require
+repository write access. The workflow only runs in `toss/necto` from `main`.
+Building has read-only repository access; only the publishing job receives
+`contents: write` through `GITHUB_TOKEN`. No personal token is needed.
+
+A new version uses the commit selected when the workflow was started. If its tag
+already exists, the workflow rebuilds that exact commit, which must be an ancestor
+of `main` with a successful main `Check` run. It never moves an existing tag.
+Packaging uses the workflow's release script while testing and building the tagged
+source, so releases from before this workflow was added can be completed.
+
+The publishing job verifies the DMG checksum, creates the tag and a draft if needed,
+uploads all four files, and compares their sizes and SHA-256 digests before
+publishing. An existing published version is refused. Identical files in a draft
+are reused; conflicting files stop the run for review. An upload failure leaves
+the release unpublished. Use **Re-run failed jobs** to retry publishing with the
+same build artifacts, retained for seven days.
+
+### Local checks
+
 `script/test release` runs the release script in temporary fixtures with build,
 signing and publishing tools replaced. It checks the generated artifacts, release
 attachments and dry-run isolation without building an app or contacting GitHub.
 It also checks bundle-version agreement, ad-hoc signing order and that
 failures stop before tagging or publishing.
+The Actions publication tests use simulated GitHub responses and cover tag/draft
+resumption, CI gating, asset verification and publication failures.
 It does not verify a real DMG, signing or an installed app's update flow.
 
 The npm tarballs include `LICENSE`. The DMG and the app's `Contents/Resources`

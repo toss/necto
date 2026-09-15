@@ -39,7 +39,7 @@ jobs:
       - name: Build the Mac app, CLI and E2E tests
         run: script/test-e2e build-mac
       - name: Test release artifacts
-        run: node --test script/tests/release.test.mjs
+        run: node --test script/tests/release.test.mjs script/tests/github-release.test.mjs
       - name: Archive Mac E2E products
         working-directory: Build/E2E/Products
         run: tar -czf ../mac.tar.gz Debug/Necto.app Debug/necto-cli Debug/NectoE2ETests.xctest NectoE2ETests_*.xctestrun

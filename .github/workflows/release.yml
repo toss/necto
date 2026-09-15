@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (for example, 0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'toss/necto' && github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      VERSION: ${{ inputs.version }}
+    outputs:
+      commit: ${{ steps.prepare.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.12.0
+      - name: Validate release and successful main CI
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node script/github-release.mjs prepare "$VERSION"
+      - name: Check out the release commit
+        env:
+          RELEASE_COMMIT: ${{ steps.prepare.outputs.commit }}
+        run: |
+          cp script/release "$RUNNER_TEMP/necto-release"
+          git checkout --detach "$RELEASE_COMMIT"
+      - name: Install and build web dependencies
+        run: |
+          corepack enable
+          yarn install --immutable
+          yarn build
+      - name: Test and package release
+        env:
+          NECTO_RELEASE_ROOT: ${{ github.workspace }}
+        run: bash "$RUNNER_TEMP/necto-release" "$VERSION" --dry-run
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ inputs.version }}
+          path: |
+            Build/Necto-${{ inputs.version }}.dmg
+            Build/Necto-${{ inputs.version }}.dmg.sha256
+            Build/necto-bridge-${{ inputs.version }}.tgz
+            Build/create-necto-plugin-${{ inputs.version }}.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.12.0
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-${{ inputs.version }}
+          path: Build
+      - name: Tag, upload and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          RELEASE_COMMIT: ${{ needs.build.outputs.commit }}
+        run: node script/github-release.mjs publish "$VERSION" "$RELEASE_COMMIT"

@@ -36,7 +36,7 @@ run() {
 }
 
 if [[ "${scope}" == "all" || "${scope}" == "release" ]]; then
-  run "package and release contracts" node --test script/tests/package.test.mjs script/tests/release.test.mjs
+  run "package and release contracts" node --test script/tests/package.test.mjs script/tests/release.test.mjs script/tests/github-release.test.mjs
 fi
 
 if [[ "${scope}" == "all" || "${scope}" == "swift" ]]; then

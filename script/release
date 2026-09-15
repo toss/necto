@@ -8,7 +8,8 @@
 #
 # Both modes use ad-hoc signing without a company certificate or notarization.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+# Actions keeps this script outside the checkout when rebuilding an older tag.
+cd "${NECTO_RELEASE_ROOT:-$(dirname "$0")/..}"
 
 run_xcodebuild() {
   local pattern="$1"
@@ -42,9 +43,11 @@ if [ "$BRANCH" != "main" ] && [ "$DRY_RUN" != "--dry-run" ]; then
   exit 1
 fi
 
-if git rev-parse "$VERSION" >/dev/null 2>&1; then
-  echo "Tag $VERSION already exists." >&2
-  exit 1
+if TAG_COMMIT="$(git rev-parse --verify "refs/tags/$VERSION^{commit}" 2>/dev/null)"; then
+  if [ "$DRY_RUN" != "--dry-run" ] || [ "$TAG_COMMIT" != "$(git rev-parse HEAD)" ]; then
+    echo "Tag $VERSION already exists. Only a dry run at that commit can reuse it." >&2
+    exit 1
+  fi
 fi
 
 echo "==> tests"
