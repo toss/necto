@@ -85,10 +85,16 @@ struct SettingsScreen: View {
         .padding(.leading, 12)
         .background(NectoTheme.background)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            if page == .general { model.cliInstaller.refresh() }
+            if page == .general {
+                model.cliInstaller.refresh()
+                model.agentSkills.refresh()
+            }
         }
         .task(id: page) {
-            if page == .general { model.cliInstaller.refresh() }
+            if page == .general {
+                model.cliInstaller.refresh()
+                model.agentSkills.refresh()
+            }
             if page != .shellAccess { selectedShellCaller = nil }
             if page == .plugins { await model.checkPluginUpdates() }
             guard page == .diagnostics else { return }
@@ -101,8 +107,6 @@ struct SettingsScreen: View {
     }
 
 
-
-    // MARK: General
 
     @ViewBuilder
     private var general: some View {
@@ -221,6 +225,33 @@ struct SettingsScreen: View {
                     .foregroundStyle(NectoTheme.danger)
                     .textSelection(.enabled)
             }
+
+            if !model.agentSkills.agents.isEmpty {
+                NectoSectionTitle(NectoL10n.text("Agent skills"), scale: scale)
+                ForEach(model.agentSkills.agents) { agent in
+                    NectoRow(
+                        label: agent.name,
+                        hint: NectoL10n.format("Use Necto from %@.", agent.name),
+                        scale: scale
+                    ) {
+                        Button(NectoL10n.text(model.agentSkills.installing == agent ? "Installing…"
+                            : model.agentSkills.updates.contains(agent) ? "Update"
+                            : model.agentSkills.installed.contains(agent) ? "Installed" : "Add")) {
+                            Task { await model.agentSkills.install(agent) }
+                        }
+                        .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+                        .disabled(model.agentSkills.installing != nil
+                            || (model.agentSkills.installed.contains(agent) && !model.agentSkills.updates.contains(agent)))
+                        .accessibilityIdentifier("settings.skill.install.\(agent.rawValue)")
+                    }
+                }
+                if let error = model.agentSkills.error {
+                    Text(error)
+                        .font(.necto(.label, scale: scale))
+                        .foregroundStyle(NectoTheme.danger)
+                        .textSelection(.enabled)
+                }
+            }
         }
     }
 
@@ -257,8 +288,6 @@ struct SettingsScreen: View {
             EmptyView()
         }
     }
-
-    // MARK: Log
 
     /// Native rather than a plugin, unlike every other screen. The one screen that has
     /// to say why a plugin would not load cannot be a plugin.
@@ -310,8 +339,6 @@ struct SettingsScreen: View {
         }
     }
 
-    // MARK: Plugins
-
     @ViewBuilder
     private var plugins: some View {
         NectoSectionTitle(NectoL10n.text("Installed"), scale: scale, isFirst: true)
@@ -324,7 +351,7 @@ struct SettingsScreen: View {
 
         NectoRow(
             label: NectoL10n.text("Install from GitHub"),
-            hint: NectoL10n.text("A repository's latest release, or one release of it."),
+            hint: NectoL10n.text("Install the latest release from a repository, or choose a specific release."),
             scale: scale
         ) {
             Button(NectoL10n.text("Add…")) { model.beginAddingLink() }
@@ -334,7 +361,7 @@ struct SettingsScreen: View {
         NectoRow(
             label: NectoL10n.text("Install from a file"),
             hint: NectoL10n.text(
-                "A folder or zip of a built desktop plugin. Nothing checks where a file came from, and it has no update to follow. Device plugins are not installed here — they ride in the app's own Swift package."
+                "Install a built desktop plugin from a folder or zip file. Necto does not verify the source or check for updates for file installs. Device plugins must be included in the app's Swift package."
             ),
             scale: scale
         ) {
@@ -344,7 +371,7 @@ struct SettingsScreen: View {
 
         NectoRow(
             label: NectoL10n.text("Plugins folder"),
-            hint: NectoL10n.text("New or changed folders need review after Reload. Deleting a folder removes its permissions."),
+            hint: NectoL10n.text("After adding or changing a plugin folder, reload and approve the plugin. Deleting its folder also removes its permissions."),
             scale: scale
         ) {
             HStack(spacing: 8) {
@@ -359,7 +386,7 @@ struct SettingsScreen: View {
         NectoRow(
             label: NectoL10n.text("Updates"),
             hint: NectoL10n.text(
-                "Plugins installed from a repository are checked when this page opens. Only releases that publish a manifest beside the archive can be checked without downloading them."
+                "Checks for newer versions of plugins installed from a repository when you open this page. To check without downloading the archive, the release must include a separate manifest file."
             ),
             scale: scale
         ) {

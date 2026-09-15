@@ -50,7 +50,7 @@ struct NectoRow<Control: View>: View {
                     .font(.necto(.label, scale: scale, family: fontFamily))
                     .foregroundStyle(NectoTheme.text)
 
-                if let hint {
+                if let hint, !hint.isEmpty {
                     Text(hint)
                         .font(.necto(.caption, scale: scale, family: fontFamily))
                         .foregroundStyle(NectoTheme.textTertiary)

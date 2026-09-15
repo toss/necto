@@ -63,11 +63,13 @@ final class NectoCLIInstaller {
         return try ["necto", "necto-cli"].filter { name in
             let path = directory.appending(path: name).path
             guard let type = try itemType(at: path) else { return true }
-            guard type == .typeSymbolicLink,
-                  try files.destinationOfSymbolicLink(atPath: path) == tool.path else {
+            guard type == .typeSymbolicLink || type == .typeRegular else {
                 throw Failure.conflict(path)
             }
-            return false
+            if type == .typeSymbolicLink {
+                return try files.destinationOfSymbolicLink(atPath: path) != tool.path
+            }
+            return true
         }
     }
 
@@ -80,7 +82,6 @@ final class NectoCLIInstaller {
     }
 
     // Recheck after authentication: the user may leave the dialog open while files change.
-    // Never use ln -f; even a destination created after these checks must not be overwritten.
     static func installCommand(tool: URL, directory: URL) -> String {
         """
         set -eu
@@ -95,17 +96,15 @@ final class NectoCLIInstaller {
         /bin/mkdir -p "$directory"
         cd -P "$directory"
         for name in necto necto-cli; do
-            if [ -L "$name" ]; then
-                [ "$(/usr/bin/readlink "$name")" = "$tool" ] && continue
-            elif [ ! -e "$name" ]; then
+            if [ -L "$name" ] || [ -f "$name" ] || [ ! -e "$name" ]; then
                 continue
             fi
             printf 'Refusing to replace: %s/%s\\n' "$directory" "$name" >&2
             exit 1
         done
         for name in necto necto-cli; do
-            if [ ! -L "$name" ]; then
-                /bin/ln -sh "$tool" "$name"
+            if [ ! -L "$name" ] || [ "$(/usr/bin/readlink "$name")" != "$tool" ]; then
+                /bin/ln -shf "$tool" "$name"
             fi
         done
         """

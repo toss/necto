@@ -87,18 +87,32 @@ struct NectoCLIInstallerTests {
         #expect(before == after)
     }
 
-    @Test("Conflicts are rejected before authorization or any link changes", arguments: ["file", "directory", "symlink", "dangling"])
-    func conflict(kind: String) async throws {
+    @Test("Replaces existing files and links without modifying their targets", arguments: ["file", "symlink", "dangling"])
+    func replaceExistingCLI(kind: String) async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         try fixture.prepareDirectory()
         let occupied = fixture.link("necto-cli")
         switch kind {
         case "file": try Data("preserve".utf8).write(to: occupied)
-        case "directory": try FileManager.default.createDirectory(at: occupied, withIntermediateDirectories: false)
         case "symlink": try FileManager.default.createSymbolicLink(at: occupied, withDestinationURL: fixture.root)
         default: try FileManager.default.createSymbolicLink(atPath: occupied.path, withDestinationPath: "/missing/other-cli")
         }
+        let installer = NectoCLIInstaller(tool: fixture.tool, directory: fixture.directory, authorize: fixture.execute)
+        await installer.install()
+        #expect(installer.error == nil)
+        #expect(installer.isInstalled)
+        #expect(try FileManager.default.destinationOfSymbolicLink(atPath: occupied.path) == fixture.tool.path)
+        #expect(FileManager.default.fileExists(atPath: fixture.tool.path))
+    }
+
+    @Test("Directories are rejected before authorization or any link changes")
+    func directoryConflict() async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.prepareDirectory()
+        let occupied = fixture.link("necto-cli")
+        try FileManager.default.createDirectory(at: occupied, withIntermediateDirectories: false)
         let before = try FileManager.default.attributesOfItem(atPath: occupied.path)[.systemFileNumber] as? NSNumber
         let installer = NectoCLIInstaller(tool: fixture.tool, directory: fixture.directory) { _ in
             Issue.record("Conflicts must not request authorization")
@@ -181,14 +195,15 @@ struct NectoCLIInstallerTests {
         defer { fixture.remove() }
         let installer = NectoCLIInstaller(tool: fixture.tool, directory: fixture.directory) { command in
             try fixture.prepareDirectory()
-            try Data("preserve".utf8).write(to: fixture.link("necto-cli"))
+            try FileManager.default.createDirectory(at: fixture.link("necto-cli"), withIntermediateDirectories: false)
+            try Data("preserve".utf8).write(to: fixture.link("necto-cli").appending(path: "keep"))
             try await fixture.execute(command)
         }
         await installer.install()
         #expect(installer.error != nil)
         #expect(!installer.isInstalled)
         #expect(!FileManager.default.fileExists(atPath: fixture.link("necto").path))
-        #expect(try String(contentsOf: fixture.link("necto-cli"), encoding: .utf8) == "preserve")
+        #expect(try String(contentsOf: fixture.link("necto-cli").appending(path: "keep"), encoding: .utf8) == "preserve")
     }
 
     @Test("Symlinked destination directories are rejected in preflight and after authorization")
