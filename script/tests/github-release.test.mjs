@@ -14,6 +14,7 @@ const head = "a".repeat(40);
 const older = "b".repeat(40);
 const version = "0.1.0";
 const root = "repos/toss/necto/";
+const download = "[**Download Necto**](https://github.com/toss/necto/releases/download/0.1.0/Necto-0.1.0.dmg)";
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 function fixture(t, options = {}) {
@@ -57,7 +58,7 @@ function fixture(t, options = {}) {
         return state.tag ? ok({ object: { type: "commit", sha: options.changedTag && state.uploads ? older : state.tag } }) : fail("gh: Not Found (HTTP 404)");
       }
       if (path === "git/refs") { state.tag = body.sha; return ok({ object: { type: "commit", sha: body.sha } }); }
-      if (path === "releases") { state.draft = { id: 7, ...body }; return ok(state.draft); }
+      if (path === "releases") { state.draft = { id: 7, body: "Generated release notes", ...body }; return ok(state.draft); }
       if (path === "releases/7/assets?per_page=100") return ok(state.assets);
       if (path === "releases/7" && method === "PATCH") {
         Object.assign(state.draft, body, { html_url: "https://github.com/toss/necto/releases/tag/0.1.0" });
@@ -85,25 +86,28 @@ test("publishing creates a tag and draft, verifies all four uploads, then publis
   assert.equal(release("publish", version, head, f), "https://github.com/toss/necto/releases/tag/0.1.0");
   assert.equal(f.state.tag, head);
   assert.equal(f.state.draft.draft, false);
+  assert.equal(f.state.draft.body, `${download}\n\nGenerated release notes`);
   assert.deepEqual(f.state.assets.map((item) => item.name), f.names);
   assert.equal(f.state.calls.at(-1)[1].at(-3), "PATCH");
 });
 
 test("an existing tag and draft resume without recreating either", (t) => {
-  const f = fixture(t, { tag: older, draft: { ...draft, target_commitish: older } });
+  const f = fixture(t, { tag: older, draft: { ...draft, target_commitish: older, body: "Existing release notes" } });
   release("publish", version, older, f);
   assert.equal(f.state.tag, older);
+  assert.equal(f.state.draft.body, `${download}\n\nExisting release notes`);
   assert.ok(!f.state.calls.some(([, args]) => args.includes("POST")));
 });
 
 test("identical draft assets are reused on retry", (t) => {
-  const f = fixture(t, { tag: head, draft: { ...draft } });
+  const f = fixture(t, { tag: head, draft: { ...draft, body: `${download}\n\nExisting release notes` } });
   const data = readFileSync(join(f.directory, f.names[0]));
   f.state.assets.push({ name: f.names[0], size: data.length, digest: `sha256:${hash(data)}`, state: "uploaded" });
   release("publish", version, head, f);
   const upload = f.state.calls.find(([, args]) => args[0] === "release")[1];
   assert.ok(!upload.includes(join(f.directory, f.names[0])));
   assert.equal(f.state.assets.length, 4);
+  assert.equal(f.state.draft.body, `${download}\n\nExisting release notes`);
 });
 
 for (const [name, options, error] of [

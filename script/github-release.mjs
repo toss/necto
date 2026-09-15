@@ -104,7 +104,10 @@ export function release(mode, version, commit, {
     asset.name === file.name && asset.state === "uploaded" && asset.size === file.size && asset.digest === file.digest))) {
     throw new Error("Uploaded release assets did not pass verification.");
   }
-  return api(`releases/${draft.id}`, { draft: false, prerelease: false, make_latest: "true" }, { method: "PATCH" }).html_url;
+  const download = `[**Download Necto**](https://github.com/${repository}/releases/download/${version}/Necto-${version}.dmg)`;
+  const notes = latest.body ?? "";
+  const body = notes.startsWith(download) ? notes : `${download}\n\n${notes}`;
+  return api(`releases/${draft.id}`, { body, draft: false, prerelease: false, make_latest: "true" }, { method: "PATCH" }).html_url;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
