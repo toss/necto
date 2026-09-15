@@ -33,7 +33,11 @@ function fakeTool() {
     case "git":
       if (args[0] === "status") return;
       if (args[0] === "branch") return console.log("main");
-      if (args[0] === "rev-parse") return process.exit(1);
+      if (args[0] === "rev-parse") {
+        if (args[1] === "HEAD") return console.log("fixture-head");
+        if (process.env.NECTO_RELEASE_EXISTING_TAG) return console.log(process.env.NECTO_RELEASE_EXISTING_TAG);
+        return process.exit(1);
+      }
       if (["tag", "push"].includes(args[0])) return record();
       break;
     case "gh":
@@ -66,7 +70,7 @@ function fakeTool() {
   throw new Error(`Unexpected release command: ${name} ${args.join(" ")}`);
 }
 
-function runRelease(t, { flags = [], env = {}, expectedStatus = 0 } = {}) {
+function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScript = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "necto-release test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const path of ["script", "bin", "tmp", "Build/bin", "Build/Products/Necto.app/Contents/MacOS"]) {
@@ -97,7 +101,13 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0 } = {}) {
   for (const name of ["test", "pack-web-package.mjs"]) {
     symlinkSync(tool, join(root, "script", name));
   }
-  const result = spawnSync("/bin/bash", ["script/release", version, ...flags], {
+  let script = "script/release";
+  if (externalScript) {
+    mkdirSync(join(root, "tmp/runner"));
+    script = join(root, "tmp/runner/release");
+    copyFileSync(join(root, "script/release"), script);
+  }
+  const result = spawnSync("/bin/bash", [script, version, ...flags], {
     cwd: root,
     encoding: "utf8",
     timeout: 10_000,
@@ -105,6 +115,7 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0 } = {}) {
       PATH: `${join(root, "bin")}:${dirname(process.execPath)}:/usr/bin:/bin`,
       TMPDIR: join(root, "tmp"),
       NECTO_RELEASE_TEST_ROOT: root,
+      ...(externalScript ? { NECTO_RELEASE_ROOT: root } : {}),
       ...env,
     },
   });
@@ -155,6 +166,14 @@ test("a release publishes the tag and artifacts to the official repository", (t)
   );
 });
 
+test("a dry run can rebuild an existing tag only at its original commit", (t) => {
+  const root = runRelease(t, {
+    flags: ["--dry-run"], env: { NECTO_RELEASE_EXISTING_TAG: "fixture-head" }, externalScript: true,
+  });
+  verifyArtifacts(root);
+  assert.equal(readFileSync(join(root, "publications.jsonl"), "utf8"), "");
+});
+
 test("publishing ad-hoc signs and verifies the embedded CLI and app without credentials", (t) => {
   const root = runRelease(t);
   const calls = readFileSync(join(root, "commands.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
@@ -174,6 +193,8 @@ test("publishing ad-hoc signs and verifies the embedded CLI and app without cred
 });
 
 for (const [name, env, flags] of [
+  ["existing tag on another commit", { NECTO_RELEASE_EXISTING_TAG: "other" }, ["--dry-run"]],
+  ["existing tag in local publish mode", { NECTO_RELEASE_EXISTING_TAG: "fixture-head" }],
   ["incorrect built version", { NECTO_RELEASE_BUILT_VERSION: "0.3.1" }],
   ["signing failure", { NECTO_RELEASE_FAIL_TOOL: "codesign" }],
   ["build failure", { NECTO_RELEASE_FAIL_TOOL: "xcodebuild" }],
