@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#
+# Copyright (c) 2026 Viva Republica, Inc.
+#
+set -euo pipefail
+
+if [[ $# -eq 0 || "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  echo "Usage: create-plugin <name> --type device|desktop"
+  echo "Creates a plugin using the latest published Necto release. Requires Node.js 20+ and npm."
+  [[ $# -gt 0 ]] && exit 0 || exit 2
+fi
+
+validate_type() {
+  local type=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --type) shift; type="${1:-}" ;;
+      --type=*) type="${1#--type=}" ;;
+    esac
+    if [[ $# -gt 0 ]]; then shift; fi
+  done
+  case "$type" in
+    device|desktop) ;;
+    *) echo "--type is required. Use --type device or --type desktop." >&2; return 2 ;;
+  esac
+}
+validate_type "$@"
+
+for tool in curl npx; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "Required command not found: $tool" >&2
+    exit 1
+  fi
+done
+
+release_url="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/toss/necto/releases/latest)"
+version="${release_url##*/}"
+if [[ "$release_url" != "https://github.com/toss/necto/releases/tag/$version" || ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+  echo "Could not resolve the latest Necto release version." >&2
+  exit 1
+fi
+
+exec npx --yes \
+  --package="https://github.com/toss/necto/releases/download/$version/create-necto-plugin-$version.tgz" \
+  create-necto-plugin "$@"
