@@ -125,6 +125,30 @@ struct NectoWebViewSecurityTests {
 
     }
 
+    @Test("Panel policy blocks undeclared network requests before they leave WebKit")
+    func networkPolicy() async throws {
+        try await withTestWebsiteDataStore { dataStore in
+            let plugin = Self.fixture(id: "network-policy", source: .device(appName: "Fixture", appBundleID: "dev.necto.security"))
+            let page = try await Self.open(plugin, dataStore: dataStore)
+            defer { page.invalidate() }
+            _ = try await page.webView.evaluateJavaScript("""
+                window.violations = [];
+                document.addEventListener('securitypolicyviolation', event => {
+                    window.violations.push(event.effectiveDirective);
+                });
+                fetch('https://blocked.invalid/data').catch(() => {});
+                const image = new Image(); image.src = 'https://blocked.invalid/image';
+                const script = document.createElement('script');
+                script.src = 'https://blocked.invalid/script'; document.head.append(script);
+                try { const socket = new WebSocket('wss://blocked.invalid/socket'); socket.onerror = () => {}; } catch (_) {}
+                void 0;
+                """)
+            try await Self.wait(page, for: "window.violations.includes('connect-src') && window.violations.includes('img-src') && window.violations.includes('script-src-elem')")
+            let inline = try await page.webView.evaluateJavaScript("window.loaded === true") as? Bool
+            #expect(inline == true)
+        }
+    }
+
     @Test("Provider errors render as text without executing HTML")
     func sampleErrors() async throws {
         try await withTestWebsiteDataStore { dataStore in

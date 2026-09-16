@@ -46,14 +46,17 @@ syntax and nothing falls back.
 | `authorUrl` | — | string | Author link |
 | `icon` | ✅ | object | `{ "systemName": "network" }`, an SF Symbols name |
 | `assets` | ✅ | string[] | Files and directories to package |
-| `allowedOrigins` | ✅ | string[] | Origin declarations: `self` or `https://…`. Currently only the value format is validated |
+| `allowedOrigins` | ✅ | string[] | Network origins permitted by the host CSP: `self` or an exact `https://…` origin |
 | `operations` | ✅ | object[] | Operations the plugin may call; empty for a pure web tool |
 
-`allowedOrigins` is not a network allowlist. Independently of that declaration,
-the host restricts top-level navigation to the installed panel's origin and accepts
-native bridge messages only from that top-level document. HTTP(S) links activated
-in that document open in the browser. External frames can load web content but
-cannot call the native bridge; ordinary web network requests are not blocked.
+The host enforces `allowedOrigins` through Content Security Policy on every panel
+response. Undeclared remote scripts, styles, images, fonts, media and connections
+are blocked. Local assets and inline scripts/styles remain supported; data images
+and fonts and blob images/media are permitted. Frames stay on the panel origin;
+workers, object embeds, form submissions and base URL changes are disabled.
+Top-level navigation and native bridge calls remain restricted to the installed
+panel's origin. An allowed remote script has the panel's privileges: only declare
+origins whose contents you trust.
 
 There is no `permissions` field. The bridges bound by a plugin's operations define
 its requested permissions.
@@ -381,5 +384,8 @@ the bridges it needs to work.
 **No platform flag.** Necto is macOS only, so a flag such as `isDesktopOnly` is
 unnecessary. Whether a connected app is required is derived from the bindings.
 
-**Declarations are not enforcement.** `allowedOrigins` is required, but the current
-implementation only validates its format. Do not use it as a network security boundary.
+**Network access is explicit.** `allowedOrigins` accepts `self` and exact HTTPS origins
+with an optional port. Credentials, paths other than `/`, queries, fragments and
+wildcards are refused. The host applies CSP independently of any policy the panel
+supplies. This limits web network access; native bridge permissions remain a separate
+boundary, and approved network origins can receive data the plugin can access.

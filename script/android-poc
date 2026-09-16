@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+serial="${1:?Usage: script/android-poc ADB_SERIAL [--no-build]}"
+mode="${2:-build}"
+case "$mode" in build|--no-build) ;; *) echo "Unknown option: $mode" >&2; exit 2 ;; esac
+sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$PWD/Build/AndroidTools/sdk}}"
+adb="$sdk/platform-tools/adb"
+[[ -x "$adb" ]] || { echo "Set ANDROID_HOME to an installed Android SDK." >&2; exit 1; }
+[[ "$("$adb" -s "$serial" get-state)" == device ]]
+if [[ "$serial" =~ ^emulator-[0-9]+$ ]]; then
+    [[ "$("$adb" -s "$serial" shell getprop ro.kernel.qemu)" == 1 ]]
+else
+    [[ "$("$adb" -s "$serial" get-devpath)" == usb:* ]] || {
+        echo "Use a USB device or local emulator for this POC." >&2
+        exit 1
+    }
+fi
+
+out="$PWD/Build/AndroidPOC"
+mkdir -p "$out/Logs"
+run() {
+    local name="$1"
+    shift
+    echo "==> $name"
+    if ! "$@" >"$out/Logs/$name.log" 2>&1; then
+        tail -n 10 "$out/Logs/$name.log"
+        return 1
+    fi
+}
+
+if [[ "$mode" == build ]]; then
+    if [[ -z "${JAVA_HOME:-}" && -d "/Applications/Android Studio.app/Contents/jbr/Contents/Home" ]]; then
+        export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+    fi
+    export ANDROID_HOME="$sdk"
+    gradle="$PWD/Android/gradlew"
+    if [[ -x "$PWD/Build/AndroidTools/gradle-8.11.1/bin/gradle" ]]; then
+        gradle="$PWD/Build/AndroidTools/gradle-8.11.1/bin/gradle"
+    fi
+    run android "$gradle" -p Android :sample:assembleDebug :sdk:testDebugUnitTest
+    run mac xcodebuild -project Necto.xcodeproj -scheme Necto -destination 'platform=macOS' \
+        -derivedDataPath "$out/DerivedData" SYMROOT="$out/Products" OBJROOT="$out/Intermediates" \
+        PRODUCT_BUNDLE_IDENTIFIER=dev.necto.android-poc build
+    run cli swift build --package-path NectoMac --product necto-cli
+fi
+
+host="$out/Products/Debug/Necto.app/Contents/MacOS/Necto"
+cli="$PWD/NectoMac/.build/debug/necto-cli"
+[[ -x "$host" && -x "$cli" ]] || { echo "Build the POC first." >&2; exit 1; }
+run install "$adb" -s "$serial" install -r Android/sample/build/outputs/apk/debug/sample-debug.apk
+run launch "$adb" -s "$serial" shell am start -W -n dev.necto.sample/.MainActivity
+exec script/android-connect "$serial" dev.necto.sample --adb "$adb" --host "$host" --cli "$cli" \
+    --state "$out/current-run.json" --log "$out/Logs/host.log"

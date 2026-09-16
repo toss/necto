@@ -1,0 +1,43 @@
+#!/usr/bin/env python3
+"""Verify that customer release APKs exclude Necto and that preview AARs are usable."""
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import zipfile
+
+root = Path(__file__).resolve().parent.parent
+sdk = Path(os.environ.get("ANDROID_HOME", root / "Build/AndroidTools/sdk"))
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--aapt", default=str(sdk / "build-tools/35.0.0/aapt"))
+args = parser.parse_args()
+results = {}
+for variant in ("debug", "release"):
+    suffix = "-unsigned" if variant == "release" else ""
+    apk = root / f"Android/sample/build/outputs/apk/{variant}/sample-{variant}{suffix}.apk"
+    with zipfile.ZipFile(apk) as archive:
+        contains_sdk = any(b"Ldev/necto/sdk/" in archive.read(name)
+                           for name in archive.namelist() if name.endswith(".dex"))
+        contains_panel = any(name.startswith("assets/event-log/") for name in archive.namelist())
+    permissions = subprocess.check_output([args.aapt, "dump", "permissions", str(apk)], text=True)
+    assert "android.permission.INTERNET" not in permissions, f"Unexpected INTERNET permission in {variant}"
+    assert contains_sdk == (variant == "debug"), f"Unexpected SDK inclusion in {variant}"
+    assert contains_panel == (variant == "debug"), f"Unexpected panel inclusion in {variant}"
+    results[variant] = dict(sdk=contains_sdk, panel=contains_panel, internetPermission=False)
+
+for module in ("sdk", "events"):
+    aar = root / f"Android/{module}/build/outputs/aar/{module}-release.aar"
+    with zipfile.ZipFile(aar) as archive:
+        assert "classes.jar" in archive.namelist()
+        if module == "events":
+            panel = root / "Sources/NectoDefaultPlugins/Panels/event-log"
+            for file in panel.rglob("*"):
+                if file.is_file():
+                    assert archive.read("assets/event-log/" + file.relative_to(panel).as_posix()) == file.read_bytes()
+    results[module + "AAR"] = dict(exists=True, bytes=aar.stat().st_size)
+
+output = root / "Build/AndroidPOC/artifact-results.json"
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text(json.dumps(results, indent=2))
+print("PASS: debug/release isolation, no INTERNET permission, SDK AAR and unchanged carried panel")

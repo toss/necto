@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""Connect a debuggable Android app over local-emulator or USB ADB."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import subprocess
+import tempfile
+import time
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("serial")
+    parser.add_argument("application_id")
+    parser.add_argument("--adb", required=True)
+    parser.add_argument("--host", required=True)
+    parser.add_argument("--cli", required=True)
+    parser.add_argument("--state", required=True)
+    parser.add_argument("--log", required=True)
+    args = parser.parse_args()
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+", args.application_id):
+        parser.error("Invalid application ID")
+    adb_env = dict(os.environ)
+    for key in ("ADB_SERVER_SOCKET", "ANDROID_ADB_SERVER_ADDRESS", "ANDROID_ADB_SERVER_PORT"):
+        adb_env.pop(key, None)
+
+    def adb(*command, check=True):
+        return subprocess.run([args.adb, "-H", "127.0.0.1", "-P", "5037", "-s", args.serial, *command],
+                              env=adb_env, capture_output=True, text=True, check=check, timeout=5)
+
+    def local_device():
+        if adb("get-state", check=False).stdout.strip() != "device":
+            return False
+        if re.fullmatch(r"emulator-\d+", args.serial):
+            return adb("shell", "getprop", "ro.kernel.qemu").stdout.strip() == "1"
+        return adb("get-devpath").stdout.strip().startswith("usb:")
+
+    if not local_device():
+        parser.error("Connect an authorized USB device or local emulator. Wireless ADB is refused.")
+
+    if adb("exec-out", "run-as", args.application_id, "id", check=False).returncode != 0:
+        parser.error("The app must be installed, debuggable, and support ADB run-as.")
+
+    os.umask(0o077)
+    home = Path(tempfile.mkdtemp(prefix="necto-android.", dir="/tmp"))
+    socket_path = home / "adb.sock"
+    forward = "localfilesystem:" + str(socket_path)
+    env = dict(os.environ, CFFIXED_USER_HOME=str(home), NECTO_ANDROID_SERIAL=args.serial,
+               NECTO_ANDROID_SOCKET=str(socket_path), NECTO_ANDROID_APP=args.application_id,
+               NECTO_ANDROID_ONLY="1")
+    env.pop("NECTO_ANDROID_PORT", None)
+    if os.environ.get("NECTO_POC_INJECTOR"):
+        env.update(DYLD_INSERT_LIBRARIES=os.environ["NECTO_POC_INJECTOR"],
+                   LOUPE_PORT="28749", LOUPE_BIND_HOST="127.0.0.1")
+    host = None
+    stopping = False
+
+    def stop(*_):
+        nonlocal stopping
+        stopping = True
+
+    def remove_forward():
+        try:
+            adb("forward", "--remove", forward, check=False)
+        except (subprocess.SubprocessError, OSError):
+            pass
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    try:
+        with open(args.log, "w") as log:
+            host = subprocess.Popen([args.host], env=env, stdout=log, stderr=log)
+            state = dict(home=str(home), serial=args.serial, applicationID=args.application_id,
+                         socketPath=str(socket_path), pid=host.pid, cli=args.cli, adb=args.adb)
+            Path(args.state).write_text(json.dumps(state, indent=2))
+            print(f"CLI: CFFIXED_USER_HOME={home} {args.cli} device list --json", flush=True)
+            print("Waiting for the debug app. Ctrl-C stops this host and removes its forwarding.", flush=True)
+            previous = None
+            waiting = True
+            while not stopping and host.poll() is None:
+                endpoint = None
+                try:
+                    if local_device():
+                        value = adb("exec-out", "run-as", args.application_id, "cat",
+                                    "no_backup/necto-endpoint", check=False).stdout.strip()
+                        if re.fullmatch(r"necto\.[a-f0-9]{64}", value):
+                            endpoint = value
+                    forwards = adb("forward", "--list", check=False).stdout.splitlines()
+                    expected = [args.serial, forward, "localabstract:" + endpoint] if endpoint else None
+                    exists = expected is not None and any(line.split() == expected for line in forwards)
+                    if endpoint != previous or (endpoint and not exists):
+                        remove_forward()
+                        previous = None
+                        if endpoint:
+                            adb("forward", forward, "localabstract:" + endpoint)
+                            previous = endpoint
+                    if endpoint and waiting:
+                        print("Private ADB connection ready.", flush=True)
+                        waiting = False
+                    elif not endpoint and not waiting:
+                        print("Waiting for the USB device or debug app to return.", flush=True)
+                        waiting = True
+                except (subprocess.SubprocessError, OSError):
+                    remove_forward()
+                    previous = None
+                time.sleep(1)
+            if not stopping and host.returncode:
+                raise SystemExit(f"Necto exited with status {host.returncode}; see {args.log}")
+    finally:
+        if host and host.poll() is None:
+            host.terminate()
+            try:
+                host.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                host.kill()
+                host.wait()
+        remove_forward()
+
+
+if __name__ == "__main__":
+    main()

@@ -11,6 +11,24 @@ import Testing
 
 @Suite("Which ports a transport dials")
 struct NectoConnectionCenterTests {
+    @Test("Android forwarding requires an explicit Unix endpoint and application")
+    func androidConfiguration() {
+        typealias Endpoint = NectoConnectionCenter.AndroidEndpoint
+        #expect(Endpoint.fromEnvironment([:]) == nil)
+        let values = ["NECTO_ANDROID_SERIAL": "phone", "NECTO_ANDROID_SOCKET": "/tmp/private/adb.sock", "NECTO_ANDROID_APP": "dev.necto.sample"]
+        #expect(Endpoint.fromEnvironment(values) == Endpoint(serial: "phone", socketPath: "/tmp/private/adb.sock", appBundleID: "dev.necto.sample"))
+        for path in ["relative", "/tmp/" + String(repeating: "x", count: 104), "/tmp/\0socket"] {
+            var invalid = values
+            invalid["NECTO_ANDROID_SOCKET"] = path
+            #expect(Endpoint.fromEnvironment(invalid) == nil)
+        }
+        for app in ["", "package;command", "dev.necto/other"] {
+            var invalid = values
+            invalid["NECTO_ANDROID_APP"] = app
+            #expect(Endpoint.fromEnvironment(invalid) == nil)
+        }
+    }
+
     @Test("a port range near UInt16.max is clipped rather than overflowing")
     func clipsPortRange() {
         #expect(NectoConnectionCenter.portsToDial(from: 65533, skipping: [65534]) == [65533, 65535])

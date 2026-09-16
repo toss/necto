@@ -166,7 +166,11 @@ public extension NectoPluginManifest {
 
     private static func isValidOrigin(_ value: String) -> Bool {
         if value == "self" { return true }
-        guard value.hasPrefix("https://"), let url = URL(string: value) else { return false }
-        return url.host?.isEmpty == false
+        guard let url = URLComponents(string: value), url.scheme == "https", let host = url.host, !host.isEmpty,
+              host.allSatisfy({ "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-:[]".contains($0) }),
+              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+              url.path.isEmpty || url.path == "/",
+              url.port.map({ (1...65535).contains($0) }) ?? true else { return false }
+        return true
     }
 }

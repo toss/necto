@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+import json
+import os
+from pathlib import Path
+import re
+import selectors
+import subprocess
+import time
+import xml.etree.ElementTree as ET
+
+root = Path(__file__).resolve().parent.parent
+out = root / "Build/AndroidPOC"
+run = json.loads((out / "current-run.json").read_text())
+env = dict(os.environ, CFFIXED_USER_HOME=run["home"])
+target = ["--device", "android:" + run["serial"], "--app", "dev.necto.sample"]
+results = {}
+
+
+def cli(args, scoped=True, check=True, timeout=20):
+    command = [run["cli"], *args, *(target if scoped else [])]
+    result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=timeout)
+    if check and result.returncode:
+        raise AssertionError(result.stderr)
+    return result
+
+
+def adb(*args):
+    return subprocess.run([run["adb"], "-s", run["serial"], *args],
+                          capture_output=True, text=True, check=True, timeout=30).stdout
+
+
+def wait_for(predicate, description, timeout=20):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return
+        time.sleep(0.2)
+    raise AssertionError("Timed out: " + description)
+
+
+def connected():
+    devices = json.loads(cli(["device", "list", "--json"], scoped=False).stdout)["devices"]
+    return any(device["id"] == "android:" + run["serial"] and
+               any(app["bundleID"] == "dev.necto.sample" for app in device["apps"])
+               for device in devices)
+
+
+def ready():
+    response = cli(["plugin", "help", "event-log", "events.list", "--json"], check=False)
+    return response.returncode == 0 and json.loads(response.stdout).get("operation", {}).get("available") is True
+
+
+def send(operation, payload=None):
+    args = ["plugin", "send", "event-log", operation]
+    if payload is not None:
+        args += ["--input", json.dumps(payload)]
+    return json.loads(cli(args).stdout)
+
+
+def stream(count):
+    result = cli(["plugin", "subscribe", "event-log", "events.observe", "--limit", str(count)], timeout=15)
+    events = [json.loads(line)["event"] for line in result.stdout.splitlines()]
+    assert len(events) == count
+    assert all(event["at"] > 0 and event["message"] == "Android heartbeat" for event in events)
+    return events
+
+
+wait_for(connected, "Android target")
+wait_for(ready, "carried Events panel and contracts")
+results["target"] = json.loads(cli(["device", "list", "--json"], scoped=False).stdout)
+results["list"] = send("events.list", {"limit": 5})
+assert results["list"]["events"]
+
+adb("shell", "uiautomator", "dump", "/data/local/tmp/necto-poc-ui.xml")
+tree = ET.fromstring(adb("shell", "cat", "/data/local/tmp/necto-poc-ui.xml"))
+button = next(node for node in tree.iter("node") if node.get("text", "").casefold() == "send event to necto")
+x1, y1, x2, y2 = map(int, re.findall(r"\d+", button.get("bounds")))
+known_events = {event["id"] for event in send("events.list", {"limit": 5000})["events"]}
+adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
+tap = None
+
+
+def button_event_arrived():
+    global tap
+    events = send("events.list", {"limit": 50})["events"]
+    tap = next((event for event in events if event["tag"] == "Interaction" and event["id"] not in known_events), None)
+    return tap is not None
+
+
+wait_for(button_event_arrived, "new event from the Android button tap")
+results["buttonEvent"] = send("events.detail", {"eventID": tap["id"]})
+assert int(results["buttonEvent"]["event"]["detail"]["count"]) > 0
+
+results["stream"] = stream(3)
+results["resubscribeAfterCancel"] = stream(1)
+invalid = cli(["plugin", "send", "event-log", "events.list", "--input", '{"limit":0}'], check=False)
+assert invalid.returncode != 0 and "INVALID_INPUT" in invalid.stderr
+results["invalidInput"] = invalid.stderr.strip()
+assert send("events.clear")["cleared"] is True
+assert send("events.list", {"level": "error"})["events"] == []
+results["clear"] = True
+
+pending = subprocess.Popen([run["cli"], "plugin", "subscribe", "event-log", "events.observe", *target],
+                           env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+try:
+    with selectors.DefaultSelector() as selector:
+        selector.register(pending.stdout, selectors.EVENT_READ)
+        assert selector.select(timeout=10), "No event before disconnect test"
+    assert json.loads(pending.stdout.readline())["event"]
+    adb("shell", "am", "force-stop", "dev.necto.sample")
+    _, error = pending.communicate(timeout=10)
+    assert pending.returncode != 0 and error.strip()
+    results["disconnect"] = error.strip()
+    wait_for(lambda: not connected(), "target removal")
+finally:
+    if pending.poll() is None:
+        pending.kill()
+        pending.communicate()
+    adb("shell", "am", "start", "-W", "-n", "dev.necto.sample/.MainActivity")
+
+wait_for(connected, "reconnection")
+wait_for(ready, "panel after reconnection")
+results["reconnectList"] = send("events.list", {"limit": 5})
+assert results["reconnectList"]["events"]
+results["reconnectStream"] = stream(3)
+results["hostPID"] = run["pid"]
+os.kill(run["pid"], 0)
+(out / "e2e-results.json").write_text(json.dumps(results, indent=2, ensure_ascii=False))
+print("PASS: target, carried panel, button event/detail, stream/cancel, invalid input, clear, disconnect, reconnect")
+print(out / "e2e-results.json")

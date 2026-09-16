@@ -220,7 +220,7 @@ struct DeviceRow: View {
 
     @State private var isHovering = false
 
-    private var isSimulator: Bool { device.connection == .simulator }
+    private var isSimulator: Bool { device.connection.isEmulator }
 
     var body: some View {
         Button(action: select) {
@@ -242,7 +242,7 @@ struct DeviceRow: View {
                 Spacer(minLength: 6)
 
                 if !device.osVersion.isEmpty {
-                    Text("iOS \(device.osVersion)")
+                    Text("\(device.connection.osName) \(device.osVersion)")
                         .font(.necto(.caption, scale: scale))
                         .foregroundStyle(NectoTheme.textTertiary)
                         .lineLimit(1)
@@ -277,7 +277,7 @@ struct DeviceRow: View {
         [
             device.deviceName + (isSimulator ? " (\(NectoL10n.text("Simulator")))" : ""),
             NectoL10n.text(isSimulator ? "Connected over loopback" : "Connected over USB"),
-            device.osVersion.isEmpty ? nil : "iOS \(device.osVersion)",
+            device.osVersion.isEmpty ? nil : "\(device.connection.osName) \(device.osVersion)",
             device.appBundleID,
             device.appVersion.isEmpty ? nil : NectoL10n.format("App %@", device.appVersion),
             NectoL10n.format("Necto SDK %@", device.sdkVersion),

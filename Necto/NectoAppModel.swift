@@ -139,7 +139,10 @@ final class NectoAppModel {
 
     let registry = NectoPluginRegistry(targetHandles: NectoAppModel.targetHandles)
 
-    private let connections = NectoConnectionCenter()
+    private let connections = NectoConnectionCenter(
+        androidEndpoint: .fromEnvironment(ProcessInfo.processInfo.environment),
+        appleDiscoveryEnabled: ProcessInfo.processInfo.environment["NECTO_ANDROID_ONLY"] != "1"
+    )
     private let storage = NectoPluginStorage()
     private let events = NectoPluginEventRouter()
     let diagnostics = NectoDiagnosticsLog()
@@ -736,7 +739,7 @@ final class NectoAppModel {
                 name: app.deviceName,
                 appName: app.appName,
                 appBundleID: app.appBundleID,
-                deviceType: app.connection == .simulator ? "simulator" : "device",
+                deviceType: app.connection.isEmulator ? "simulator" : "device",
                 // Everything the connection centre reports is by definition attached.
                 isConnected: true,
                 nectoVersion: app.sdkVersion
