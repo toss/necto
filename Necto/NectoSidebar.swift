@@ -60,6 +60,7 @@ struct SidebarPluginSearch: View {
             isSearching = true
         } label: {
             Image(systemName: "magnifyingglass")
+                .foregroundStyle(NectoTheme.textTertiary)
         }
         .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
         .help(NectoL10n.text("Search plugins"))
