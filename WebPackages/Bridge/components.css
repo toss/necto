@@ -425,6 +425,21 @@ th.necto-numeric { text-align: right; }
 
 .necto-detail-title .necto-button-quiet { margin-left: auto; }
 
+.necto-detail-title-wrap {
+  box-sizing: border-box;
+  height: auto;
+  min-height: var(--necto-toolbar-height);
+  padding-top: var(--necto-space-1);
+  padding-bottom: var(--necto-space-1);
+}
+
+.necto-detail-title-wrap .necto-detail-title-url {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-overflow: clip;
+}
+
 .necto-detail-body { flex: 1; min-height: 0; overflow: auto; padding: var(--necto-space-3); }
 
 /* Scrollbars are painted by the UA. Left to it they arrive as a bright band in a dark
