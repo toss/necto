@@ -2,16 +2,14 @@
 // Copyright (c) 2026 Viva Republica, Inc.
 //
 
-import { createInterface } from "node:readline/promises";
-import { stdin as input, stdout as output } from "node:process";
 import { createProject } from "./create-project.js";
 
-const usage = `Usage: create-necto-plugin <name> [--type device|desktop]
+const usage = `Usage: create-necto-plugin <name> --type device|desktop
 
 Creates a standalone Necto plugin project in a new directory.
 
 Options:
-  --type <type>  Plugin type. Prompts when omitted.
+  --type <type>  Required. Either device or desktop.
   --help         Show this help.`;
 
 export async function run(arguments_) {
@@ -22,8 +20,8 @@ export async function run(arguments_) {
   }
 
   if (!parsed.name) throw new Error(usage);
-  const type = parsed.type ?? await promptForType();
-  const result = await createProject({ name: parsed.name, type });
+  if (!parsed.type) throw new Error("--type is required. Use --type device or --type desktop.");
+  const result = await createProject({ name: parsed.name, type: parsed.type });
 
   console.log(`Created ${result.type} plugin at ${result.directory}`);
   console.log("");
@@ -57,25 +55,8 @@ function parseArguments(arguments_) {
     }
   }
 
-  if (type && type !== "device" && type !== "desktop") {
+  if (type !== undefined && type !== "device" && type !== "desktop") {
     throw new Error(`Unknown plugin type: ${type}. Use device or desktop.`);
   }
   return { help, name, type };
-}
-
-async function promptForType() {
-  if (!input.isTTY || !output.isTTY) {
-    throw new Error("--type is required when the command is not interactive.");
-  }
-
-  const readline = createInterface({ input, output });
-  try {
-    const answer = (await readline.question("Plugin type (device/desktop): ")).trim().toLowerCase();
-    if (answer !== "device" && answer !== "desktop") {
-      throw new Error(`Unknown plugin type: ${answer}. Use device or desktop.`);
-    }
-    return answer;
-  } finally {
-    readline.close();
-  }
 }
