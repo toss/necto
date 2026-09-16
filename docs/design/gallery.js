@@ -335,7 +335,7 @@ const networkPane = (bar) => `
 
     <aside class="necto-detail">
       <div class="necto-resize" role="separator" aria-orientation="horizontal" aria-label="Resize"></div>
-      <div class="necto-detail-title">
+      <div class="necto-detail-title necto-detail-title-wrap">
         <span class="necto-status necto-status-warning">404</span>
         <span>GET</span>
         <span class="necto-detail-title-url">https://api.example.com/v2/merchants/unknown?include=terms</span>

@@ -190,7 +190,6 @@ function bodyView(body: Body | undefined, label: string): Node[] {
 
 function summary(record: RecordDetail): HTMLElement {
   const rows: [string, string][] = [
-    ["URL", record.url],
     [t("Method"), record.method],
     [t("State"), record.state],
   ];
@@ -338,7 +337,7 @@ function renderDetail(): void {
   close.addEventListener("click", closeDetail);
 
   aside.append(
-    el("div", { class: "necto-detail-title" }, [
+    el("div", { class: "necto-detail-title necto-detail-title-wrap" }, [
       ...(selected ? [statusCell(selected)] : []),
       el("span", { class: "cell-method" }, [selected?.method ?? ""]),
       el("span", { class: "necto-detail-title-url" }, [selected?.url ?? ""]),

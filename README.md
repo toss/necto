@@ -46,18 +46,13 @@ To integrate the SDK into your app and exclude SDK calls from Release builds, se
 
 ## Create a plugin
 
-Select a [published release](https://github.com/toss/necto/releases) that includes
-the generator and bridge archives. This example pins `0.1.0`:
+Requires Node.js 20+ and npm. Uses the latest release.
 
 ```bash
-NECTO_VERSION=0.1.0
-npx --yes \
-  --package="https://github.com/toss/necto/releases/download/${NECTO_VERSION}/create-necto-plugin-${NECTO_VERSION}.tgz" \
-  create-necto-plugin Uptime --type device
+curl -fsSL https://raw.githubusercontent.com/toss/necto/main/script/create-plugin | bash -s -- Example --type device
 ```
 
-Use `--type desktop` for a web-only plugin. A device project includes a Swift
-package, an Xcode project, an ExampleApp and the web panel source.
+Replace `Example` with your project name. `--type`: `device` or `desktop`.
 
 ## Documentation
 
