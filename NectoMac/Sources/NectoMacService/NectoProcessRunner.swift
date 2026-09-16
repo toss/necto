@@ -96,7 +96,7 @@ public enum NectoProcessRunner {
                 let input = standardInput.map { _ in Pipe() }
                 child.executableURL = URL(filePath: executable)
                 child.arguments = arguments
-                child.environment = environment
+                child.environment = environment ?? ProcessInfo.processInfo.environment
                 child.currentDirectoryURL = directory
                 child.standardInput = input?.fileHandleForReading ?? FileHandle.nullDevice
                 child.standardOutput = output
