@@ -9,6 +9,30 @@ import Testing
 
 @Suite("Async process I/O")
 struct NectoProcessRunnerTests {
+    @Test("omitted environment inherits the parent environment")
+    func inheritedEnvironment() async throws {
+        let home = try #require(ProcessInfo.processInfo.environment["HOME"])
+        let output = try await NectoProcessRunner.run("/usr/bin/printenv", arguments: ["HOME"])
+        #expect(output.exitCode == 0)
+        #expect(output.stdout == Data("\(home)\n".utf8))
+    }
+
+    @Test("explicit environment replaces rather than merges the parent environment")
+    func explicitEnvironment() async throws {
+        let output = try await NectoProcessRunner.run(
+            "/usr/bin/env", arguments: [], environment: ["NECTO_PROCESS_TEST": "provided"]
+        )
+        #expect(output.exitCode == 0)
+        #expect(output.stdout == Data("NECTO_PROCESS_TEST=provided\n".utf8))
+    }
+
+    @Test("explicit empty environment stays empty")
+    func emptyEnvironment() async throws {
+        let output = try await NectoProcessRunner.run("/usr/bin/env", arguments: [], environment: [:])
+        #expect(output.exitCode == 0)
+        #expect(output.stdout.isEmpty)
+    }
+
     @Test("bounded standard input reaches the process through EOF")
     func standardInput() async throws {
         let input = Data(repeating: 97, count: NectoProcessRunner.maximumStandardInputBytes)
