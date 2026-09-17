@@ -2,6 +2,15 @@ name: Deploy docs
 
 on:
   workflow_dispatch:
+  # Only the files the site is built from. Swift and plugin changes are far more
+  # frequent here, and none of them change what is published.
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "package.json"
+      - "yarn.lock"
+      - ".github/workflows/deploy-docs.yml"
 
 permissions:
   contents: read
