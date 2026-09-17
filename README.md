@@ -2,22 +2,24 @@
 
 English | [한국어](README-ko.md)
 
-Necto is a macOS debugging tool for iOS apps. Use plugins to inspect network
-requests, events and performance metrics, or add tools for your app.
+Necto is an iOS debugging platform that connects anywhere.  
+Build the tools you need as plugins. A modern alternative to Flipper.
 
 ![Necto showing CPU, memory, and frame rate in the Performance plugin](docs/images/necto.png)
 
-- Connect to apps running on USB devices or iOS simulators.
+- Connect to an app on a USB device or an iOS simulator. The SDK listens inside
+  your app, so there is no proxy to configure and no certificate to trust
+  ([docs/setup.md](docs/setup.md)).
+- Anything you need for iOS development can be a plugin. A device plugin rides in
+  your app and its panel appears in Necto when the app connects; a desktop plugin
+  installs from a GitHub release, folder or ZIP and works without a connected app
+  ([docs/plugin-manifest.md](docs/plugin-manifest.md)).
+- Everything Necto does, the CLI does too. Install and delete plugins, call bridge
+  operations, or install the bundled skill and let an AI debug the app itself
+  ([docs/control-socket.md](docs/control-socket.md)).
 - Feature screens are web plugins made up of a `manifest.json` and web assets.
   They use the same design tokens as the app
   ([docs/design.md](docs/design.md)).
-- Add a device plugin's Swift package to your app and register it with the SDK
-  ([docs/setup.md](docs/setup.md)). Its panel appears in Necto when the app connects.
-- Desktop plugins work without a connected app and install in Necto from a
-  GitHub release, folder or ZIP ([docs/plugin-manifest.md](docs/plugin-manifest.md)).
-- Install, delete and call desktop plugins from the terminal with `necto`
-  (`necto-cli` remains supported)
-  ([docs/control-socket.md](docs/control-socket.md)).
 - The Mac app and SDK use Swift, while plugin screens use web technologies.
   The Mac app manages connections and execution without a separate server process
   ([docs/architecture.md](docs/architecture.md)).
