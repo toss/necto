@@ -41,7 +41,10 @@ those also need checks in the app or on a device.
 
 The `NectoAppTests` scheme runs Swift Testing without launching the Mac app. App
 sources under test belong to both targets. Tests use an in-memory approval store,
-temporary cache directories and isolated WebKit data stores. Run it in Xcode or directly:
+temporary cache directories and per-test nonpersistent WebKit data stores. Storage
+isolation tests share one store across plugin pages so origin collisions remain
+observable. These tests cover isolation and retention across page recreation, not
+disk persistence across app launches. Run it in Xcode or directly:
 
 ```bash
 xcodebuild -project Necto.xcodeproj -scheme NectoAppTests -destination 'platform=macOS' test
@@ -68,6 +71,13 @@ It opens Simulator and waits for boot to finish before installing the test Examp
 each test writes its own values. The app and temporary Mac home are removed afterward.
 The simulator is left booted; it is never erased or deleted, and other installed apps
 are left intact.
+
+Launching Simulator or ExampleApp and waiting for the Mac host's control socket
+each get a 120-second deadline for cold startup. Connection and plugin readiness
+checks retain their 30-second deadline. If the host exits during startup, the test
+fails immediately. Startup failures include the host
+output and the last CLI probe's output in the test log.
+
 Other Necto instances must be closed because hosts share the SDK's loopback ports.
 Waits check observable state with deadlines, not fixed startup delays or performance
 thresholds. Build logs, command output and the test result bundle are in `Build/E2E/Logs`.

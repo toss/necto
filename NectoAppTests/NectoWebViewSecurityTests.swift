@@ -23,10 +23,9 @@ private struct ErrorTicksProvider: NectoOperationProvider {
 @MainActor
 struct NectoWebViewSecurityTests {
     @Test("App and installation identities isolate storage while trusted updates retain it")
-    func storageAndBridgeIsolation() async throws {
-        try await withTestWebsiteDataStore { dataStore in
-            try await Self.verifyStorageAndBridgeIsolation(dataStore: dataStore)
-        }
+    func storageIsolation() async throws {
+        // Share one store so origin collisions expose another principal's data.
+        try await Self.verifyStorageIsolation(dataStore: .nonPersistent())
     }
 
     static func wait(_ page: NectoPluginPage, for expression: String) async throws {
@@ -61,7 +60,7 @@ struct NectoWebViewSecurityTests {
         catch { page.invalidate(); throw error }
     }
 
-    private static func verifyStorageAndBridgeIsolation(dataStore: WKWebsiteDataStore) async throws {
+    private static func verifyStorageIsolation(dataStore: WKWebsiteDataStore) async throws {
         func open(_ plugin: NectoInstalledPlugin) async throws -> NectoPluginPage {
             try await Self.open(plugin, dataStore: dataStore)
         }
@@ -89,11 +88,6 @@ struct NectoWebViewSecurityTests {
         try #require(retained == "A", "Update lost the same principal's browser storage")
         _ = try await reopened.webView.evaluateJavaScript("localStorage.removeItem('sentinel')")
 
-        _ = try await reopened.webView.evaluateJavaScript("window.webkit.messageHandlers.necto.postMessage({type:'context'}).then(r=>window.mainResult=r.ok); void 0")
-        try await wait(reopened, for: "window.mainResult === true")
-        _ = try await reopened.webView.evaluateJavaScript("const frame=document.createElement('iframe'); frame.src='frame.html'; document.body.append(frame)")
-        try await wait(reopened, for: "window.frameResult === 'denied'")
-
         let local = NectoLocalPluginInstallation(pluginID: id, directoryPath: "/synthetic", approvedContentHash: "first")
         let desktop = try await open(fixture(id: id, source: .installed, installation: local))
         pages.append(desktop)
@@ -116,20 +110,35 @@ struct NectoWebViewSecurityTests {
         let preview = try await open(fixture(id: id, source: .installed))
         pages.append(preview)
         try #require(!preview.webView.configuration.websiteDataStore.isPersistent, "Unregistered preview persisted storage")
-        let otherID = NectoPluginPrincipal(pluginID: id + "-other", sourceIdentity: local.principal.sourceIdentity)
-        try #require(NectoPluginSchemeHandler.originHost(for: local.principal) != NectoPluginSchemeHandler.originHost(for: otherID),
+        try #require(preview.webView.configuration.websiteDataStore !== dataStore, "Unregistered preview inherited the shared store")
+    }
+
+    @Test("Principal fields produce distinct storage origins")
+    func distinctOrigins() throws {
+        let principal = NectoPluginPrincipal(pluginID: "com.example.storage", sourceIdentity: "device:com.example.a")
+        let otherID = NectoPluginPrincipal(pluginID: principal.pluginID + "-other", sourceIdentity: principal.sourceIdentity)
+        try #require(NectoPluginSchemeHandler.originHost(for: principal) != NectoPluginSchemeHandler.originHost(for: otherID),
                     "Different plugin IDs shared an origin")
         try #require(NectoPluginSchemeHandler.originHost(for: .init(pluginID: "bc", sourceIdentity: "a")) !=
                     NectoPluginSchemeHandler.originHost(for: .init(pluginID: "c", sourceIdentity: "ab")),
                     "Ambiguous principal fields shared an origin")
+    }
 
+    @Test("The main frame can access the bridge while iframes cannot")
+    func bridgeIsolation() async throws {
+        let plugin = Self.fixture(id: "com.example.bridge-" + UUID().uuidString.lowercased(),
+                                  source: .device(appName: "A", appBundleID: "com.example.a"))
+        let page = try await Self.open(plugin, dataStore: .nonPersistent())
+        defer { page.invalidate() }
+        _ = try await page.webView.evaluateJavaScript("window.webkit.messageHandlers.necto.postMessage({type:'context'}).then(r=>window.mainResult=r.ok); void 0")
+        try await Self.wait(page, for: "window.mainResult === true")
+        _ = try await page.webView.evaluateJavaScript("const frame=document.createElement('iframe'); frame.src='frame.html'; document.body.append(frame)")
+        try await Self.wait(page, for: "window.frameResult === 'denied'")
     }
 
     @Test("Provider errors render as text without executing HTML")
     func sampleErrors() async throws {
-        try await withTestWebsiteDataStore { dataStore in
-            try await Self.verifySampleErrors(dataStore: dataStore)
-        }
+        try await Self.verifySampleErrors(dataStore: .nonPersistent())
     }
 
     private static func verifySampleErrors(dataStore: WKWebsiteDataStore) async throws {
