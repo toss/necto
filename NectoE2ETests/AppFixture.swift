@@ -47,9 +47,10 @@ final class AppFixture {
         print("E2E simulator: iPhone 17 Pro (\(id))")
         // Pre-created CI devices may still need their first boot; -b also accepts booted devices.
         let boot = try launch(URL(filePath: "/usr/bin/xcrun"), ["simctl", "bootstatus", id, "-b"])
-        _ = try await run("/usr/bin/open", ["-a", "Simulator", "--args", "-CurrentDeviceUDID", id])
         let bootResult = try await finish(boot, timeout: .seconds(600))
         try #require(bootResult.status == 0, "Simulator boot failed: \(bootResult.error)")
+        // Simulator also boots the selected device, so open it only after simctl has finished booting.
+        _ = try await run("/usr/bin/open", ["-a", "Simulator", "--args", "-CurrentDeviceUDID", id])
         print("E2E: simulator ready")
         simulator = id
         _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path], timeout: .seconds(120))
