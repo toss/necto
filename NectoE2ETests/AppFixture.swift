@@ -54,12 +54,32 @@ final class AppFixture {
         simulator = id
         _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path], timeout: .seconds(120))
         print("E2E: Example installed")
-        _ = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
-        try await wait("GUI control socket") {
-            let result = try await self.cli(["device", "list", "--json"], scoped: false)
-            return result.status == 0
-        }
+        let hostCommand = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
+        try await waitForControlSocket(hostCommand)
         try await launchExample()
+    }
+
+    // A cold AppKit launch on CI can outlast the operation-level deadline.
+    func waitForControlSocket(_ host: Command, timeout: Duration = .seconds(120)) async throws {
+        do {
+            try await wait("GUI control socket", timeout: timeout) {
+                guard host.process.isRunning else {
+                    throw Failure(message: "Necto exited before its control socket was ready (status \(host.process.terminationStatus)).")
+                }
+                let result = try await self.cli(["device", "list", "--json"], scoped: false)
+                return result.status == 0
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw Failure(message: """
+                \(error)
+                Host logs:
+                \(host.logTail())
+                Last command logs:
+                \(commands.last?.logTail() ?? "No commands ran.")
+                """)
+        }
     }
 
     static func selectSimulator(_ devices: [String: [[String: Any]]]) -> [String: Any]? {
@@ -133,10 +153,12 @@ final class AppFixture {
         }
     }
 
-    private func wait(_ description: String, until condition: () async throws -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(30)
+    private func wait(_ description: String, timeout: Duration = .seconds(30), until condition: () async throws -> Bool) async throws {
+        let deadline = ContinuousClock.now + timeout
         while !(try await condition()) {
-            try #require(ContinuousClock.now < deadline, "Timed out waiting for \(description). Logs: \(logs.path)")
+            guard ContinuousClock.now < deadline else {
+                throw Failure(message: "Timed out waiting for \(description). Logs: \(logs.path)")
+            }
             try await Task.sleep(for: .milliseconds(100))
         }
         print("E2E: \(description)")
@@ -185,7 +207,7 @@ final class AppFixture {
         }
     }
 
-    private func launch(_ url: URL, _ arguments: [String], isolated: Bool = false) throws -> Command {
+    func launch(_ url: URL, _ arguments: [String], isolated: Bool = false) throws -> Command {
         let process = Process()
         process.executableURL = url
         process.arguments = arguments

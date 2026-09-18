@@ -68,6 +68,12 @@ It opens Simulator and waits for boot to finish before installing the test Examp
 each test writes its own values. The app and temporary Mac home are removed afterward.
 The simulator is left booted; it is never erased or deleted, and other installed apps
 are left intact.
+
+The Mac host gets up to 120 seconds to open its control socket after a cold launch;
+connection and plugin readiness checks retain their 30-second deadline. If the host
+exits during startup, the test fails immediately. Startup failures include the host
+output and the last CLI probe's output in the test log.
+
 Other Necto instances must be closed because hosts share the SDK's loopback ports.
 Waits check observable state with deadlines, not fixed startup delays or performance
 thresholds. Build logs, command output and the test result bundle are in `Build/E2E/Logs`.
