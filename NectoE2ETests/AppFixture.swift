@@ -50,7 +50,7 @@ final class AppFixture {
         let bootResult = try await finish(boot, timeout: .seconds(600))
         try #require(bootResult.status == 0, "Simulator boot failed: \(bootResult.error)")
         // Simulator also boots the selected device, so open it only after simctl has finished booting.
-        _ = try await run("/usr/bin/open", ["-a", "Simulator", "--args", "-CurrentDeviceUDID", id])
+        _ = try await run("/usr/bin/open", ["-a", "Simulator", "--args", "-CurrentDeviceUDID", id], timeout: .seconds(120))
         print("E2E: simulator ready")
         simulator = id
         _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path], timeout: .seconds(120))
@@ -94,7 +94,7 @@ final class AppFixture {
     }
 
     func launchExample() async throws {
-        _ = try await run("/usr/bin/xcrun", ["simctl", "launch", try #require(simulator), Self.exampleID])
+        _ = try await run("/usr/bin/xcrun", ["simctl", "launch", try #require(simulator), Self.exampleID], timeout: .seconds(120))
     }
 
     func terminateExample() async throws {
