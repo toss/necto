@@ -19,7 +19,7 @@ func withTestWebsiteDataStore(_ body: (WKWebsiteDataStore) async throws -> Void)
     await dataStore!.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
     dataStore = nil
     // WebKit releases its store after pending page teardown completes.
-    let deadline = ContinuousClock.now + .seconds(5)
+    let deadline = ContinuousClock.now + .seconds(30)
     while true {
         do {
             try await WKWebsiteDataStore.remove(forIdentifier: identifier)
