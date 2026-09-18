@@ -90,10 +90,11 @@ struct NectoProcessRunnerTests {
         let start = clock.now
         await #expect(throws: NectoProcessRunner.Failure.timedOut) {
             try await NectoProcessRunner.run(
-                "/bin/bash", arguments: ["-c", "sleep 2 & exit 0"], timeoutMilliseconds: 100
+                "/bin/bash", arguments: ["-c", "sleep 10 & exit 0"], timeoutMilliseconds: 100
             )
         }
-        #expect(clock.now - start < .seconds(1))
+        // Allow CI scheduling and the one-second kill grace, but fail if we wait for the descendant's EOF.
+        #expect(clock.now - start < .seconds(5))
     }
 
     @Test("kills a direct child that ignores termination")
