@@ -41,7 +41,10 @@ those also need checks in the app or on a device.
 
 The `NectoAppTests` scheme runs Swift Testing without launching the Mac app. App
 sources under test belong to both targets. Tests use an in-memory approval store,
-temporary cache directories and isolated WebKit data stores. Run it in Xcode or directly:
+temporary cache directories and per-test nonpersistent WebKit data stores. Storage
+isolation tests share one store across plugin pages so origin collisions remain
+observable. These tests cover isolation and retention across page recreation, not
+disk persistence across app launches. Run it in Xcode or directly:
 
 ```bash
 xcodebuild -project Necto.xcodeproj -scheme NectoAppTests -destination 'platform=macOS' test
