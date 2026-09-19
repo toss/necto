@@ -2,21 +2,23 @@
 
 [English](README.md) | 한국어
 
-Necto는 iOS 앱을 위한 macOS 디버깅 도구예요. 플러그인으로 네트워크 요청,
-이벤트, 성능 지표를 확인하고 앱에 필요한 도구를 추가할 수 있어요.
+Necto는 어떤 환경에서든 바로 연결되는 iOS 디버깅 플랫폼이에요.  
+무엇이든 플러그인으로 만들어 내 도구로 써요. Flipper의 현대적인 대안이에요.
 
 ![Performance 플러그인에서 CPU, 메모리, 프레임률을 보여주는 Necto 화면](docs/images/necto.png)
 
-- USB 기기나 iOS 시뮬레이터에서 실행 중인 앱에 연결할 수 있어요.
+- USB로 연결한 기기나 iOS 시뮬레이터의 앱에 연결해요. SDK가 앱 안에서 동작하기
+  때문에 프록시를 설정하거나 인증서를 신뢰시킬 필요가 없어요
+  ([docs/ko/setup.md](docs/ko/setup.md)).
+- iOS 개발에 필요한 모든 것을 플러그인으로 만들 수 있어요. 디바이스 플러그인은 앱에
+  실려서 앱이 연결되면 패널이 Necto에 표시되고, 데스크톱 플러그인은 GitHub 릴리스,
+  폴더나 ZIP으로 설치해 연결된 앱 없이도 동작해요
+  ([docs/ko/plugin-manifest.md](docs/ko/plugin-manifest.md)).
+- Necto가 하는 모든 일을 CLI로 할 수 있어요. 플러그인을 설치·삭제하고 브리지
+  오퍼레이션을 호출하며, 스킬을 설치하면 AI가 직접 앱을 디버깅해요
+  ([docs/ko/control-socket.md](docs/ko/control-socket.md)).
 - 기능 화면은 `manifest.json`과 웹 에셋으로 구성된 웹 플러그인이에요.
   앱과 같은 디자인 토큰을 사용해요([docs/ko/design.md](docs/ko/design.md)).
-- 디바이스 플러그인은 Swift 패키지로 앱에 추가하고 SDK에 등록해요
-  ([docs/ko/setup.md](docs/ko/setup.md)). 앱이 연결되면 해당 패널이 Necto에 표시돼요.
-- 데스크톱 플러그인은 연결된 앱 없이 동작하며 GitHub 릴리스, 폴더나 ZIP으로 Necto에
-  설치해요([docs/ko/plugin-manifest.md](docs/ko/plugin-manifest.md)).
-- `necto`로 터미널에서 데스크톱 플러그인을 설치·삭제하고 기능을 호출할 수 있어요.
-  기존 `necto-cli` 이름도 지원해요
-  ([docs/ko/control-socket.md](docs/ko/control-socket.md)).
 - Mac 앱과 SDK는 Swift를, 플러그인 화면은 웹 기술을 사용해요.
   Mac 앱이 연결과 실행을 담당하며 별도의 서버 프로세스는 없어요
   ([docs/ko/architecture.md](docs/ko/architecture.md)).

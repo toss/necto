@@ -5,7 +5,7 @@
 import { defineConfig } from "vitepress";
 import { docsLicensePlugin } from "../../script/licenses.mjs";
 
-const repo = "https://github.com/toss/toss-necto";
+const repo = "https://github.com/toss/necto";
 
 function sidebar(prefix: string, labels: Record<string, string>) {
   const link = (page: string) => `${prefix}/${page}`;
@@ -84,11 +84,14 @@ const ko = sidebar("/ko", {
 });
 
 export default defineConfig({
-  base: "/toss-necto/",
+  base: "/necto/",
   title: "Necto",
   description:
-    "A macOS debugging tool for iOS apps, with plugins for network requests, events and performance metrics.",
+    "An iOS debugging platform that connects anywhere, where anything you need " +
+    "becomes a plugin — a modern alternative to Flipper.",
   srcExclude: ["design/**"],
+  // The base is not applied to head entries, so the favicon carries it itself.
+  head: [["link", { rel: "icon", type: "image/png", href: "/necto/necto-icon.png" }]],
   vite: { plugins: [docsLicensePlugin()] },
   locales: {
     root: {
@@ -111,9 +114,10 @@ export default defineConfig({
     },
   },
   themeConfig: {
+    logo: { src: "/necto-icon.png", alt: "Necto" },
     socialLinks: [{ icon: "github", link: repo }],
     footer: {
-      message: '<a href="/toss-necto/THIRD_PARTY_NOTICES.txt">Licenses and third-party notices</a>',
+      message: '<a href="/necto/THIRD_PARTY_NOTICES.txt">Licenses and third-party notices</a>',
     },
   },
 });

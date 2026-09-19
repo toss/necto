@@ -1,0 +1,33 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Only the home hero. Everything else is the default theme, so a change here
+ * is a change to the landing page and nothing else.
+ */
+
+/*
+ * The glow behind the hero logo. The default theme blurs this gradient into a
+ * blob sized to the image, so it reads as light coming off the mark rather
+ * than a shape of its own. Both stops are brand tokens, so it follows the
+ * theme in light and dark mode instead of pinning a colour.
+ */
+:root {
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    var(--vp-c-brand-3) 30%,
+    var(--vp-c-brand-1) 70%
+  );
+  --vp-home-hero-image-filter: blur(40px);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --vp-home-hero-image-filter: blur(56px);
+  }
+}
+
+@media (min-width: 960px) {
+  :root {
+    --vp-home-hero-image-filter: blur(68px);
+  }
+}
