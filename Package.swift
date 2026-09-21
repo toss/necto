@@ -25,11 +25,15 @@ let package = Package(
         ),
         .target(
             name: "NectoDefaultPlugins",
-            dependencies: ["NectoModel", "NectoSDK"],
+            dependencies: [
+                "NectoModel", "NectoSDK",
+                .target(name: "NectoTouchInjection", condition: .when(platforms: [.iOS])),
+            ],
             resources: [
                 .copy("Panels"),
             ]
         ),
+        .target(name: "NectoTouchInjection"),
         // CPU, memory and frame-rate capture for apps that explicitly opt in.
         .target(
             name: "NectoProcessMetrics",
