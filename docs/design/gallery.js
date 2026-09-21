@@ -955,76 +955,69 @@ document.getElementById("files").innerHTML = `
     </aside>
   </div>`;
 
-const views = [
-  { depth: 0, twist: "▾", name: "UIWindow", meta: "393 × 852" },
-  { depth: 1, twist: "▾", name: "UINavigationController", meta: "" },
-  { depth: 2, twist: "▾", name: "CheckoutViewController", meta: "" },
-  { depth: 3, twist: "▾", name: "UIScrollView", meta: "393 × 704" },
-  { depth: 4, twist: "▾", name: "UIStackView", meta: "361 × 528" },
-  { depth: 5, twist: "", name: "UILabel <em>“Order total”</em>", meta: "112 × 20" },
-  { depth: 5, twist: "", name: "CartSummaryView", meta: "361 × 148", on: true },
-  { depth: 5, twist: "▸", name: "UIButton <em>“Pay”</em>", meta: "361 × 52" },
-  { depth: 3, twist: "", name: "UIVisualEffectView", meta: "393 × 96" },
-];
-
-document.getElementById("views").innerHTML = `
+document.getElementById("control").innerHTML = `
+  <div class="necto-tabs">
+    <button type="button" class="necto-tab" aria-selected="true">Actions</button>
+    <button type="button" class="necto-tab">Read accessibility</button>
+  </div>
   <div class="necto-toolbar">
     <button type="button" class="necto-button">Refresh</button>
-    <div class="necto-segmented">
-      <button type="button" aria-selected="true">Tree</button>
-      <button type="button">Snapshot</button>
-    </div>
-    <input class="necto-field" type="search" placeholder="Filter by class" aria-label="Filter by class" />
+    <input class="necto-field" type="search" placeholder="Filter elements" aria-label="Filter elements" />
+    <span class="necto-caption">3</span>
+    <span class="necto-caption control-status" role="status"><span class="control-spinner" aria-hidden="true"></span><span>Sending input…</span></span>
   </div>
   <div style="display:flex; height:420px">
     <div style="flex:1; overflow:auto">
-      <div class="necto-tree">${views.map((v) => `
-        <button type="button" class="necto-tree-row" aria-selected="${Boolean(v.on)}" style="padding-left:calc(${v.depth} * 14px + var(--necto-space-3))">
-          <span class="necto-tree-twist">${v.twist}</span>
-          <span class="necto-tree-name">${v.name}</span>
-          <span class="necto-tree-meta">${v.meta}</span>
-        </button>`).join("")}</div>
+      <div class="necto-tree">
+        <button type="button" class="necto-tree-row"><span class="necto-tree-name">Count tap</span><span class="necto-tree-meta">Button</span></button>
+        <button type="button" class="necto-tree-row" aria-selected="true"><span class="necto-tree-name">Example scroll area</span><span class="necto-tree-meta">Scroll area</span></button>
+        <button type="button" class="necto-tree-row"><span class="necto-tree-name">Continue</span><span class="necto-tree-meta">Button</span></button>
+      </div>
     </div>
-
     <aside class="necto-detail" style="width:320px; border-top:0; border-left:1px solid var(--necto-border)">
-      <div class="necto-detail-title">
-        <span class="necto-detail-title-url">CartSummaryView</span>
-        <button type="button" class="necto-button necto-button-quiet" aria-label="Close">✕</button>
+      <div class="necto-detail-title"><span class="necto-detail-title-url">Example scroll area</span><button type="button" class="necto-button necto-button-quiet" aria-label="Close">✕</button></div>
+      <div class="necto-detail-body" style="display:flex; flex-direction:column; gap:var(--necto-space-4)">
+    <section aria-label="Gestures" style="display:flex; flex-direction:column; gap:var(--necto-space-2)">
+      <h3 class="necto-section-title" style="margin:0">Gestures</h3>
+      <label>Position <select class="necto-field"><option>Default position</option><option selected>Custom position</option></select></label>
+      <label>X (left to right) <input class="necto-field" type="number" min="0" max="1" step="any" value="0.25" /></label>
+      <label>Y (top to bottom) <input class="necto-field" type="number" min="0" max="1" step="any" value="0.75" /></label>
+      <label>Fingers <select class="necto-field"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></label>
+      <label>Tap count <select class="necto-field"><option>1</option><option selected>2</option><option>3</option></select></label>
+      <div><button type="button" class="necto-button">Tap</button></div>
+      <p class="necto-caption" style="margin:0">Arrows show finger movement. Swipe up to reveal content below.</p>
+      <label>Distance ratio <input class="necto-field" type="number" min="0.1" max="0.9" step="0.1" value="0.6" /></label>
+      <label>Duration (ms) <input class="necto-field" type="number" min="100" max="2000" value="400" /></label>
+      <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--necto-space-1)">
+        <button type="button" class="necto-button" style="min-width:0; height:auto; min-height:max(var(--necto-button-height),calc(2lh + 2 * var(--necto-space-1) + 2px)); padding-block:var(--necto-space-1); white-space:normal; word-break:keep-all">↑ Swipe up</button>
+        <button type="button" class="necto-button" style="min-width:0; height:auto; min-height:max(var(--necto-button-height),calc(2lh + 2 * var(--necto-space-1) + 2px)); padding-block:var(--necto-space-1); white-space:normal; word-break:keep-all">↓ Swipe down</button>
+        <button type="button" class="necto-button" style="min-width:0; height:auto; min-height:max(var(--necto-button-height),calc(2lh + 2 * var(--necto-space-1) + 2px)); padding-block:var(--necto-space-1); white-space:normal; word-break:keep-all">← Swipe left</button>
+        <button type="button" class="necto-button" style="min-width:0; height:auto; min-height:max(var(--necto-button-height),calc(2lh + 2 * var(--necto-space-1) + 2px)); padding-block:var(--necto-space-1); white-space:normal; word-break:keep-all">→ Swipe right</button>
       </div>
-      <div class="necto-tabs">
-        <button type="button" class="necto-tab" aria-selected="true">Layout</button>
-        <button type="button" class="necto-tab">Properties</button>
-        <button type="button" class="necto-tab">Constraints</button>
-      </div>
-      <div class="necto-detail-body">
-        <dl class="necto-pairs">
-          <div><dt>Frame</dt><dd>16, 248, 361 × 148</dd></div>
-          <div><dt>Bounds</dt><dd>0, 0, 361 × 148</dd></div>
-          <div><dt>Safe area</dt><dd>0, 0, 0, 0</dd></div>
-          <div><dt>Alpha</dt><dd>1.0</dd></div>
-          <div><dt>Hidden</dt><dd>false</dd></div>
-          <div><dt>Background</dt><dd>systemBackground</dd></div>
-        </dl>
-        <p class="necto-section-title">Tap or drag on screen</p>
-        <div role="button" tabindex="0" aria-label="Tap or drag on screen" style="height:132px; cursor:crosshair; border:1px solid var(--necto-border); border-radius:var(--necto-radius-control); background:var(--necto-base-05); position:relative">
-          <div style="position:absolute; left:14%; top:22%; right:14%; height:44%; border:1px solid var(--necto-accent); background:color-mix(in srgb, var(--necto-accent) 12%, transparent)"></div>
-        </div>
-        <div style="display:flex; flex-wrap:wrap; gap:var(--necto-space-1); margin-top:var(--necto-space-2)">
-          <button type="button" class="necto-button necto-button-quiet">Highlight</button>
-          <button type="button" class="necto-button necto-button-quiet">Tap</button>
-          <button type="button" class="necto-button necto-button-quiet">Hold</button>
-          <button type="button" class="necto-button necto-button-quiet">↑</button>
-          <button type="button" class="necto-button necto-button-quiet">↓</button>
-          <button type="button" class="necto-button necto-button-quiet">←</button>
-          <button type="button" class="necto-button necto-button-quiet">→</button>
-        </div>
-        <div style="display:flex; gap:var(--necto-space-1); margin-top:var(--necto-space-2)">
-          <input class="necto-field" type="text" placeholder="Text to enter" aria-label="Text to enter" style="min-width:0" />
-          <button type="button" class="necto-button necto-button-quiet">Enter</button>
-        </div>
+    </section>
       </div>
     </aside>
-  </div>`;
+  </div>
+`;
+
+document.getElementById("control").insertAdjacentHTML("beforeend", `
+  <div class="necto-tabs">
+    <button type="button" class="necto-tab">Actions</button>
+    <button type="button" class="necto-tab" aria-selected="true">Read accessibility</button>
+  </div>
+  <div class="necto-toolbar">
+    <button type="button" class="necto-button">Read</button>
+    <input class="necto-field" type="search" placeholder="Filter accessibility content" aria-label="Filter accessibility content" />
+  </div>
+  <table class="necto-table">
+    <thead><tr><th>Role</th><th>Label</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Heading</td><td>Control Detail</td><td>—</td></tr>
+      <tr><td>Text</td><td style="white-space:pre-wrap;overflow-wrap:anywhere;vertical-align:top;padding-block:var(--necto-space-2)">Read-only content remains readable when a label spans multiple lines.</td><td>—</td></tr>
+      <tr><td>Text input</td><td>Search query<div class="necto-caption">example.query</div></td><td>Necto</td></tr>
+      <tr><td>Text input</td><td>Password</td><td>Secure value is hidden</td></tr>
+    </tbody>
+  </table>`);
 
 const rules = [
   { on: true, method: "GET", pattern: "api.example.com/v2/cart", status: "200", delay: "0 ms", hits: "12", tone: "ok" },

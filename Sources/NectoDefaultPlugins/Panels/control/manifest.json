@@ -1,0 +1,493 @@
+{
+  "schemaVersion": 1,
+  "id": "control",
+  "name": "Control",
+  "description": "Discover actionable controls and accessibility content; tap, enter text, swipe, and request back navigation.",
+  "version": "0.1.0",
+  "author": "Necto",
+  "icon": {
+    "systemName": "hand.tap"
+  },
+  "assets": [
+    "index.html",
+    "assets"
+  ],
+  "allowedOrigins": [
+    "self"
+  ],
+  "operations": [
+    {
+      "id": "control.actionTargets",
+      "title": "List action targets",
+      "description": "List visible action targets and their supported requests. Discover by label, identifier, or role, then pass the returned opaque id as targetID. Refresh after every action or UI change; stale or moved targets are refused. Read-only labels and disabled controls are excluded. Scroll containers and a screen gesture surface are also provided. Discovery does not execute actions. A supported request does not guarantee the intended app outcome.",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.control.actionTargets",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Optional case-insensitive substring of label, app-assigned identifier, or role. Whitespace is trimmed; omit or pass an empty string to list all visible action candidates. Does not search text values or offscreen elements."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Opaque runtime ID to pass as targetID. Do not invent IDs or substitute identifier. Read elements again before the next action; IDs are not persistent across app launches."
+                },
+                "role": {
+                  "type": "string",
+                  "description": "Platform-neutral element role, such as button, textInput, scrollArea, or screen."
+                },
+                "label": {
+                  "type": "string",
+                  "description": "User-facing text or accessibility label. Optional and not necessarily unique."
+                },
+                "identifier": {
+                  "type": "string",
+                  "description": "Optional app-assigned accessibility identifier, useful for finding a target. May be duplicated; pass the returned id, not this value, as targetID."
+                },
+                "frame": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "description": "Visible bounds in window coordinates: x, y, width, height."
+                },
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "tap",
+                      "input",
+                      "swipe",
+                      "back"
+                    ]
+                  },
+                  "description": "Requests supported by this target. Dispatch is not proof that the app reacted; read accessibility content to verify."
+                },
+                "value": {
+                  "type": "string",
+                  "description": "Current text value. Omitted for secure fields."
+                },
+                "isSecure": {
+                  "type": "boolean",
+                  "description": "True for a secure input. Its current value is omitted; do not attempt to read back the secret."
+                },
+                "tapGestures": {
+                  "type": "array",
+                  "description": "Observed native tap-recognizer configurations, when available. Use these as suggestions; absence does not imply single-tap-only support. Other gesture systems may not expose configurations.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "touchCount": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5
+                      },
+                      "tapCount": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3
+                      }
+                    },
+                    "required": [
+                      "touchCount",
+                      "tapCount"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "role",
+                "frame",
+                "actions"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "targets"
+        ],
+        "additionalProperties": false
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "control.readAccessibility",
+      "title": "Read accessibility content",
+      "description": "Read visible accessibility content to understand the current screen or verify an action outcome. Includes non-actionable text and labels. Returns flat read-only items, not a view tree, action targets, or a definitive screen identity. Items have no executable IDs; use control.actionTargets to find a target before acting. Offscreen and hidden content is excluded; secure values are omitted. Content depends on what the app exposes; this is not a full VoiceOver transcript. This read does not execute actions or refresh cached action targets.",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.control.readAccessibility",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Optional case-insensitive substring of label, identifier, role, or non-secure value. Whitespace is trimmed; omit or leave empty to read all available visible content."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "Flat content in accessibility-container or view traversal order. Labels and identifiers may be duplicated; order is not guaranteed to match VoiceOver.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "description": "Semantic role such as heading, text, button, textInput, link, image, adjustable, or element; does not imply action support."
+                },
+                "label": {
+                  "type": "string",
+                  "description": "Exposed accessibility label. Optional."
+                },
+                "identifier": {
+                  "type": "string",
+                  "description": "Optional app-assigned identifier for filtering. Not an action target ID."
+                },
+                "value": {
+                  "type": "string",
+                  "description": "Exposed current value. Omitted for secure fields."
+                },
+                "isSecure": {
+                  "type": "boolean",
+                  "description": "True for secure input; its value is never returned."
+                }
+              },
+              "required": [
+                "role"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "control.tap",
+      "title": "Tap element",
+      "description": "Tap a current target with touchCount simultaneous fingers and tapCount successive taps. Both default to 1. Uses synthetic touch delivery, including SwiftUI responder routing; it does not call a recognizer handler directly. Check tapGestures for observed native configurations. Multiple taps or fingers can be ignored by the app. Read accessibility content afterwards to verify; do not automatically retry a dispatched action. With position, multiple fingers are centered there; insufficient space or a covered contact is refused before injection.",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.control.tap",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "targetID": {
+            "type": "string",
+            "description": "A fresh id from control.actionTargets offering this action. Refresh after every attempt. Never use identifier in place of id."
+          },
+          "touchCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 1,
+            "description": "Number of fingers touching simultaneously (1\u20135). Contacts are spread around the target center within its visible bounds."
+          },
+          "tapCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "default": 1,
+            "description": "Number of successive taps by those fingers (1\u20133). This is distinct from touchCount; defaults to one tap."
+          },
+          "position": {
+            "type": "object",
+            "description": "Optional position relative to the current visible target frame: x increases rightward and y downward, from 0 to 1. Tap uses it as the contact center; swipe starts here. Exact edges are inset by half a point to remain inside. Omit to preserve the default gesture geometry. Use a screen target for screen-relative coordinates.",
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "targetID"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "dispatched": {
+            "type": "boolean",
+            "description": "Input was delivered. Does not guarantee navigation, editing acceptance, or scrolling."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "touch",
+              "textInput",
+              "edgeSwipe"
+            ]
+          },
+          "contentChanged": {
+            "type": "boolean",
+            "description": "Visible accessibility content differs after a short observation delay. This is not a screen ID, navigation assertion, or animation completion signal. False can also mean the effect is not exposed through accessibility."
+          }
+        },
+        "required": [
+          "dispatched",
+          "method",
+          "contentChanged"
+        ],
+        "additionalProperties": false
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "control.input",
+      "title": "Enter text",
+      "description": "Focus a native editable field by tapping it, then insert text through the platform text-input interface. Supports UIKit and SwiftUI fields backed by it; custom editors may be unavailable. Default mode replaces the full text; append inserts at the end. The app may reject or transform input. Secure values are never returned. Input delivery is not proof of success. Read control.readAccessibility afterwards to verify the expected text or state. Do not automatically retry a dispatched action.",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.control.input",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "targetID": {
+            "type": "string",
+            "description": "A fresh id from control.actionTargets offering this action. Refresh after every attempt. Never use identifier in place of id."
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "append"
+            ],
+            "default": "replace"
+          }
+        },
+        "required": [
+          "targetID",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "dispatched": {
+            "type": "boolean",
+            "description": "Input was delivered. Does not guarantee navigation, editing acceptance, or scrolling."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "touch",
+              "textInput",
+              "edgeSwipe"
+            ]
+          },
+          "contentChanged": {
+            "type": "boolean",
+            "description": "Visible accessibility content differs after a short observation delay. This is not a screen ID, navigation assertion, or animation completion signal. False can also mean the effect is not exposed through accessibility."
+          }
+        },
+        "required": [
+          "dispatched",
+          "method",
+          "contentChanged"
+        ],
+        "additionalProperties": false
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "control.swipe",
+      "title": "Swipe on element",
+      "description": "Move a finger across the target. Direction is finger movement: up usually reveals content farther down. distanceRatio is the fraction of the usable target dimension traversed, not a guaranteed scroll distance. durationMs controls gesture duration; inertia may continue afterwards. Input delivery is not proof of success. Read control.readAccessibility afterwards to verify the expected text or state. Do not automatically retry a dispatched action. With position, distanceRatio is relative to the visible target dimension and the end is clipped to the target bounds; a zero-length swipe is rejected. Without position, the existing centered swipe path is preserved.",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.control.swipe",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "targetID": {
+            "type": "string",
+            "description": "A fresh id from control.actionTargets offering this action. Refresh after every attempt. Never use identifier in place of id."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "left",
+              "right"
+            ]
+          },
+          "distanceRatio": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 0.9,
+            "default": 0.6
+          },
+          "durationMs": {
+            "type": "number",
+            "minimum": 100,
+            "maximum": 2000,
+            "default": 400
+          },
+          "position": {
+            "type": "object",
+            "description": "Optional position relative to the current visible target frame: x increases rightward and y downward, from 0 to 1. Tap uses it as the contact center; swipe starts here. Exact edges are inset by half a point to remain inside. Omit to preserve the default gesture geometry. Use a screen target for screen-relative coordinates.",
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "targetID",
+          "direction"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "dispatched": {
+            "type": "boolean",
+            "description": "Input was delivered. Does not guarantee navigation, editing acceptance, or scrolling."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "touch",
+              "textInput",
+              "edgeSwipe"
+            ]
+          },
+          "contentChanged": {
+            "type": "boolean",
+            "description": "Visible accessibility content differs after a short observation delay. This is not a screen ID, navigation assertion, or animation completion signal. False can also mean the effect is not exposed through accessibility."
+          }
+        },
+        "required": [
+          "dispatched",
+          "method",
+          "contentChanged"
+        ],
+        "additionalProperties": false
+      },
+      "timeoutMs": 5000
+    },
+    {
+      "id": "control.back",
+      "title": "Request back navigation",
+      "description": "Request platform back navigation on a screen target. On iOS sends a left-edge swipe to the right; it does not force-pop a controller or dismiss a sheet. It can be ignored at the root or when the app disables interactive back. Verify the expected destination with control.readAccessibility. Input delivery is not proof of success. Read control.readAccessibility afterwards to verify the expected text or state. Do not automatically retry a dispatched action.",
+      "kind": "once",
+      "binding": {
+        "name": "necto.device.control.back",
+        "version": 1
+      },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "targetID": {
+            "type": "string",
+            "description": "A fresh id from control.actionTargets offering this action. Refresh after every attempt. Never use identifier in place of id."
+          }
+        },
+        "required": [
+          "targetID"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "dispatched": {
+            "type": "boolean",
+            "description": "Input was delivered. Does not guarantee navigation, editing acceptance, or scrolling."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "touch",
+              "textInput",
+              "edgeSwipe"
+            ]
+          },
+          "contentChanged": {
+            "type": "boolean",
+            "description": "Visible accessibility content differs after a short observation delay. This is not a screen ID, navigation assertion, or animation completion signal. False can also mean the effect is not exposed through accessibility."
+          }
+        },
+        "required": [
+          "dispatched",
+          "method",
+          "contentChanged"
+        ],
+        "additionalProperties": false
+      },
+      "timeoutMs": 5000
+    }
+  ]
+}

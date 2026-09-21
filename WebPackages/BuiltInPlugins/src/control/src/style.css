@@ -1,0 +1,76 @@
+/*
+ * Copyright (c) 2026 Viva Republica, Inc.
+ *
+ * Only what is particular to this plugin. Everything structural comes from
+ * @necto/bridge/components.css, so the panel looks like part of the app rather than
+ * like a page embedded in it.
+ */
+
+@import "@necto/bridge/theme.css";
+@import "@necto/bridge/components.css";
+@import "./loading.css";
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+#root > .necto-app {
+  height: 100%;
+}
+
+.control-workspace {
+  flex: 1;
+  min-height: 0;
+}
+
+/* The pane needs no box of its own; the aside inside it is the whole thing. */
+.detail-slot {
+  display: contents;
+}
+
+.control-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--necto-space-4);
+}
+
+.control-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--necto-space-1);
+}
+
+.control-accessibility-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--necto-space-2);
+}
+
+.control-accessibility-actions > h3,
+.control-accessibility-actions > p {
+  margin: 0;
+}
+
+.control-scroll-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.control-scroll-buttons > button {
+  min-width: 0;
+  height: auto;
+  min-height: max(var(--necto-button-height), calc(2lh + 2 * var(--necto-space-1) + 2px));
+  padding-block: var(--necto-space-1);
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.control-reading td {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+  padding-block: var(--necto-space-2);
+}

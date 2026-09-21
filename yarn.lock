@@ -710,6 +710,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@necto-plugin/control@workspace:WebPackages/BuiltInPlugins/src/control":
+  version: 0.0.0-use.local
+  resolution: "@necto-plugin/control@workspace:WebPackages/BuiltInPlugins/src/control"
+  dependencies:
+    "@necto/bridge": "workspace:*"
+    typescript: "npm:^5.7.3"
+    vite: "npm:^6.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@necto-plugin/event-log@workspace:WebPackages/BuiltInPlugins/src/event-log":
   version: 0.0.0-use.local
   resolution: "@necto-plugin/event-log@workspace:WebPackages/BuiltInPlugins/src/event-log"
