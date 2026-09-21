@@ -164,61 +164,78 @@ struct ManifestContractTests {
         try await check(plugin, "necto.device.files.delete", in: "files", input: ["root": "test", "path": "note.txt"])
     }
 
-    @Test("what the view inspector returns is what its manifest promised")
-    func viewsMatchTheirManifest() async throws {
-        let plugin = DefaultViewInspectorPlugin {
-            [NectoViewNode(
-                className: "UIWindow",
-                frame: (0, 0, 393, 852),
-                children: [NectoViewNode(className: "UILabel", text: "Hi", frame: (0, 0, 100, 20), alpha: 0.5)]
-            )]
+    @Test("Swipe limits and input mode are validated")
+    func controlInputValidation() throws {
+        let operations = try operations(of: "control")
+        let schema = try #require(operations["necto.device.control.swipe"]?["inputSchema"])
+        #expect(NectoJSONSchema.validate(["targetID": "swipe", "direction": "up"], against: schema) == nil)
+        for input: NectoJSONValue in [
+            ["targetID": "swipe", "direction": "diagonal"],
+            ["targetID": "swipe", "direction": "up", "durationMs": 2001],
+            ["targetID": "swipe", "direction": "up", "distanceRatio": 0],
+        ] {
+            #expect(NectoJSONSchema.validate(input, against: schema) != nil)
         }
-        try await check(plugin, "necto.device.views.tree", in: "view-inspector")
-        try await check(plugin, "necto.device.views.search", in: "view-inspector", input: ["query": "Hi"])
-        try await check(plugin, "necto.device.views.inspect", in: "view-inspector", input: ["viewID": "path:0"])
-        let collector = NectoHandler()
-        plugin.register(collector)
-        guard case let .once(snapshot)? = collector.registrations["necto.device.views.snapshot@1"]?.body else {
-            Issue.record("views.snapshot is not registered")
-            return
+        #expect(NectoJSONSchema.validate(["targetID": "swipe", "direction": "up", "durationMs": 400, "distanceRatio": 0.6], against: schema) == nil)
+        let tapSchema = try #require(operations["necto.device.control.tap"]?["inputSchema"])
+        for fingers in 1...5 {
+            for taps in 1...3 {
+                #expect(NectoJSONSchema.validate(["targetID": "tap", "touchCount": .number(Double(fingers)),
+                    "tapCount": .number(Double(taps))], against: tapSchema) == nil)
+            }
         }
-        let baseline = try await snapshot([:])
-        let snapshotID = try #require(baseline["snapshotID"]?.stringValue)
-        try await check(plugin, "necto.device.views.snapshot", in: "view-inspector")
-        try await check(
-            plugin,
-            "necto.device.views.compare",
-            in: "view-inspector",
-            input: ["baselineSnapshotID": .string(snapshotID)]
-        )
+        for invalid: NectoJSONValue in [0, 6, 1.5, "2"] {
+            #expect(NectoJSONSchema.validate(["targetID": "tap", "touchCount": invalid], against: tapSchema) != nil)
+        }
+        for invalid: NectoJSONValue in [0, 4, 1.5, "2"] {
+            #expect(NectoJSONSchema.validate(["targetID": "tap", "tapCount": invalid], against: tapSchema) != nil)
+        }
+        #expect(NectoJSONSchema.validate(["targetID": "tap"], against: tapSchema) == nil)
+        for (operationSchema, base): (NectoJSONValue, [String: NectoJSONValue]) in [
+            (tapSchema, ["targetID": "tap"]), (schema, ["targetID": "swipe", "direction": "up"]),
+        ] {
+            for position: NectoJSONValue in [["x": 0, "y": 1], ["x": 0.25, "y": 0.75]] {
+                #expect(NectoJSONSchema.validate(.object(base.merging(["position": position]) { _, new in new }), against: operationSchema) == nil)
+            }
+            for position: NectoJSONValue in [.null, ["x": 0.5], ["x": -0.1, "y": 0], ["x": 0, "y": 1.1], ["x": "0", "y": 0]] {
+                #expect(NectoJSONSchema.validate(.object(base.merging(["position": position]) { _, new in new }), against: operationSchema) != nil)
+            }
+        }
+        let inputSchema = try #require(operations["necto.device.control.input"]?["inputSchema"])
+        #expect(NectoJSONSchema.validate(["targetID": "field", "text": "테스트", "mode": "replace"], against: inputSchema) == nil)
+        #expect(NectoJSONSchema.validate(["targetID": "field"], against: inputSchema) != nil)
+        #expect(NectoJSONSchema.validate(["targetID": "field", "text": "test", "mode": "unknown"], against: inputSchema) != nil)
+    }
 
-        let interactions = DefaultViewInspectorPlugin(snapshot: { [] }) { operation, _ in
+    @Test("Control responses match their manifest")
+    func controlMatchesManifest() async throws {
+        let plugin = NectoUIControlPlugin(actionTargets: {
+            [NectoControlTarget(id: "field", role: "textInput", label: "Query",
+                                 frame: (0, 0, 100, 40), actions: ["tap"], value: "Hello")]
+        }, readAccessibility: {
+            [NectoAccessibilityItem(role: "heading", label: "Control Detail"),
+             NectoAccessibilityItem(role: "textInput", label: "Password", value: "secret", isSecure: true)]
+        }) { operation, _ in
             switch operation {
-            case "highlight": ["highlighted": true]
-            case "tap": ["tapped": true, "method": "primaryAction"]
-            case "tapAt": ["tapped": true, "method": "primaryAction", "x": 10, "y": 20]
-            case "scroll": ["offset": [0, 100]]
-            case "swipe", "drag": ["offset": [0, 100], "method": "contentOffset"]
-            case "longPress": ["pressed": true, "duration": 0.6, "method": "controlEvents"]
-            case "inputText": ["inserted": true, "length": 5, "method": "UIKeyInput"]
+            case "tap", "swipe", "back", "input": ["dispatched": true, "method": "touch", "contentChanged": false]
             default: throw NectoBridgeError(code: .operationUnavailable, message: operation)
             }
         }
-        try await check(interactions, "necto.device.views.highlight", in: "view-inspector", input: ["viewID": "v"])
-        try await check(interactions, "necto.device.views.tap", in: "view-inspector", input: ["viewID": "v"])
-        try await check(interactions, "necto.device.views.tapAt", in: "view-inspector", input: ["x": 10, "y": 20])
-        try await check(interactions, "necto.device.views.scroll", in: "view-inspector", input: ["viewID": "v", "direction": "down"])
-        try await check(interactions, "necto.device.views.swipe", in: "view-inspector", input: ["viewID": "v", "direction": "up"])
-        try await check(interactions, "necto.device.views.drag", in: "view-inspector", input: ["fromX": 10, "fromY": 20, "toX": 10, "toY": 5])
-        try await check(interactions, "necto.device.views.longPress", in: "view-inspector", input: ["viewID": "v"])
-        try await check(interactions, "necto.device.views.inputText", in: "view-inspector", input: ["viewID": "v", "text": "hello"])
+        try await check(plugin, "necto.device.control.readAccessibility", in: "control")
+        try await check(plugin, "necto.device.control.readAccessibility", in: "control", input: ["query": "detail"])
+        try await check(plugin, "necto.device.control.actionTargets", in: "control")
+        try await check(plugin, "necto.device.control.actionTargets", in: "control", input: ["query": "Query"])
+        try await check(plugin, "necto.device.control.tap", in: "control", input: ["targetID": "field"])
+        try await check(plugin, "necto.device.control.swipe", in: "control", input: ["targetID": "swipe", "direction": "up"])
+        try await check(plugin, "necto.device.control.back", in: "control", input: ["targetID": "screen"])
+        try await check(plugin, "necto.device.control.input", in: "control", input: ["targetID": "field", "text": "테스트"])
     }
 
     /// A schema that says only `{"type": "object"}` passes anything, so it reads as a
     /// contract while promising nothing.
     @Test("every shipped operation says what it takes and returns", arguments: [
         "event-log", "files", "network-logger", "performance-monitor", "plugin-sample", "preferences", "shell-demo",
-        "view-inspector",
+        "control",
     ])
     func schemasSaySomething(plugin: String) throws {
         for (key, operation) in try operations(of: plugin) {
