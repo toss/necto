@@ -3,6 +3,8 @@
 //
 
 import Foundation
+import NectoMacService
+import NectoModel
 import Testing
 
 @Suite("Simulator connection and CLI", .serialized, .timeLimit(.minutes(15)))
@@ -52,6 +54,69 @@ struct ConnectionTests {
             throw error
         }
         await app.close()
+    }
+
+    @Test("simulator SDK enforces optional public-key authentication", arguments: ConnectionSecurity.allCases)
+    func securityConnection(security: ConnectionSecurity) async throws {
+        let credentials = try ConnectionCredentials(security: security)
+        defer { credentials.close() }
+        let host = SecurityConnectionHost { bundleID in
+            guard bundleID == AppFixture.exampleID else { return nil }
+            return try await credentials.identity(bundleID: bundleID)
+        }
+        let app = try AppFixture()
+        do {
+            try await app.start(publicKey: credentials.publicKey) { await host.start() }
+            if security == .missingKey || security == .mismatchedKey {
+                let reason: NectoUnauthorizedApp.Reason = security == .missingKey ? .missingKey : .rejectedKey
+                for attempt in 0..<2 {
+                    try await app.wait("SDK authentication rejection") {
+                        await host.center.unauthorizedApps.contains { $0.appBundleID == AppFixture.exampleID && $0.reason == reason }
+                    }
+                    #expect(await host.center.connectedApps.allSatisfy { $0.appBundleID != AppFixture.exampleID })
+                    #expect(host.plugins.keys.allSatisfy { $0.appBundleID != AppFixture.exampleID })
+                    let denied = try #require(await host.center.unauthorizedApps.first { $0.appBundleID == AppFixture.exampleID })
+                    do {
+                        _ = try await host.invoke("preferences.suites", input: [:], target: denied.target)
+                        Issue.record("An unauthorized app accepted a plugin call")
+                    } catch let error as NectoBridgeError { #expect(error.code == .unauthorized) }
+                    if attempt == 0 {
+                        try await app.terminateExample()
+                        try await app.wait("denied app removal") {
+                            await host.center.unauthorizedApps.allSatisfy { $0.appBundleID != AppFixture.exampleID }
+                        }
+                        try await app.launchExample()
+                    }
+                }
+                if security == .missingKey { try credentials.installMatchingKey() }
+            }
+            if security != .mismatchedKey {
+                var target = try await host.waitForPlugins(app)
+                try await checkSecureCall(host, target: target)
+                try await app.terminateExample()
+                try await app.wait("SDK disconnection") {
+                    await host.center.connectedApps.allSatisfy { $0.appBundleID != AppFixture.exampleID }
+                        && host.plugins.keys.allSatisfy { $0.appBundleID != AppFixture.exampleID }
+                }
+                try await app.launchExample()
+                target = try await host.waitForPlugins(app)
+                try await checkSecureCall(host, target: target)
+            }
+            #expect(credentials.lookups.isEmpty == (security == .plaintext))
+        } catch {
+            await host.stop()
+            await app.close()
+            throw error
+        }
+        await host.stop()
+        await app.close()
+    }
+
+    private func checkSecureCall(_ host: SecurityConnectionHost, target: NectoTarget) async throws {
+        let value = NectoJSONValue.string(UUID().uuidString)
+        _ = try await host.invoke("preferences.set", input: ["key": "necto.e2e.security", "value": value], target: target)
+        let result = try await host.invoke("preferences.detail", input: ["key": "necto.e2e.security"], target: target)
+        #expect(result["entry"]?["value"] == value)
     }
 
     private func checkOnce(_ app: AppFixture) async throws {

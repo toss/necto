@@ -24,6 +24,7 @@ public final class NectoTLSStream: NectoByteStream, @unchecked Sendable {
     private var channel: (any Channel)?
     private var buffer = Data()
     private var failure: (any Error)?
+    private var reachedEOF = false
     private var pending: (count: Int, continuation: CheckedContinuation<Data, any Error>)?
     private var tlsPromise: EventLoopPromise<Void>?
     private var tlsFinished = false
@@ -59,6 +60,7 @@ public final class NectoTLSStream: NectoByteStream, @unchecked Sendable {
             let future = try await channel.eventLoop.submit {
                 let promise = try self.lock.withLock {
                     if let failure = self.failure { throw failure }
+                    guard !self.reachedEOF else { throw NectoSecurityError.closed }
                     guard self.tlsPromise == nil, self.pending == nil else { throw NectoSecurityError.concurrentRead }
                     let promise = channel.eventLoop.makePromise(of: Void.self)
                     self.tlsPromise = promise
@@ -99,7 +101,7 @@ public final class NectoTLSStream: NectoByteStream, @unchecked Sendable {
         }
     }
 
-    public var isTLSReady: Bool { lock.withLock { tlsFinished && failure == nil } }
+    public var isTLSReady: Bool { lock.withLock { tlsFinished && failure == nil && !reachedEOF } }
 
     func negotiatedTLSVersion() async throws -> TLSVersion? {
         guard let channel = lock.withLock({ channel }) else { throw NectoSecurityError.closed }
@@ -111,6 +113,7 @@ public final class NectoTLSStream: NectoByteStream, @unchecked Sendable {
             try Task.checkCancellation()
             let channel = try lock.withLock {
                 if let failure { throw failure }
+                guard !reachedEOF else { throw NectoSecurityError.closed }
                 guard let channel = self.channel else { throw NectoSecurityError.closed }
                 return channel
             }
@@ -129,6 +132,7 @@ public final class NectoTLSStream: NectoByteStream, @unchecked Sendable {
                     else if pending != nil { continuation.resume(throwing: NectoSecurityError.concurrentRead) }
                     else if count > limit { continuation.resume(throwing: NectoSecurityError.bufferLimit) }
                     else if buffer.count >= count { continuation.resume(returning: consume(count)) }
+                    else if reachedEOF { continuation.resume(throwing: NectoSecurityError.closed) }
                     else { pending = (count, continuation) }
                 }
             }
@@ -153,7 +157,7 @@ public final class NectoTLSStream: NectoByteStream, @unchecked Sendable {
 
     fileprivate func receive(_ data: Data) {
         let overflow = lock.withLock {
-            guard failure == nil else { return false }
+            guard failure == nil, !reachedEOF else { return false }
             guard data.count <= limit - buffer.count else { return true }
             buffer.append(data)
             if let pending, buffer.count >= pending.count {
@@ -170,9 +174,23 @@ public final class NectoTLSStream: NectoByteStream, @unchecked Sendable {
 
     fileprivate func completeTLS() {
         lock.withLock {
-            guard failure == nil, !tlsFinished else { return }
+            guard failure == nil, !reachedEOF, !tlsFinished else { return }
             tlsFinished = true
             tlsPromise?.succeed(())
+        }
+    }
+
+    fileprivate func endOfStream() {
+        lock.withLock {
+            guard failure == nil, !reachedEOF else { return }
+            reachedEOF = true
+            // A clean peer close must not discard complete frames awaiting a reader.
+            pending?.continuation.resume(throwing: NectoSecurityError.closed)
+            pending = nil
+            if !tlsFinished {
+                tlsPromise?.fail(NectoSecurityError.closed)
+                tlsPromise = nil
+            }
         }
     }
 
@@ -205,7 +223,7 @@ private final class StreamHandler: ChannelInboundHandler, @unchecked Sendable {
         context.close(promise: nil)
     }
     func channelInactive(context: ChannelHandlerContext) {
-        stream?.fail(NectoSecurityError.closed)
+        stream?.endOfStream()
         context.fireChannelInactive()
     }
 }

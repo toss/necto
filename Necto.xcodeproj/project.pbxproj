@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AE00000000000000000009 /* NectoMacService in Frameworks */ = {isa = PBXBuildFile; productRef = 99A1DE268E90C14804203FA5 /* NectoMacService */; };
 		AF1000000000000000000018 /* NectoAgentSkills.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000019 /* NectoAgentSkills.swift */; };
 		AF1000000000000000000016 /* NectoCLIInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000017 /* NectoCLIInstaller.swift */; };
 		AF1000000000000000000000 /* NectoDevicePluginStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000001 /* NectoDevicePluginStore.swift */; };
@@ -52,6 +53,12 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		AE00000000000000000010 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (AE00000000000000000009 /* NectoMacService in Frameworks */,);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AF00000000000000000006 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -123,11 +130,12 @@
 		AE00000000000000000003 /* NectoE2ETests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AE00000000000000000004 /* Build configuration list for PBXNativeTarget "NectoE2ETests" */;
-			buildPhases = (AE00000000000000000005 /* Sources */,);
+			buildPhases = (AE00000000000000000005 /* Sources */, AE00000000000000000010 /* Frameworks */,);
 			buildRules = ();
 			dependencies = ();
 			fileSystemSynchronizedGroups = (AE00000000000000000002 /* NectoE2ETests */,);
 			name = NectoE2ETests;
+			packageProductDependencies = (99A1DE268E90C14804203FA5 /* NectoMacService */,);
 			productName = NectoE2ETests;
 			productReference = AE00000000000000000001 /* NectoE2ETests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";

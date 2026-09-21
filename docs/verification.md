@@ -64,6 +64,15 @@ events as JSONL (`stream`). It then terminates ExampleApp during a live subscrip
 checks that the CLI exits with an error and the target disappears, and relaunches
 ExampleApp to repeat both operations without restarting Necto.
 
+Security cases run the simulator SDK against `NectoConnectionCenter`, with its
+credential lookup supplied by the test. They use a disposable Keychain and real
+TLS connections, without changing the GUI's startup code or the user's Keychain.
+They cover no public key, matching keys, missing keys, and mismatched keys.
+Rejected apps must expose no plugins or accept commands, including after relaunch.
+Installing a missing key must allow automatic reconnection. Successful cases also
+write and read a value through the SDK before and after reconnecting. These cases
+test the connection service; the GUI and CLI flow above runs separately.
+
 Both CI and local runs use `iPhone 17 Pro` on the newest available iOS runtime that
 has one, regardless of boot state. If none exists, the test fails immediately.
 It opens Simulator and waits for boot to finish before installing the test ExampleApp

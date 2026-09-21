@@ -120,6 +120,63 @@ struct FailureTests {
         }
     }
 
+    @Test("complete encrypted frames remain readable after peer EOF", arguments: [false, true], [false, true])
+    func bufferedFramesAfterEOF(tcp: Bool, sentByDevice: Bool) async throws {
+        let fixture = try CredentialFixture()
+        try await withSockets(tcp: tcp) { pair in
+            let (device, host) = try await secureSessions(pair, identity: fixture.identity)
+            let sender = sentByDevice ? device : host
+            let receiver = sentByDevice ? host : device
+            let receivingStream = sentByDevice ? pair.host : pair.device
+            let messages = [Data("last response".utf8), Data("last event".utf8)]
+            for message in messages { try await sender.send(message) }
+            sender.close()
+            try await waitForPeerClose(receivingStream)
+
+            for message in messages { #expect(try await receiver.receive() == message) }
+            await #expect(throws: NectoSecurityError.closed) { _ = try await receiver.receive() }
+            await #expect(throws: NectoSecurityError.closed) { try await receiver.send(Data([1])) }
+        }
+    }
+
+    @Test("EOF preserves complete encrypted frames but rejects a truncated following frame")
+    func completeFrameBeforeTruncatedFrame() async throws {
+        let fixture = try CredentialFixture()
+        try await withSockets { pair in
+            let (device, host) = try await secureSessions(pair, identity: fixture.identity)
+            let message = Data("complete response".utf8)
+            try await device.send(message)
+            try await pair.device.write(Data([0, 0, 0, 10, 1, 2]))
+            device.close()
+            try await waitForPeerClose(pair.host)
+
+            #expect(try await host.receive() == message)
+            await #expect(throws: NectoSecurityError.closed) { _ = try await host.receive() }
+        }
+    }
+
+    @Test("explicit close discards unread encrypted frames even after peer EOF")
+    func closeAfterEOFDiscardsFrames() async throws {
+        let fixture = try CredentialFixture()
+        try await withSockets { pair in
+            let (device, host) = try await secureSessions(pair, identity: fixture.identity)
+            try await device.send(Data("unread response".utf8))
+            device.close()
+            try await waitForPeerClose(pair.host)
+            host.close()
+
+            await #expect(throws: NectoSecurityError.closed) { _ = try await host.receive() }
+        }
+    }
+
+    private func waitForPeerClose(_ stream: NectoTLSStream) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while stream.isTLSReady, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        try #require(!stream.isTLSReady)
+    }
+
     @Test("cancelling an encrypted receive unblocks it and closes its stream")
     func cancelRead() async throws {
         let fixture = try CredentialFixture()

@@ -9,11 +9,12 @@ import Testing
 
 @MainActor
 final class AppFixture {
-    static let exampleID = "im.toss.necto.e2e.example"
+    nonisolated static let exampleID = "im.toss.necto.e2e.example"
     private let products: URL
     private let executable: URL
     private let home: URL
     private let logs: URL
+    private var publicKey: String?
     private var simulator: String?
     private var commands: [Command] = []
 
@@ -26,11 +27,12 @@ final class AppFixture {
         // Keep the Unix socket path below sockaddr_un's limit, including on CI runners.
         home = URL(filePath: "/tmp/necto-e2e-\(UUID().uuidString.prefix(8))")
         try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         print("E2E command logs: \(logs.path)")
     }
 
-    func start() async throws {
+    func start(publicKey: String? = nil, hostStart: (@MainActor () async throws -> Void)? = nil) async throws {
+        self.publicKey = publicKey
         let running = NSWorkspace.shared.runningApplications.filter { $0.executableURL?.lastPathComponent == "Necto" }
         try #require(running.isEmpty, "Quit other Necto instances before E2E; they share the SDK's loopback ports.")
         let host = products.appending(path: "Debug/Necto.app")
@@ -55,8 +57,12 @@ final class AppFixture {
         simulator = id
         _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path], timeout: .seconds(120))
         print("E2E: Example installed")
-        let hostCommand = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
-        try await waitForControlSocket(hostCommand)
+        if let hostStart {
+            try await hostStart()
+        } else {
+            let hostCommand = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
+            try await waitForControlSocket(hostCommand)
+        }
         try await launchExample()
     }
 
@@ -94,7 +100,10 @@ final class AppFixture {
     }
 
     func launchExample() async throws {
-        _ = try await run("/usr/bin/xcrun", ["simctl", "launch", try #require(simulator), Self.exampleID], timeout: .seconds(120))
+        let environment = publicKey.map { ["SIMCTL_CHILD_NECTO_PUBLIC_KEY": $0] } ?? [:]
+        let command = try launch(URL(filePath: "/usr/bin/xcrun"),
+                                 ["simctl", "launch", try #require(simulator), Self.exampleID], environment: environment)
+        try await finish(command, timeout: .seconds(120)).requireSuccess()
     }
 
     func terminateExample() async throws {
@@ -154,7 +163,7 @@ final class AppFixture {
         }
     }
 
-    private func wait(_ description: String, timeout: Duration = .seconds(30), until condition: () async throws -> Bool) async throws {
+    func wait(_ description: String, timeout: Duration = .seconds(30), until condition: () async throws -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
         while !(try await condition()) {
             guard ContinuousClock.now < deadline else {
@@ -208,15 +217,15 @@ final class AppFixture {
         }
     }
 
-    func launch(_ url: URL, _ arguments: [String], isolated: Bool = false) throws -> Command {
+    func launch(_ url: URL, _ arguments: [String], isolated: Bool = false, environment overrides: [String: String] = [:]) throws -> Command {
         let process = Process()
         process.executableURL = url
         process.arguments = arguments
-        if isolated {
-            var environment = ProcessInfo.processInfo.environment
-            environment["CFFIXED_USER_HOME"] = home.path
-            process.environment = environment
-        }
+        var environment = ProcessInfo.processInfo.environment
+        environment.removeValue(forKey: "SIMCTL_CHILD_NECTO_PUBLIC_KEY")
+        if isolated { environment["CFFIXED_USER_HOME"] = home.path }
+        environment.merge(overrides) { _, override in override }
+        process.environment = environment
         let name = "\(commands.count)-\(url.lastPathComponent)"
         let output = logs.appending(path: "\(name).stdout")
         let error = logs.appending(path: "\(name).stderr")
