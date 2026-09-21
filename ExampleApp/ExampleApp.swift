@@ -33,7 +33,7 @@ struct ExampleApp: App {
         // both panels something real to show on a fresh install.
         NectoSDK.register(NectoPreferencesPlugin())
         NectoSDK.register(NectoFilesPlugin())
-        NectoSDK.register(DefaultViewInspectorPlugin())
+        NectoSDK.register(NectoUIControlPlugin())
         Self.seedPreferences()
         Self.seedFiles()
 
@@ -90,6 +90,12 @@ struct RootView: View {
 
             NetworkView()
                 .tabItem { Label("Network", systemImage: "network") }
+
+            ControlFixture()
+                .tabItem { Label("Control", systemImage: "hand.tap") }
+
+            AccessibilityFixture()
+                .tabItem { Label("Accessibility", systemImage: "accessibility") }
 
             AboutView()
                 .tabItem { Label("About", systemImage: "info.circle") }
