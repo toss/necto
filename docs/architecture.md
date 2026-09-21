@@ -33,7 +33,7 @@ and receives `plugin.result`, paired by request ID through `NectoDeviceBridgeCli
 
 - `once` returns one result.
 - `stream` returns events until completion or cancellation. For example,
-  `DefaultNetworkPlugin` stores records in the app and sends changes to active
+  `NectoNetworkPlugin` stores records in the app and sends changes to active
   `network-records.observe` subscribers through `NectoHandler.Out`.
 
 Both use the same generic messages. Adding an app feature means adding a plugin's
@@ -48,7 +48,8 @@ handlers and manifest bindings, not a feature-specific host adapter or wire mess
 | `NectoCLIService` | Control request, response and socket endpoint shared by the app and CLI | Command parsing or provider execution |
 | `NectoMacService` | Operation routing, host providers, device connections and control server | UI or app-specific features |
 | `NectoSDK` | App-side listening, plugin registration and message routing | Feature implementations, `URLProtocol` or domain types |
-| `NectoDefaultPlugins` | The plugins Necto ships: network, events, performance | How an app captures traffic |
+| `NectoDefaultPlugins` | The plugins Necto ships, including UI Control | How an app captures traffic |
+| `NectoTouchInjection` | iOS touch delivery for UI Control, including SwiftUI gesture routing | SDK transport or host-specific behavior |
 | `NectoProcessMetrics` | Optional CPU, memory, FPS and thread sampling | Starting unless the app registers it and a reader subscribes |
 | `NectoURLSessionCapture` | One capture mechanism, for apps using `URLSession` | Capture that an app cannot disable |
 | `Necto/` | Shell UI and the plugin host | Feature screens |

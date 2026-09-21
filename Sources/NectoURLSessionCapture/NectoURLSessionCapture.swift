@@ -19,7 +19,7 @@ import Foundation
 /// are one line. An app that reports some requests itself as well reaches the plugin
 /// through `network`.
 public struct URLSessionNetworkPlugin: NectoPluginable {
-    public let network = DefaultNetworkPlugin()
+    public let network = NectoNetworkPlugin()
 
     public var id: String { network.id }
 

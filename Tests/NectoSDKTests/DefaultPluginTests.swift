@@ -71,9 +71,9 @@ private func eventually(_ predicate: @escaping @Sendable () -> Bool) async -> Bo
 }
 
 @Suite("Events plugin")
-struct DefaultEventsPluginTests {
-    private func plugin(_ events: [NectoEvent]) -> DefaultEventsPlugin {
-        let plugin = DefaultEventsPlugin()
+struct NectoEventsPluginTests {
+    private func plugin(_ events: [NectoEvent]) -> NectoEventsPlugin {
+        let plugin = NectoEventsPlugin()
         for event in events { plugin.report(event) }
         return plugin
     }
@@ -118,7 +118,7 @@ struct DefaultEventsPluginTests {
 
     @Test("says so when asked for an event it does not have")
     func unknownEvent() async {
-        let subject = DefaultEventsPlugin()
+        let subject = NectoEventsPlugin()
         await #expect(throws: NectoBridgeError.self) {
             try await answer(subject, "necto.device.events.detail", ["eventID": .string("nope")])
         }
@@ -146,7 +146,7 @@ struct DefaultEventsPluginTests {
 
     @Test("declares its operations as the app's own")
     func declaresDeviceContracts() {
-        let descriptors = handlers(of: DefaultEventsPlugin()).values.map(\.descriptor)
+        let descriptors = handlers(of: NectoEventsPlugin()).values.map(\.descriptor)
         #expect(descriptors.allSatisfy { $0.binding.type == .device })
         #expect(Set(descriptors.map(\.binding.name)) == [
             "necto.device.events.list", "necto.device.events.detail", "necto.device.events.observe", "necto.device.events.clear",
@@ -155,13 +155,13 @@ struct DefaultEventsPluginTests {
 }
 
 @Suite("Performance plugin")
-struct DefaultPerformancePluginTests {
+struct NectoPerformancePluginTests {
     private let frame = NectoMetric(id: "frame", title: "Frame time", unit: "ms", budget: .atMost(16.7))
     private let memory = NectoMetric(id: "memory", title: "Memory", unit: "MB")
 
     @Test("describes what it measures, and what counts as too much")
     func describesMetrics() async throws {
-        let subject = DefaultPerformancePlugin(metrics: [frame, memory])
+        let subject = NectoPerformancePlugin(metrics: [frame, memory])
 
         let output = try await answer(subject, "necto.device.performance.metrics")
         let described = try #require(output["metrics"]?.arrayValue)
@@ -174,7 +174,7 @@ struct DefaultPerformancePluginTests {
 
     @Test("keeps a reading and reports it back")
     func keepsReadings() async throws {
-        let subject = DefaultPerformancePlugin(metrics: [memory])
+        let subject = NectoPerformancePlugin(metrics: [memory])
         subject.report(148, for: "memory")
 
         let series = try #require(try await answer(subject, "necto.device.performance.series")["series"]?.arrayValue)
@@ -185,7 +185,7 @@ struct DefaultPerformancePluginTests {
     /// The judgement is made once, here, rather than in every surface that draws it.
     @Test("says when a reading is over budget")
     func judgesAgainstBudget() async throws {
-        let subject = DefaultPerformancePlugin(metrics: [frame])
+        let subject = NectoPerformancePlugin(metrics: [frame])
 
         subject.report(12.0, for: "frame")
         var series = try #require(try await answer(subject, "necto.device.performance.series")["series"]?.arrayValue)
@@ -201,7 +201,7 @@ struct DefaultPerformancePluginTests {
     @Test("a floor is exceeded by falling under it")
     func judgesAgainstAFloor() async throws {
         let fps = NectoMetric(id: "fps", title: "Frame rate", unit: "fps", budget: .atLeast(55))
-        let subject = DefaultPerformancePlugin(metrics: [fps])
+        let subject = NectoPerformancePlugin(metrics: [fps])
 
         let described = try #require(try await answer(subject, "necto.device.performance.metrics")["metrics"]?.arrayValue)
         #expect(described.first?["budget"] == .number(55))
@@ -218,7 +218,7 @@ struct DefaultPerformancePluginTests {
 
     @Test("a metric with no budget is never over it")
     func noBudgetNeverOver() async throws {
-        let subject = DefaultPerformancePlugin(metrics: [memory])
+        let subject = NectoPerformancePlugin(metrics: [memory])
         subject.report(9_000, for: "memory")
 
         let series = try #require(try await answer(subject, "necto.device.performance.series")["series"]?.arrayValue)
@@ -228,7 +228,7 @@ struct DefaultPerformancePluginTests {
     /// A series nobody can label is a line with no meaning, so it is not kept.
     @Test("drops a reading for a metric that was never declared")
     func dropsUndeclared() async throws {
-        let subject = DefaultPerformancePlugin(metrics: [memory])
+        let subject = NectoPerformancePlugin(metrics: [memory])
         subject.report(1, for: "nothing-like-this")
 
         let series = try #require(try await answer(subject, "necto.device.performance.series")["series"]?.arrayValue)
@@ -238,7 +238,7 @@ struct DefaultPerformancePluginTests {
 
     @Test("narrows to one metric when asked")
     func filtersToOneMetric() async throws {
-        let subject = DefaultPerformancePlugin(metrics: [frame, memory])
+        let subject = NectoPerformancePlugin(metrics: [frame, memory])
 
         let output = try await answer(subject, "necto.device.performance.series", ["metricID": .string("frame")])
         #expect(output["series"]?.arrayValue?.count == 1)
@@ -246,21 +246,21 @@ struct DefaultPerformancePluginTests {
 
     @Test("stays bounded on a long session")
     func staysBounded() async throws {
-        let subject = DefaultPerformancePlugin(metrics: [memory])
-        for index in 0 ..< (DefaultPerformancePlugin.capacity + 50) {
+        let subject = NectoPerformancePlugin(metrics: [memory])
+        for index in 0 ..< (NectoPerformancePlugin.capacity + 50) {
             subject.report(Double(index), for: "memory")
         }
 
         let output = try await answer(subject, "necto.device.performance.series", ["limit": .number(10_000)])
         let samples = try #require(output["series"]?.arrayValue?.first?["samples"]?.arrayValue)
-        #expect(samples.count == DefaultPerformancePlugin.capacity)
+        #expect(samples.count == NectoPerformancePlugin.capacity)
         // The newest survive: a trend is read from where it ended up.
-        #expect(samples.last?["value"] == .number(Double(DefaultPerformancePlugin.capacity + 49)))
+        #expect(samples.last?["value"] == .number(Double(NectoPerformancePlugin.capacity + 49)))
     }
 
     @Test("declares process monitoring without changing custom metric adoption")
     func declaresMonitoringContracts() {
-        let names = handlers(of: DefaultPerformancePlugin(metrics: [memory])).values.map(\.descriptor.binding.name)
+        let names = handlers(of: NectoPerformancePlugin(metrics: [memory])).values.map(\.descriptor.binding.name)
         #expect(Set(names) == [
             "necto.device.performance.metrics", "necto.device.performance.series",
             "necto.device.performance.observe", "necto.device.performance.snapshot",
@@ -270,7 +270,7 @@ struct DefaultPerformancePluginTests {
 
     @Test("process operations stay unavailable without an injected sampler")
     func processMetricsAreOptIn() async {
-        let subject = DefaultPerformancePlugin(metrics: [memory])
+        let subject = NectoPerformancePlugin(metrics: [memory])
         await #expect(throws: NectoBridgeError.self) {
             try await answer(subject, "necto.device.performance.snapshot")
         }
@@ -279,7 +279,7 @@ struct DefaultPerformancePluginTests {
     @Test("a subscription arriving during stop gets a fresh sampler")
     func restartsAfterStopWithoutCancellingTheNewRun() async throws {
         let sampler = TestPerformanceSampler()
-        let subject = DefaultPerformancePlugin(sampler: sampler)
+        let subject = NectoPerformancePlugin(sampler: sampler)
         guard case let .stream(body)? = handlers(of: subject)["necto.device.performance.observe@1"]?.body else {
             Issue.record("performance.observe is not a stream")
             return

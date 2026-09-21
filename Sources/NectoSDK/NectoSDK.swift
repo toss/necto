@@ -14,7 +14,7 @@ import Foundation
 /// a network request, a view tree or a feature flag is.
 ///
 /// ```swift
-/// NectoSDK.register(DefaultNetworkPlugin())
+/// NectoSDK.register(NectoNetworkPlugin())
 /// NectoSDK.start()
 /// print(NectoSDK.status)
 /// ```

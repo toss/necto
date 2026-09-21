@@ -18,11 +18,11 @@ import NectoSDK
 import NectoURLSessionCapture
 
 #if DEBUG
-let events = DefaultEventsPlugin()
+let events = NectoEventsPlugin()
 NectoSDK.register(URLSessionNetworkPlugin())   // network, captured for you
 NectoSDK.register(events)
 NectoSDK.register(ProcessPerformancePlugin())  // six process metrics while observed
-NectoSDK.register(DefaultViewInspectorPlugin())
+NectoSDK.register(NectoUIControlPlugin())
 NectoSDK.start()
 events.report(NectoEvent(level: .info, tag: "App", message: "App started"))
 #endif
@@ -79,7 +79,7 @@ dependencies and inspect the actual Release output for remaining code and resour
 
 ## Where to start
 
-Start with `URLSessionNetworkPlugin` and `DefaultEventsPlugin`. Network requests appear
+Start with `URLSessionNetworkPlugin` and `NectoEventsPlugin`. Network requests appear
 as they happen. Keep the registered `events` instance in your app's debug logging code
 and call `events.report(...)` to send log entries, as in the example above. Guard these
 calls with `#if DEBUG` too. Add other plugins for the data you need to inspect.

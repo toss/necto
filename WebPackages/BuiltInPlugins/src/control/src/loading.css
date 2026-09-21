@@ -1,0 +1,30 @@
+/* Copyright (c) 2026 Viva Republica, Inc. */
+
+.control-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--necto-space-2);
+  min-width: 0;
+}
+
+.control-spinner {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: control-spin 0.8s linear infinite;
+}
+
+.control-spinner[hidden] { display: none; }
+
+@keyframes control-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-spinner { animation: none; }
+}

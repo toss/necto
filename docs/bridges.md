@@ -51,7 +51,7 @@ noted.
 
 These exist because they are the *host's* to answer — what Necto itself knows, keeps or
 can reach. Anything belonging to the app under test is an app bridge, including
-the ones Necto ships: `DefaultNetworkPlugin` declares its own contracts and answers them
+the ones Necto ships: `NectoNetworkPlugin` declares its own contracts and answers them
 from the app's own records, and nothing here knows it by name.
 
 ### Storage — `necto.desktop.storage.*`
@@ -133,10 +133,10 @@ and last for the host session.
 
 ### Network records — `necto.device.network-records.*`
 
-*An app bridge, not a host one.* `DefaultNetworkPlugin` keeps the records in the app and
+*An app bridge, not a host one.* `NectoNetworkPlugin` keeps the records in the app and
 answers these itself. Collection starts when the app reports records, independently
 of whether the panel is open. A later connection can read the retained records;
-`DefaultNetworkPlugin` keeps up to 2,000 and discards the oldest when full.
+`NectoNetworkPlugin` keeps up to 2,000 and discards the oldest when full.
 
 | Key | Kind | Input | Output |
 | --- | --- | --- | --- |
@@ -276,7 +276,7 @@ the SDK, unregister its ID before registering the new implementation; a duplicat
 registration asserts in debug and is rejected in every build.
 
 An app plugin sends stream events through the `NectoHandler.Out` of an active
-subscription. `DefaultNetworkPlugin.report(_:)` stores records in the app and notifies
+subscription. `NectoNetworkPlugin.report(_:)` stores records in the app and notifies
 its `network-records.observe` subscribers. The panel subscribes through
 `necto.device.subscribe("records.observe", ...)`; there is no public `bridge.emit`
 API or feature-specific host channel adapter for these records.

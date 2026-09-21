@@ -710,6 +710,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@necto-plugin/control@workspace:WebPackages/BuiltInPlugins/src/control":
+  version: 0.0.0-use.local
+  resolution: "@necto-plugin/control@workspace:WebPackages/BuiltInPlugins/src/control"
+  dependencies:
+    "@necto/bridge": "workspace:*"
+    typescript: "npm:^5.7.3"
+    vite: "npm:^6.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@necto-plugin/event-log@workspace:WebPackages/BuiltInPlugins/src/event-log":
   version: 0.0.0-use.local
   resolution: "@necto-plugin/event-log@workspace:WebPackages/BuiltInPlugins/src/event-log"
@@ -779,16 +789,6 @@ __metadata:
     typescript: "npm:^5.7.3"
     vite: "npm:^6.0.0"
     vitest: "npm:^3.2.7"
-  languageName: unknown
-  linkType: soft
-
-"@necto-plugin/view-inspector@workspace:WebPackages/BuiltInPlugins/src/view-inspector":
-  version: 0.0.0-use.local
-  resolution: "@necto-plugin/view-inspector@workspace:WebPackages/BuiltInPlugins/src/view-inspector"
-  dependencies:
-    "@necto/bridge": "workspace:*"
-    typescript: "npm:^5.7.3"
-    vite: "npm:^6.0.0"
   languageName: unknown
   linkType: soft
 

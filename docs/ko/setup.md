@@ -18,11 +18,11 @@ import NectoSDK
 import NectoURLSessionCapture
 
 #if DEBUG
-let events = DefaultEventsPlugin()
+let events = NectoEventsPlugin()
 NectoSDK.register(URLSessionNetworkPlugin())   // network, captured for you
 NectoSDK.register(events)
 NectoSDK.register(ProcessPerformancePlugin())  // six process metrics while observed
-NectoSDK.register(DefaultViewInspectorPlugin())
+NectoSDK.register(NectoUIControlPlugin())
 NectoSDK.start()
 events.report(NectoEvent(level: .info, tag: "App", message: "App started"))
 #endif
@@ -78,7 +78,7 @@ Swift 패키지의 소스를 제외할 수는 없어요.
 
 ## 먼저 추가할 플러그인
 
-`URLSessionNetworkPlugin`과 `DefaultEventsPlugin`부터 추가해 보세요. 네트워크
+`URLSessionNetworkPlugin`과 `NectoEventsPlugin`부터 추가해 보세요. 네트워크
 요청이 일어나는 즉시 패널에 나타나요. 등록한 `events` 인스턴스를 앱의 디버그
 로깅 코드에 보관하고 위 예제처럼 `events.report(...)`로 로그를 보내세요.
 이 호출도 `#if DEBUG`로 감싸야 해요. 나머지 플러그인은 확인할 데이터에 맞춰 추가하세요.

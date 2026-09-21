@@ -141,9 +141,15 @@ struct NectoCLICommandTests {
     @Test("invoke preserves the discovered operation and target", arguments: [
         ("files", "files.write", #"{"root":"documents","path":"note.txt","content":"hello"}"#),
         ("performance-monitor", "performance.snapshot", "{}"),
-        ("view-inspector", "views.highlight", #"{"viewID":"view-1"}"#),
-        ("view-inspector", "views.tapAt", #"{"x":196.5,"y":426}"#),
-        ("view-inspector", "views.inputText", #"{"viewID":"field-1","text":"hello","replace":true}"#),
+        ("control", "control.actionTargets", #"{"query":"Search"}"#),
+        ("control", "control.readAccessibility", #"{"query":"Detail"}"#),
+        ("control", "control.tap", #"{"targetID":"button-1"}"#),
+        ("control", "control.tap", #"{"targetID":"gesture-1","touchCount":2,"tapCount":3}"#),
+        ("control", "control.swipe", #"{"targetID":"scroll-1","direction":"up"}"#),
+        ("control", "control.tap", #"{"targetID":"screen-1","position":{"x":0.25,"y":0.75}}"#),
+        ("control", "control.swipe", #"{"targetID":"scroll-1","direction":"up","position":{"x":0.25,"y":0.75}}"#),
+        ("control", "control.input", #"{"targetID":"field-1","text":"테스트","mode":"replace"}"#),
+        ("control", "control.back", #"{"targetID":"screen-1"}"#),
         ("encrypted-network", "encrypted-network.detail", #"{"recordID":"r1","decrypt":true}"#),
         ("toss-user-defaults", "toss-defaults.set", #"{"path":"feature.enabled","value":false}"#),
     ])
