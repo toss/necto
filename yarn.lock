@@ -792,16 +792,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@necto-plugin/view-inspector@workspace:WebPackages/BuiltInPlugins/src/view-inspector":
-  version: 0.0.0-use.local
-  resolution: "@necto-plugin/view-inspector@workspace:WebPackages/BuiltInPlugins/src/view-inspector"
-  dependencies:
-    "@necto/bridge": "workspace:*"
-    typescript: "npm:^5.7.3"
-    vite: "npm:^6.0.0"
-  languageName: unknown
-  linkType: soft
-
 "@necto/bridge@workspace:*, @necto/bridge@workspace:WebPackages/Bridge":
   version: 0.0.0-use.local
   resolution: "@necto/bridge@workspace:WebPackages/Bridge"

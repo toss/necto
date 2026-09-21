@@ -22,7 +22,7 @@ let events = NectoEventsPlugin()
 NectoSDK.register(URLSessionNetworkPlugin())   // network, captured for you
 NectoSDK.register(events)
 NectoSDK.register(ProcessPerformancePlugin())  // six process metrics while observed
-NectoSDK.register(DefaultViewInspectorPlugin())
+NectoSDK.register(NectoUIControlPlugin())
 NectoSDK.start()
 events.report(NectoEvent(level: .info, tag: "App", message: "App started"))
 #endif
