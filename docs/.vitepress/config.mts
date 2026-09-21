@@ -18,6 +18,12 @@ function sidebar(prefix: string, labels: Record<string, string>) {
       ],
     },
     {
+      text: labels.security,
+      items: [
+        { text: labels.connectionSecurity, link: link("connection-security") },
+      ],
+    },
+    {
       text: labels.tutorial,
       items: [
         { text: labels.tutorialDesktop, link: link("tutorial-desktop") },
@@ -49,6 +55,8 @@ const en = sidebar("", {
   start: "Start",
   setup: "Connect Necto to your app",
   install: "Install the Necto app",
+  security: "Security",
+  connectionSecurity: "Connection authentication and Keychain",
   tutorial: "Adding a plugin",
   tutorialDesktop: "Part 1 — A desktop plugin",
   tutorialDevice: "Part 2 — A device plugin",
@@ -68,6 +76,8 @@ const ko = sidebar("/ko", {
   start: "시작하기",
   setup: "앱에 Necto 연결하기",
   install: "Necto 앱 설치하기",
+  security: "보안",
+  connectionSecurity: "연결 인증과 키체인 등록",
   tutorial: "플러그인을 추가하고 싶다면",
   tutorialDesktop: "1부 — 데스크톱 플러그인",
   tutorialDevice: "2부 — 디바이스 플러그인",

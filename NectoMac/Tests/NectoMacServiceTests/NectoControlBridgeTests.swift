@@ -41,6 +41,39 @@ private func connected(_ target: NectoTarget) -> NectoConnectedApp {
 
 @Suite("Control bridge ownership", .timeLimit(.minutes(1)))
 struct NectoControlBridgeTests {
+    @Test("unauthorized targets stay discoverable but cannot list, invoke, or subscribe to plugins")
+    func unauthorizedTarget() async throws {
+        let target = NectoTarget(deviceID: "phone", appBundleID: "protected.app")
+        let denied = NectoUnauthorizedApp(target: target, appName: "Protected", deviceName: "Phone",
+            osVersion: "26", connection: .usb, reason: .missingKey)
+        let registry = NectoPluginRegistry()
+        let bridge = NectoControlBridge(registry: registry, connectedApps: { [] }, unauthorizedApps: { [denied] })
+        let info = await bridge.targets()
+        #expect(info["targets"]?.arrayValue?.first?["status"] == "unauthorized")
+        #expect(info["targets"]?.arrayValue?.first?["reason"] == "missingKey")
+        for kind in 0..<4 {
+            do {
+                switch kind {
+                case 0: _ = try await bridge.plugins(app: target.appBundleID, device: target.deviceID, desktop: false)
+                case 1: _ = try await bridge.plugins(app: target.appBundleID, device: target.deviceID, desktop: false, pluginID: "shared")
+                case 2: _ = try await bridge.invoke(pluginID: "shared", operationID: "read", input: [:],
+                    app: target.appBundleID, device: target.deviceID, desktop: false)
+                default: try await bridge.subscribe(pluginID: "shared", operationID: "observe", input: [:],
+                    app: target.appBundleID, device: target.deviceID, desktop: false, onEvent: { _ in Issue.record("Unauthorized event") })
+                }
+                Issue.record("Unauthorized operation succeeded")
+            } catch let error as NectoBridgeError { #expect(error.code == .unauthorized) }
+        }
+        try await registry.install(manifest: scopeManifest(version: "1.0.0"), sourceIdentity: "desktop")
+        let desktop = try await bridge.plugins(app: nil, device: nil, desktop: true)
+        #expect(desktop["plugins"]?.arrayValue?.count == 1)
+
+        let recovered = NectoControlBridge(registry: registry, connectedApps: { [connected(target)] }, unauthorizedApps: { [denied] })
+        let targets = await recovered.targets()["targets"]?.arrayValue
+        #expect(targets?.count == 1)
+        #expect(targets?.first?["status"] == "connected")
+    }
+
     @Test func duplicateIDsStayScopedAcrossDiscoveryAndExecution() async throws {
         let registry = NectoPluginRegistry()
         let targets = [NectoTarget(deviceID: "one", appBundleID: "app.a"),

@@ -17,6 +17,13 @@ import UIKit
 /// changing this file.
 final class NectoSDKRuntime: @unchecked Sendable {
     private let lock = NSLock()
+    private let lifecycleLock = NSLock()
+    private var configuredPublicKey: NectoPublicKeyPin?
+    private let helloProvider: @Sendable () async -> NectoHandshakeHello
+
+    init(hello: (@Sendable () async -> NectoHandshakeHello)? = nil) {
+        helloProvider = hello ?? { await Self.hello() }
+    }
     private var listener: NectoDeviceListener?
     private var task: Task<Void, Never>?
     private var generation: UUID?
@@ -133,14 +140,33 @@ final class NectoSDKRuntime: @unchecked Sendable {
     /// coming back to the foreground feels immediate.
     private static let retryDelay = Duration.seconds(1)
 
-    func start(port: UInt16) {
+    func start(port: UInt16, publicKey: String? = nil) {
+        lifecycleLock.withLock {
+            let pin: NectoPublicKeyPin?
+            do { pin = try publicKey.map(NectoPublicKeyPin.init) }
+            catch {
+                stopRuntime()
+                status = .failed("Invalid Necto public key. Expected a Base64 P-256 public key.")
+                return
+            }
+            let unchanged = lock.withLock {
+                task != nil && configuredPublicKey?.bytes == pin?.bytes
+            }
+            guard !unchanged else { return }
+            stopRuntime()
+            startRuntime(port: port, publicKey: pin)
+        }
+    }
+
+    private func startRuntime(port: UInt16, publicKey: NectoPublicKeyPin?) {
         lock.withLock {
             guard task == nil else { return }
+            configuredPublicKey = publicKey
             let generation = UUID()
             self.generation = generation
             task = Task { [self] in
                 while !Task.isCancelled {
-                    await serve(port: port, generation: generation)
+                    await serve(port: port, generation: generation, publicKey: publicKey)
                     guard !Task.isCancelled else { return }
                     try? await Task.sleep(for: Self.retryDelay)
                 }
@@ -149,7 +175,7 @@ final class NectoSDKRuntime: @unchecked Sendable {
     }
 
     /// Accepts connections until the socket goes away.
-    private func serve(port basePort: UInt16, generation: UUID) async {
+    private func serve(port basePort: UInt16, generation: UUID, publicKey: NectoPublicKeyPin?) async {
         var bound: NectoDeviceListener?
         var lastFailure = "No port was available from \(basePort)"
         for offset in 0 ..< Int(NectoDeviceListener.portSpan) {
@@ -181,7 +207,7 @@ final class NectoSDKRuntime: @unchecked Sendable {
 
             for try await session in listener.sessions() {
                 guard !Task.isCancelled else { session.close(); break }
-                await handle(session: session)
+                await accept(session: session, publicKey: publicKey)
             }
         } catch {
             lock.withLock {
@@ -195,11 +221,16 @@ final class NectoSDKRuntime: @unchecked Sendable {
     }
 
     func stop() {
+        lifecycleLock.withLock { stopRuntime() }
+    }
+
+    private func stopRuntime() {
         lock.lock()
         let task = task
         let listener = listener
         let session = session
         self.task = nil
+        configuredPublicKey = nil
         generation = nil
         self.listener = nil
         self.session = nil
@@ -222,12 +253,27 @@ final class NectoSDKRuntime: @unchecked Sendable {
     /// The listener path calls this for every connection. Keeping it separate means
     /// the message handling can be exercised over a socket pair, without binding a
     /// port or leaving a listener thread behind.
-    func accept(session: NectoMessageSession) async {
-        await handle(session: session)
+    func accept(session: NectoMessageSession, publicKey: NectoPublicKeyPin? = nil) async {
+        guard let publicKey else {
+            await handle(session: session)
+            return
+        }
+        do {
+            let hello = await helloProvider()
+            guard !hello.appBundleID.isEmpty else { throw NectoSecurityError.unsupportedNegotiation }
+            try await session.handshake {
+                try await session.send(NectoSecurityOffer(hello: hello))
+            }
+            let secured = try await session.upgradingTLS(.device(publicKey))
+            // Authenticate before handle() can replace an existing session or register plugins.
+            await handle(session: secured, hello: hello)
+        } catch {
+            session.close()
+        }
     }
 
     /// Says hello, tells the host what this app offers, then reads until it goes away.
-    private func handle(session: NectoMessageSession) async {
+    private func handle(session: NectoMessageSession, hello suppliedHello: NectoHandshakeHello? = nil) async {
         let previous = lock.withLock { () -> (NectoMessageSession?, [Task<Void, Never>])? in
             guard !Task.isCancelled else { return nil }
             let previous = (self.session, requests.values.map(\.task))
@@ -241,16 +287,9 @@ final class NectoSDKRuntime: @unchecked Sendable {
         previous.1.forEach { $0.cancel() }
         defer { disconnect(session) }
         do {
-            let hello = await NectoHandshakeHello(
-                appBundleID: Self.appBundleID,
-                appName: Self.appName,
-                appVersion: Self.appVersion,
-                deviceName: Self.deviceName(),
-                osVersion: Self.osVersion(),
-                sdkVersion: NectoSDK.version,
-                appIcon: Self.appIcon(),
-                simulatorID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"]
-            )
+            let hello: NectoHandshakeHello
+            if let provided = suppliedHello { hello = provided }
+            else { hello = await helloProvider() }
             let ack = try await session.handshake {
                 try await session.send(hello)
                 return try await session.receive(NectoHandshakeAck.self)
@@ -492,6 +531,14 @@ final class NectoSDKRuntime: @unchecked Sendable {
     }
 
     // MARK: App identity
+
+    private static func hello() async -> NectoHandshakeHello {
+        await NectoHandshakeHello(
+            appBundleID: appBundleID, appName: appName, appVersion: appVersion,
+            deviceName: deviceName(), osVersion: osVersion(), sdkVersion: NectoSDK.version,
+            appIcon: appIcon(), simulatorID: ProcessInfo.processInfo.environment["SIMULATOR_UDID"]
+        )
+    }
 
     /// A bundle without an identifier cannot complete the handshake, and a test bundle
     /// is exactly that, so the identity is overridable rather than always read from

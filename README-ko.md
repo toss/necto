@@ -29,7 +29,7 @@ Necto는 어떤 환경에서든 바로 연결되는 iOS 디버깅 플랫폼이�
 Necto를 응용 프로그램 폴더로 옮기세요. 체크섬 확인과 ad-hoc 서명 정책은
 [설치 안내](docs/ko/install.md)에 있어요.
 
-소스에서 빌드하려면 macOS 14 이상, Swift 6.0 이상을 지원하는 Xcode,
+소스에서 빌드하려면 macOS 14 이상, Swift 6.1 이상을 지원하는 Xcode,
 Node.js 22.12 이상과 Yarn 4.6.0이 필요해요. iOS SDK는 iOS 16 이상을 지원해요.
 
 ```bash

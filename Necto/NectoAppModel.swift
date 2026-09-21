@@ -67,6 +67,7 @@ final class NectoAppModel {
     var queuedAssets: Set<String> { installer.queuedAssets }
 
     private(set) var connectedApps: [NectoConnectedApp] = []
+    private(set) var unauthorizedApps: [NectoUnauthorizedApp] = []
 
     let backgroundPanels = NectoBackgroundPanels()
     let cliInstaller = NectoCLIInstaller()
@@ -151,6 +152,7 @@ final class NectoAppModel {
     private(set) var unreadIssueCount = 0
     private let appBridge: NectoDeviceBridgeClient
     private var connectionTask: Task<Void, Never>?
+    private var authorizationTask: Task<Void, Never>?
 
     init() {
         shellAccess = NectoShellAccessController(snapshot: NectoPluginLibrary.shellPolicy) {
@@ -405,6 +407,7 @@ final class NectoAppModel {
         let name: String
         /// The same app on each device it was found on, newest listing first.
         let devices: [NectoConnectedApp]
+        let unauthorized: [NectoUnauthorizedApp]
 
         var id: String { bundleID }
     }
@@ -424,9 +427,12 @@ final class NectoAppModel {
             grouped[key, default: []].append(app)
         }
 
-        return order.compactMap { key in
-            guard let devices = grouped[key], let first = devices.first else { return nil }
-            return ConnectedApp(bundleID: key, name: first.appName, devices: devices)
+        let denied = Dictionary(grouping: unauthorizedApps, by: \.appBundleID)
+        for app in unauthorizedApps where !order.contains(app.appBundleID) { order.append(app.appBundleID) }
+        return order.map { key in
+            let devices = grouped[key] ?? []
+            let unauthorized = denied[key] ?? []
+            return ConnectedApp(bundleID: key, name: devices.first?.appName ?? unauthorized.first?.appName ?? key, devices: devices, unauthorized: unauthorized)
         }
     }
 
@@ -438,6 +444,9 @@ final class NectoAppModel {
             registry: registry,
             connectedApps: { [weak self] in
                 await MainActor.run { self?.connectedApps ?? [] }
+            },
+            unauthorizedApps: { [weak self] in
+                await MainActor.run { self?.unauthorizedApps ?? [] }
             },
             install: { [weak self] source in
                 guard let self else {
@@ -478,6 +487,9 @@ final class NectoAppModel {
 
     private func startWatchingConnections() {
         guard connectionTask == nil else { return }
+        authorizationTask = Task { [connections] in
+            for await apps in await connections.authorizationUpdates() { unauthorizedApps = apps }
+        }
 
         // The transport reports facts; which of them is worth telling someone about is
         // decided here, where what the person was trying to do is known.

@@ -17,3 +17,8 @@ plugins require approval of their source and requested bridges. Shell execution 
 modify files and run processes as the logged-in user. See the
 [plugin trust policy](docs/plugin-manifest.md#identity-and-trust) and
 [production build guidance](docs/setup.md#keeping-it-away-from-users).
+
+For optional SDK connection authentication, see the
+[connection authentication and Keychain registration guide](docs/connection-security.md)
+([한국어](docs/ko/connection-security.md)). It covers app public keys, private setup
+tools, Mac Keychain entries and troubleshooting unauthorized connections.

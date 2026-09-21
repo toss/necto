@@ -37,13 +37,21 @@ struct ExampleApp: App {
         Self.seedPreferences()
         Self.seedFiles()
 
-        NectoSDK.start()
+        Self.startNecto()
         ExampleTelemetry.start()
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
+        }
+    }
+
+    static func startNecto() {
+        if let publicKey = ProcessInfo.processInfo.environment["NECTO_PUBLIC_KEY"] {
+            NectoSDK.start(publicKey: publicKey)
+        } else {
+            NectoSDK.start()
         }
     }
 

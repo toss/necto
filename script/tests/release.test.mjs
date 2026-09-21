@@ -70,7 +70,7 @@ function fakeTool() {
   throw new Error(`Unexpected release command: ${name} ${args.join(" ")}`);
 }
 
-function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScript = false } = {}) {
+function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScript = false, boringSSLRevision = "817ab07ebb53da35afea409ab9328f578492832d" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "necto-release test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const path of ["script", "bin", "tmp", "Build/bin", "Build/Products/Necto.app/Contents/MacOS"]) {
@@ -78,11 +78,20 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScrip
   }
   copyFileSync(new URL("../release", import.meta.url), join(root, "script/release"));
   copyFileSync(new URL("../licenses.mjs", import.meta.url), join(root, "script/licenses.mjs"));
+  mkdirSync(join(root, "script/licenses"));
+  copyFileSync(new URL("../licenses/BoringSSL-817ab07.txt", import.meta.url), join(root, "script/licenses/BoringSSL-817ab07.txt"));
   copyFileSync(new URL("../../LICENSE", import.meta.url), join(root, "LICENSE"));
   mkdirSync(join(root, "LICENSES"));
   copyFileSync(new URL("../../LICENSES/PeerTalk.txt", import.meta.url), join(root, "LICENSES/PeerTalk.txt"));
   mkdirSync(join(root, "NectoMac/.build/checkouts/swift-argument-parser"), { recursive: true });
   writeFileSync(join(root, "NectoMac/.build/checkouts/swift-argument-parser/LICENSE.txt"), "fixture Swift license\n");
+  for (const name of ["swift-nio", "swift-nio-ssl", "swift-atomics", "swift-collections", "swift-system"]) {
+    const directory = join(root, "NectoMac/.build/checkouts", name);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(join(directory, "LICENSE.txt"), `fixture ${name} license\n`);
+    if (["swift-nio", "swift-nio-ssl"].includes(name)) writeFileSync(join(directory, "NOTICE.txt"), `fixture ${name} notice\n`);
+  }
+  writeFileSync(join(root, "NectoMac/.build/checkouts/swift-nio-ssl/Package.swift"), `// BoringSSL Commit: ${boringSSLRevision}\n`);
   mkdirSync(join(root, "node_modules/vite"), { recursive: true });
   writeFileSync(join(root, "node_modules/vite/package.json"), JSON.stringify({ name: "vite", version: "1.0.0" }));
   writeFileSync(join(root, "node_modules/vite/LICENSE.md"), "fixture Vite license\n");
@@ -125,6 +134,12 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScrip
 
 function verifyArtifacts(root) {
   assert.equal(readFileSync(join(root, "Build/Products/Necto.app/Contents/Resources/NectoMac_necto-cli.bundle/Skills/necto/SKILL.md"), "utf8"), "fixture skill\n");
+  const notices = readFileSync(join(root, "Build/Products/Necto.app/Contents/Resources/THIRD_PARTY_NOTICES.txt"), "utf8");
+  const boringSSLLicense = readFileSync(new URL("../licenses/BoringSSL-817ab07.txt", import.meta.url), "utf8");
+  for (const term of ["OpenSSL License", "Original SSLeay License", "ISC license", "fiat carries the MIT license"]) {
+    assert.ok(boringSSLLicense.includes(term), `BoringSSL supplemental license must include ${term}`);
+  }
+  assert.ok(notices.includes(boringSSLLicense), "the app must contain the complete vendored BoringSSL license");
   for (const name of artifacts) assert.ok(readFileSync(join(root, "Build", name)).length > 0);
   const hash = createHash("sha256").update(readFileSync(join(root, "Build", artifacts[0]))).digest("hex");
   assert.equal(readFileSync(join(root, "Build", `${artifacts[0]}.sha256`), "utf8"), `${hash}  ${artifacts[0]}\n`);
@@ -146,6 +161,12 @@ test("a dry run builds the app, checksum and web packages without publishing", (
     builds.every((arguments_) => arguments_.includes(`MARKETING_VERSION=${version}`)),
     "every Xcode invocation must use the version being released",
   );
+});
+
+test("a changed BoringSSL revision prevents publishing with stale license notices", (t) => {
+  const root = runRelease(t, { boringSSLRevision: "different-revision", expectedStatus: 1 });
+  assert.equal(readFileSync(join(root, "publications.jsonl"), "utf8"), "");
+  assert.equal(existsSync(join(root, "Build", artifacts[0])), false);
 });
 
 test("a release publishes the tag and artifacts to the official repository", (t) => {

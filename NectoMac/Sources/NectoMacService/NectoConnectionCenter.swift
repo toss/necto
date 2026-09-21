@@ -35,6 +35,7 @@ public actor NectoConnectionCenter {
     private let port: UInt16
     private let probeInterval: Duration
     private let deviceEvents: @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>
+    private let identity: @Sendable (String) async throws -> NectoTLSIdentity?
     private var onEnvelope: (@Sendable (NectoEnvelope, NectoTarget) -> Void)?
 
     private var connections: [String: Connection] = [:]
@@ -42,6 +43,15 @@ public actor NectoConnectionCenter {
     private var probes: [Endpoint: Task<Void, Never>] = [:]
     private var sessionTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var observers: [UUID: AsyncStream<[NectoConnectedApp]>.Continuation] = [:]
+    private struct Denied {
+        let app: NectoUnauthorizedApp
+        let usbDeviceID: Int?
+        let port: UInt16?
+    }
+    private var denied: [String: Denied] = [:]
+    private var deniedObservers: [UUID: AsyncStream<[NectoUnauthorizedApp]>.Continuation] = [:]
+    private var publishedDenied: [NectoUnauthorizedApp] = []
+    private var generation: UInt64 = 0
 
     public init(
         port: UInt16 = NectoTransportDefaults.devicePort,
@@ -53,15 +63,34 @@ public actor NectoConnectionCenter {
     init(
         port: UInt16,
         probeInterval: Duration,
-        deviceEvents: @escaping @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>
+        deviceEvents: @escaping @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>,
+        identity: @escaping @Sendable (String) async throws -> NectoTLSIdentity? = { bundleID in
+            try await Task.detached { try NectoKeychainCredentialStore().identity(bundleID: bundleID) }.value
+        }
     ) {
         self.port = port
         self.probeInterval = probeInterval
         self.deviceEvents = deviceEvents
+        self.identity = identity
     }
 
     public var connectedApps: [NectoConnectedApp] {
         connections.values.map(\.app).sorted { $0.id < $1.id }
+    }
+
+    public var unauthorizedApps: [NectoUnauthorizedApp] {
+        denied.values.map(\.app).filter { connections[$0.id] == nil }.sorted { $0.id < $1.id }
+    }
+
+    public func authorizationUpdates() -> AsyncStream<[NectoUnauthorizedApp]> {
+        AsyncStream { continuation in
+            let id = UUID()
+            deniedObservers[id] = continuation
+            continuation.yield(unauthorizedApps)
+            continuation.onTermination = { [weak self] _ in
+                Task { await self?.removeDeniedObserver(id) }
+            }
+        }
     }
 
     /// Emits the full list whenever it changes, starting with the current one.
@@ -86,6 +115,9 @@ public actor NectoConnectionCenter {
     public func send(_ envelope: NectoEnvelope, to target: NectoTarget) async throws {
         let id = NectoConnectedApp.id(for: target)
         guard let session = connections[id]?.session else {
+            if denied[id] != nil {
+                throw NectoBridgeError(code: .unauthorized, message: "Authentication is required for '\(target.appBundleID)'.")
+            }
             throw NectoBridgeError(
                 code: .targetDisconnected,
                 message: "'\(target.appBundleID)' is not connected"
@@ -130,6 +162,7 @@ public actor NectoConnectionCenter {
     }
 
     public func stop() {
+        generation &+= 1
         deviceWatcher?.cancel()
         deviceWatcher = nil
         for probe in probes.values { probe.cancel() }
@@ -138,6 +171,7 @@ public actor NectoConnectionCenter {
         for task in sessionTasks.values { task.cancel() }
         sessionTasks.removeAll()
         connections.removeAll()
+        denied.removeAll()
         usbDeviceIDs.removeAll()
         localPorts.removeAll()
         devicePorts.removeAll()
@@ -156,6 +190,7 @@ public actor NectoConnectionCenter {
                 case let .detached(deviceID):
                     cancelUSBProbes { $0 == deviceID }
                     removeConnections { $0.usbDeviceID == deviceID }
+                    removeDenied { $0.usbDeviceID == deviceID }
                 case .attached:
                     break
                 }
@@ -167,6 +202,7 @@ public actor NectoConnectionCenter {
             notes?(.usbUnavailable(String(describing: error)))
             cancelUSBProbes { _ in true }
             removeConnections { $0.usbDeviceID != nil }
+            removeDenied { $0.usbDeviceID != nil }
         }
     }
 
@@ -197,6 +233,7 @@ public actor NectoConnectionCenter {
             // device usually stays plugged in while its app is started, stopped and
             // started again, and waiting for another attach would mean asking someone
             // to unplug the cable.
+            removeDenied { $0.usbDeviceID == device.deviceID && $0.port == candidate }
         }
     }
 
@@ -222,6 +259,7 @@ public actor NectoConnectionCenter {
                     )
                 } catch {
                     // Nothing listening there. Try again after the interval.
+                    removeDenied { $0.usbDeviceID == nil && $0.port == candidate }
                 }
             case let .usb(device, candidate) where !connectedPorts(usbDeviceID: device.deviceID).contains(candidate):
                 await connectToDevice(device, port: candidate)
@@ -257,13 +295,40 @@ public actor NectoConnectionCenter {
         localPort: UInt16? = nil,
         devicePort: UInt16? = nil
     ) async throws -> Task<Void, Never>? {
-        let (hello, ack) = try await session.handshake {
-            let hello = try await session.receive(NectoHandshakeHello.self)
-            let ack = NectoHandshakeAck.evaluate(hello)
-            try await session.send(ack)
-            return (hello, ack)
+        let identity = self.identity
+        let generation = self.generation
+        let negotiated: (NectoMessageSession, NectoHandshakeHello, NectoHandshakeAck)
+        do {
+            let (active, hello) = try await Self.authenticate(session: session, identity: identity)
+            do {
+                negotiated = try await active.handshake {
+                    let ack = NectoHandshakeAck.evaluate(hello)
+                    try await active.send(ack)
+                    return (active, hello, ack)
+                }
+            } catch { active.close(); throw error }
+        } catch let failure as AuthenticationFailure {
+            session.close()
+            guard !Task.isCancelled, generation == self.generation else { throw CancellationError() }
+            let offer = failure.offer
+            let resolvedID = connection == .simulator ? (offer.simulatorID ?? deviceID) : deviceID
+            let app = NectoUnauthorizedApp(
+                target: NectoTarget(deviceID: resolvedID, appBundleID: offer.appBundleID),
+                appName: offer.appName, deviceName: deviceName ?? offer.deviceName,
+                osVersion: offer.osVersion, connection: connection, reason: failure.reason
+            )
+            if let port = localPort ?? devicePort {
+                denied = denied.filter { $0.value.usbDeviceID != usbDeviceID || $0.value.port != port }
+            }
+            denied[app.id] = Denied(app: app, usbDeviceID: usbDeviceID, port: localPort ?? devicePort)
+            publishDenied()
+            return nil
+        } catch {
+            session.close()
+            throw error
         }
-        guard !Task.isCancelled else { session.close(); throw CancellationError() }
+        let (session, hello, ack) = negotiated
+        guard !Task.isCancelled, generation == self.generation else { session.close(); throw CancellationError() }
 
         guard ack.accepted else {
             // The one failure a person can act on: their app and this Necto do not speak
@@ -292,6 +357,10 @@ public actor NectoConnectionCenter {
 
         connections[app.id]?.session.close()
         connections[app.id] = Connection(app: app, session: session)
+        denied.removeValue(forKey: app.id)
+        if let port = localPort ?? devicePort {
+            denied = denied.filter { $0.value.usbDeviceID != usbDeviceID || $0.value.port != port }
+        }
         notes?(.connected(appBundleID: app.target.appBundleID, over: connection == .usb ? "USB" : "loopback"))
         usbDeviceIDs[app.id] = usbDeviceID
         localPorts[app.id] = localPort
@@ -351,7 +420,65 @@ public actor NectoConnectionCenter {
         observers.removeValue(forKey: id)
     }
 
+    private struct AuthenticationFailure: Error {
+        let offer: NectoSecurityOffer
+        let reason: NectoUnauthorizedApp.Reason
+    }
+
+    private static func authenticate(
+        session: NectoMessageSession,
+        identity: @escaping @Sendable (String) async throws -> NectoTLSIdentity?
+    ) async throws -> (NectoMessageSession, NectoHandshakeHello) {
+        let data = try await session.handshake { try await session.receive() }
+        let object = try JSONDecoder().decode(NectoJSONValue.self, from: data)
+        guard object["type"] != nil else {
+            return (session, try JSONDecoder().decode(NectoHandshakeHello.self, from: data))
+        }
+        let offer = try JSONDecoder().decode(NectoSecurityOffer.self, from: data)
+        guard offer.isSupported else { throw NectoSecurityError.unsupportedNegotiation }
+        let credential: NectoTLSIdentity?
+        do {
+            credential = try await session.handshake(timeout: NectoTLSStream.authenticationTimeout) {
+                try await identity(offer.appBundleID)
+            }
+        }
+        catch {
+            throw AuthenticationFailure(offer: offer, reason: .credentialUnavailable)
+        }
+        guard let credential else { throw AuthenticationFailure(offer: offer, reason: .missingKey) }
+        do {
+            let secured = try await session.upgradingTLS(.host(credential))
+            do {
+                let hello = try await secured.handshake { try await secured.receive(NectoHandshakeHello.self) }
+                guard hello.appBundleID == offer.appBundleID, hello.simulatorID == offer.simulatorID else {
+                    throw NectoSecurityError.unsupportedNegotiation
+                }
+                return (secured, hello)
+            } catch { secured.close(); throw error }
+        } catch {
+            if Task.isCancelled { throw CancellationError() }
+            throw AuthenticationFailure(offer: offer, reason: .rejectedKey)
+        }
+    }
+
+    private func removeDeniedObserver(_ id: UUID) { deniedObservers.removeValue(forKey: id) }
+
+    private func removeDenied(where matches: (Denied) -> Bool) {
+        let ids = denied.filter { matches($0.value) }.map(\.key)
+        guard !ids.isEmpty else { return }
+        ids.forEach { denied.removeValue(forKey: $0) }
+        publishDenied()
+    }
+
+    private func publishDenied() {
+        let snapshot = unauthorizedApps
+        guard snapshot != publishedDenied else { return }
+        publishedDenied = snapshot
+        deniedObservers.values.forEach { $0.yield(snapshot) }
+    }
+
     private func publish() {
+        publishDenied()
         let snapshot = connectedApps
         for continuation in observers.values {
             continuation.yield(snapshot)

@@ -16,6 +16,49 @@ private func socketPair() throws -> (NectoSocketStream, NectoSocketStream) {
 
 @Suite("Asynchronous socket I/O", .timeLimit(.minutes(1)))
 struct NectoSocketConcurrencyTests {
+    @Test("socket transfer preserves unread bytes and the old stream cannot close its successor", arguments: 0..<10)
+    func transferSocket(_: Int) async throws {
+        let (peer, source) = try socketPair()
+        defer { peer.close() }
+        try await peer.write(Data([1, 2, 3, 4, 5, 6]))
+        #expect(try await source.read(count: 2) == Data([1, 2]))
+        let successor = NectoSocketStream(descriptor: try source.takeSocketDescriptor())
+        defer { successor.close() }
+        source.close()
+        #expect(try await successor.read(count: 4) == Data([3, 4, 5, 6]))
+        try await successor.write(Data([7, 8]))
+        #expect(try await peer.read(count: 2) == Data([7, 8]))
+        #expect(throws: NectoSocketStream.Failure.self) { try source.takeSocketDescriptor() }
+        await #expect(throws: NectoSocketStream.Failure.self) { try await source.write(Data([9])) }
+        await #expect(throws: NectoSocketStream.Failure.self) { try await source.read(count: 1) }
+    }
+
+    @Test("a closed socket cannot transfer ownership")
+    func transferClosedSocket() throws {
+        let (peer, source) = try socketPair()
+        defer { peer.close() }
+        source.close()
+        #expect(throws: NectoSocketStream.Failure.self) { try source.takeSocketDescriptor() }
+    }
+
+    @Test("socket transfer refuses an in-flight write without losing ownership")
+    func transferDuringWrite() async throws {
+        let (source, peer) = try socketPair()
+        defer { source.close(); peer.close() }
+        let writing = Task { try await source.write(Data(repeating: 42, count: 1024 * 1024)) }
+        // The peer has consumed only one byte, so the small socket buffer keeps the write pending.
+        #expect(try await peer.read(count: 1) == Data([42]))
+        do {
+            let descriptor = try source.takeSocketDescriptor()
+            Darwin.close(descriptor)
+            Issue.record("An active write transferred its socket")
+        } catch let error as NectoSocketStream.Failure {
+            guard case .busy = error else { Issue.record("Expected busy: \(error)"); return }
+        }
+        source.close()
+        await #expect(throws: NectoSocketStream.Failure.self) { try await writing.value }
+    }
+
     @Test("acceptor rejects a descriptor it cannot make nonblocking")
     func invalidAcceptorDescriptor() {
         #expect(throws: POSIXError.self) { try NectoSocketAcceptor(descriptor: -1) }

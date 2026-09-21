@@ -11,6 +11,42 @@ import Testing
 
 @Suite("CLI process interface", .timeLimit(.minutes(1)))
 struct NectoCLIBlackBoxTests {
+    @Test("unauthorized status survives JSON and human device discovery", arguments: [false, true])
+    func unauthorizedDiscovery(json: Bool) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let server = fixture.respond { request, session in
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: ["targets": .array([
+                ["deviceID": "sim-1", "deviceName": "Phone", "appBundleID": "protected.app", "appName": "Protected",
+                 "status": "unauthorized", "reason": "missingKey"],
+            ])]))
+        }
+        let result = try await fixture.run(["device", "list"] + (json ? ["--json"] : []))
+        try await server.value
+        #expect(result.status == 0)
+        if json {
+            let app = try result.json()["devices"]?.arrayValue?.first?["apps"]?.arrayValue?.first
+            #expect(app?["status"] == "unauthorized")
+            #expect(app?["reason"] == "missingKey")
+        } else { #expect(result.output.contains("[unauthorized]")) }
+    }
+
+    @Test("unauthorized plugin calls return a failure, while the CLI remains available")
+    func unauthorizedCall() async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let server = fixture.respond { request, session in
+            try await session.send(NectoControlResponse(id: request.id, kind: .error,
+                error: .init(code: "UNAUTHORIZED", message: "Install the connection key.")))
+        }
+        let result = try await fixture.run(["plugin", "list", "--device", "sim-1", "--app", "protected.app", "--json"])
+        try await server.value
+        #expect(result.status != 0)
+        #expect(result.error.contains("UNAUTHORIZED"))
+        let help = try await fixture.run(["--help"])
+        #expect(help.status == 0)
+    }
+
     @Test("device discovery prints usable identifiers grouped by device")
     func deviceDiscovery() async throws {
         let fixture = try CLIProcessFixture()

@@ -105,8 +105,7 @@ xcrun simctl launch <device-id> im.toss.necto.example
 
 The app shows the listening port, and the Mac app lists it under the sidebar within a
 couple of seconds. `lsof -nP -iTCP:9979-9986 -sTCP:LISTEN` checks the default SDK
-port range when it does not appear. If you configured another base port, check that
-range instead.
+port range when it does not appear. The public SDK API selects its port automatically.
 
 For concurrent connections, launch SDK-enabled apps on two booted simulators. The
 SDK chooses a free port within the eight-port range and the Mac probes all eight.
