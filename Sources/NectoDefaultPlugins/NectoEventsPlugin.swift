@@ -8,7 +8,7 @@ import Foundation
 
 /// Somewhere to record what the app did.
 ///
-/// A capture mechanism talks to this rather than to `DefaultEventsPlugin`, so an app
+/// A capture mechanism talks to this rather than to `NectoEventsPlugin`, so an app
 /// that already has a logger of its own routes it here without depending on the
 /// shipped plugin, and a test can stand in for the whole thing.
 public protocol NectoEventReporting: AnyObject, Sendable {
@@ -59,12 +59,12 @@ public struct NectoEvent: Sendable, Hashable, Identifiable {
 /// it events from wherever the app already knows about them.
 ///
 /// ```swift
-/// let events = DefaultEventsPlugin()
+/// let events = NectoEventsPlugin()
 /// NectoSDK.register(events)
 ///
 /// events.report(NectoEvent(level: .warn, tag: "Cache", message: "Evicted 240 entries"))
 /// ```
-public final class DefaultEventsPlugin: NectoPluginable, NectoEventReporting, @unchecked Sendable {
+public final class NectoEventsPlugin: NectoPluginable, NectoEventReporting, @unchecked Sendable {
     /// Keeps memory bounded on a long session. Older events fall off the end.
     public static let capacity = 5000
 

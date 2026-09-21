@@ -42,7 +42,7 @@ private func makeRecord(id: String = "record-1", url: String = "https://example.
 @Test func networkPluginAnswersItsOwnContracts() async throws {
     // The network plugin is an ordinary plugin. It declares contracts and answers
     // them, and nothing on the Mac side knows it exists.
-    let plugin = DefaultNetworkPlugin()
+    let plugin = NectoNetworkPlugin()
     plugin.report(makeRecord(url: "https://example.com/things?page=2"))
 
     let output = try await answer(plugin, "necto.device.network-records.list", [:])
@@ -55,7 +55,7 @@ private func makeRecord(id: String = "record-1", url: String = "https://example.
 /// The list carries no bodies: five hundred rows should not drag five hundred response
 /// bodies with them, so they live behind `detail`.
 @Test func listOmitsBodiesAndDetailCarriesThem() async throws {
-    let plugin = DefaultNetworkPlugin()
+    let plugin = NectoNetworkPlugin()
     plugin.report(makeRecord())
 
     let list = try await answer(plugin, "necto.device.network-records.list", [:])
@@ -66,7 +66,7 @@ private func makeRecord(id: String = "record-1", url: String = "https://example.
 }
 
 @Test func detailRefusesAnUnknownRecord() async {
-    let plugin = DefaultNetworkPlugin()
+    let plugin = NectoNetworkPlugin()
     await #expect(throws: NectoBridgeError.self) {
         try await answer(plugin, "necto.device.network-records.detail", ["recordID": .string("nope")])
     }
@@ -75,7 +75,7 @@ private func makeRecord(id: String = "record-1", url: String = "https://example.
 /// The app keeps its own records, so it collects from the moment it starts rather than
 /// from the moment someone opens the panel.
 @Test func recordsSurviveWithNoHostAttached() async throws {
-    let plugin = DefaultNetworkPlugin()
+    let plugin = NectoNetworkPlugin()
     plugin.report(makeRecord())
     plugin.report(makeRecord(id: "record-2"))
 
@@ -84,7 +84,7 @@ private func makeRecord(id: String = "record-1", url: String = "https://example.
 }
 
 @Test func clearEmptiesTheList() async throws {
-    let plugin = DefaultNetworkPlugin()
+    let plugin = NectoNetworkPlugin()
     plugin.report(makeRecord())
 
     _ = try await answer(plugin, "necto.device.network-records.clear", [:])
@@ -94,7 +94,7 @@ private func makeRecord(id: String = "record-1", url: String = "https://example.
 }
 
 @Test func networkPluginDeclaresItsFourOperations() {
-    let descriptors = registrations(of: DefaultNetworkPlugin()).values.map(\.descriptor)
+    let descriptors = registrations(of: NectoNetworkPlugin()).values.map(\.descriptor)
     let names = descriptors.map(\.binding.name)
 
     #expect(Set(names) == [
@@ -110,7 +110,7 @@ private func makeRecord(id: String = "record-1", url: String = "https://example.
 /// Reading and clearing are the same kind of thing to the runtime: both answer once.
 /// That a clear destroys something is in its name, not in a flag beside it.
 @Test func everythingButObserveAnswersOnce() {
-    let registered = registrations(of: DefaultNetworkPlugin())
+    let registered = registrations(of: NectoNetworkPlugin())
     #expect(registered["necto.device.network-records.clear@1"]?.descriptor.kind == .once)
     #expect(registered["necto.device.network-records.list@1"]?.descriptor.kind == .once)
     #expect(registered["necto.device.network-records.observe@1"]?.descriptor.kind == .stream)

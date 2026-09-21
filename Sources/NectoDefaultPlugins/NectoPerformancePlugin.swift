@@ -102,7 +102,7 @@ public protocol NectoPerformanceSampling: AnyObject, Sendable {
 /// What the app is spending, read from Necto.
 ///
 /// ```swift
-/// let performance = DefaultPerformancePlugin(metrics: [
+/// let performance = NectoPerformancePlugin(metrics: [
 ///     NectoMetric(id: "memory", title: "Memory", unit: "MB"),
 ///     NectoMetric(id: "frame", title: "Frame time", unit: "ms", budget: 16.7),
 /// ])
@@ -110,7 +110,7 @@ public protocol NectoPerformanceSampling: AnyObject, Sendable {
 ///
 /// performance.report(148, for: "memory")
 /// ```
-public final class DefaultPerformancePlugin: NectoPluginable, NectoPerformanceReporting, @unchecked Sendable {
+public final class NectoPerformancePlugin: NectoPluginable, NectoPerformanceReporting, @unchecked Sendable {
     /// About twenty minutes at one reading a second. Enough to see a trend, bounded
     /// enough that an app running all day does not grow without limit.
     public static let capacity = 1200

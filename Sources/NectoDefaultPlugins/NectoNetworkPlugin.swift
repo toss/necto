@@ -14,7 +14,7 @@ import Foundation
 /// guess is wrong, so the app reports and Necto only carries.
 ///
 /// ```swift
-/// let network = DefaultNetworkPlugin()
+/// let network = NectoNetworkPlugin()
 /// NectoSDK.register(network)
 /// NectoSDK.start()
 ///
@@ -28,7 +28,7 @@ import Foundation
 /// Shipped with Necto, and still an ordinary plugin: it declares contracts and answers
 /// them, exactly as one written in an app would. Nothing on the Mac side knows this
 /// plugin exists.
-public final class DefaultNetworkPlugin: NectoPluginable, NectoNetworkReporting, @unchecked Sendable {
+public final class NectoNetworkPlugin: NectoPluginable, NectoNetworkReporting, @unchecked Sendable {
     /// Keeps memory bounded on a long session. Older records fall off the end.
     public static let capacity = 2000
 

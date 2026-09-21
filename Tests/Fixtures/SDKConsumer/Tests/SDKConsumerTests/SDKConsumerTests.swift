@@ -19,7 +19,7 @@ func sdkConsumer() throws {
     #expect(NectoSDK.status == .stopped)
     #expect(NectoSDK.plugins.isEmpty)
 
-    let events = DefaultEventsPlugin()
+    let events = NectoEventsPlugin()
     let performance = ProcessPerformancePlugin()
     let network = URLSessionNetworkPlugin()
     for plugin in [events as any NectoPluginable, performance, network] {

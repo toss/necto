@@ -18,13 +18,13 @@ import UIKit
 /// Sampling starts while `performance.observe` has a subscriber and stops with the
 /// last subscriber. Linking the SDK product does not start sampling.
 public final class ProcessPerformancePlugin: NectoPluginable, NectoPerformanceReporting, @unchecked Sendable {
-    public let performance: DefaultPerformancePlugin
+    public let performance: NectoPerformancePlugin
 
     public var id: String { performance.id }
     public var panel: NectoPluginPanel? { performance.panel }
 
     public init(metrics: [NectoMetric] = []) {
-        performance = DefaultPerformancePlugin(metrics: metrics, sampler: NectoProcessSampler())
+        performance = NectoPerformancePlugin(metrics: metrics, sampler: NectoProcessSampler())
     }
 
     public func register(_ necto: NectoHandler) {

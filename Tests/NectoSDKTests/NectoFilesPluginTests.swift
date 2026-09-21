@@ -24,7 +24,7 @@ private func call(
 }
 
 @Suite("Files plugin")
-struct DefaultFilesPluginTests {
+struct NectoFilesPluginTests {
     /// A directory of its own per test, so nothing reads or writes real app data.
     private func makeRoot() throws -> URL {
         let url = FileManager.default.temporaryDirectory
@@ -33,8 +33,8 @@ struct DefaultFilesPluginTests {
         return url
     }
 
-    private func plugin(at root: URL) -> DefaultFilesPlugin {
-        DefaultFilesPlugin(roots: [DefaultFilesPlugin.Root(id: "test", name: "Test", url: root)])
+    private func plugin(at root: URL) -> NectoFilesPlugin {
+        NectoFilesPlugin(roots: [NectoFilesPlugin.Root(id: "test", name: "Test", url: root)])
     }
 
     @Test("lists directories first, then files by name")
@@ -115,7 +115,7 @@ struct DefaultFilesPluginTests {
         let root = try makeRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         // 0xFF is not valid UTF-8, so the fallback path cannot mistake this for text.
-        try Data(repeating: 0xFF, count: DefaultFilesPlugin.imageLimit + 1)
+        try Data(repeating: 0xFF, count: NectoFilesPlugin.imageLimit + 1)
             .write(to: root.appending(path: "huge.png"))
 
         let output = try await call(plugin(at: root), "files.preview", ["root": "test", "path": "huge.png"])
@@ -132,7 +132,7 @@ struct DefaultFilesPluginTests {
         ("archive.zip", nil),
     ] as [(String, String?)])
     func mapsImageExtensions(name: String, expected: String?) {
-        #expect(DefaultFilesPlugin.imageMediaType(for: URL(filePath: "/tmp/\(name)")) == expected)
+        #expect(NectoFilesPlugin.imageMediaType(for: URL(filePath: "/tmp/\(name)")) == expected)
     }
 
     /// A panel that can name any path can read anything the app can, so a path that

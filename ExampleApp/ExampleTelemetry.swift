@@ -10,7 +10,7 @@ import Foundation
 ///
 /// The app explicitly opts into Necto's process sampler.
 enum ExampleTelemetry {
-    static let events = DefaultEventsPlugin()
+    static let events = NectoEventsPlugin()
     static let performance = ProcessPerformancePlugin()
 
     static func start() {

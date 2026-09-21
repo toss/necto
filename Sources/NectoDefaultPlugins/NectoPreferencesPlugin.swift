@@ -12,12 +12,12 @@ import Foundation
 /// register it and it answers, because the store it reads is already there.
 ///
 /// ```swift
-/// NectoSDK.register(DefaultPreferencesPlugin())
+/// NectoSDK.register(NectoPreferencesPlugin())
 /// ```
 ///
 /// A suite can be named for apps that keep their own, and the standard store is always
 /// available under `standard`.
-public final class DefaultPreferencesPlugin: NectoPluginable, @unchecked Sendable {
+public final class NectoPreferencesPlugin: NectoPluginable, @unchecked Sendable {
     /// Enough of a value to recognise a row by. The whole thing is behind `detail`,
     /// because a token or a cached response is not something to put in a list.
     static let previewLimit = 120

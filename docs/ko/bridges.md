@@ -50,7 +50,7 @@ Mac 앱이 제공해요. 따로 언급하지 않았다면 앱 연결 여부와 �
 
 호스트 브리지는 Necto가 보관하거나 접근할 수 있는 데이터를 다뤄요.
 테스트 대상 앱의 데이터는 Necto가 배포하는 기능이어도 앱 브리지로 다뤄요.
-예를 들어 `DefaultNetworkPlugin`은 자신의 계약을 선언하고 앱의 레코드로 응답해요.
+예를 들어 `NectoNetworkPlugin`은 자신의 계약을 선언하고 앱의 레코드로 응답해요.
 호스트 브리지에는 이 플러그인 이름에 의존하는 코드가 없어요.
 
 ### 스토리지 — `necto.desktop.storage.*`
@@ -127,10 +127,10 @@ Mac 앱이 제공해요. 따로 언급하지 않았다면 앱 연결 여부와 �
 
 ### 네트워크 레코드 — `necto.device.network-records.*`
 
-*호스트 브리지가 아니라 앱 브리지예요.* `DefaultNetworkPlugin`이 레코드를
+*호스트 브리지가 아니라 앱 브리지예요.* `NectoNetworkPlugin`이 레코드를
 앱 안에 보관하고 직접 응답해요. 앱이 레코드를 보고하면 패널이 열려 있지 않아도
 수집해요. 나중에 연결해도 보관 중인 레코드를 읽을 수 있어요.
-`DefaultNetworkPlugin`은 최대 2,000개를 보관하고 한도를 넘으면 오래된 것부터 제거해요.
+`NectoNetworkPlugin`은 최대 2,000개를 보관하고 한도를 넘으면 오래된 것부터 제거해요.
 
 | 키 | 종류 | 입력 | 출력 |
 | --- | --- | --- | --- |
@@ -269,7 +269,7 @@ NectoSDK.unregister(id: "com.example.variables")
 발생시키고 모든 빌드에서 거부돼요.
 
 앱 플러그인은 활성 구독의 `NectoHandler.Out`으로 스트림 이벤트를 보내요.
-`DefaultNetworkPlugin.report(_:)`는 앱에 레코드를 저장하고
+`NectoNetworkPlugin.report(_:)`는 앱에 레코드를 저장하고
 `network-records.observe` 구독자에게 변경을 알려요. 패널은
 `necto.device.subscribe("records.observe", ...)`로 구독해요. 이를 위한 공개
 `bridge.emit` API나 기능 전용 호스트 채널 어댑터는 없어요.

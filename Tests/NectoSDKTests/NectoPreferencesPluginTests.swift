@@ -24,7 +24,7 @@ private func call(
 }
 
 @Suite("Preferences plugin")
-struct DefaultPreferencesPluginTests {
+struct NectoPreferencesPluginTests {
     /// A suite of its own, so a test never reads or writes the machine's real defaults.
     private func makeSuite() -> (name: String, defaults: UserDefaults) {
         let name = "necto.tests.\(UUID().uuidString)"
@@ -37,7 +37,7 @@ struct DefaultPreferencesPluginTests {
         defer { UserDefaults.standard.removePersistentDomain(forName: suite.name) }
         suite.defaults.set("dark", forKey: "com.example.theme")
 
-        let plugin = DefaultPreferencesPlugin(suites: [suite.name])
+        let plugin = NectoPreferencesPlugin(suites: [suite.name])
         let output = try await call(plugin, "preferences.list", ["suite": .string(suite.name), "prefix": "com.example"])
 
         let entry = try #require(output["entries"]?.arrayValue?.first)
@@ -49,17 +49,17 @@ struct DefaultPreferencesPluginTests {
     /// `NSNumber` answers to both, and the narrower answer is the true one.
     @Test("tells a Bool from an Int")
     func distinguishesBoolFromInt() {
-        #expect(DefaultPreferencesPlugin.typeName(true) == "Bool")
-        #expect(DefaultPreferencesPlugin.typeName(47) == "Int")
-        #expect(DefaultPreferencesPlugin.typeName(1.5) == "Double")
-        #expect(DefaultPreferencesPlugin.describe(false) == "false")
+        #expect(NectoPreferencesPlugin.typeName(true) == "Bool")
+        #expect(NectoPreferencesPlugin.typeName(47) == "Int")
+        #expect(NectoPreferencesPlugin.typeName(1.5) == "Double")
+        #expect(NectoPreferencesPlugin.describe(false) == "false")
     }
 
     /// Property-list containers may contain values such as `Date` that JSON does not.
     /// Reading preferences must still return a preview instead of terminating the app.
     @Test("describes a property-list container that is not JSON")
     func describesNonJSONPropertyListContainer() {
-        let rendered = DefaultPreferencesPlugin.describe([
+        let rendered = NectoPreferencesPlugin.describe([
             "createdAt": Date(timeIntervalSince1970: 0),
         ])
 
@@ -75,12 +75,12 @@ struct DefaultPreferencesPluginTests {
         let token = String(repeating: "e", count: 400)
         suite.defaults.set(token, forKey: "token")
 
-        let plugin = DefaultPreferencesPlugin(suites: [suite.name])
+        let plugin = NectoPreferencesPlugin(suites: [suite.name])
         let row = try #require(
             try await call(plugin, "preferences.list", ["suite": .string(suite.name)])["entries"]?.arrayValue?
                 .first { $0["key"]?.stringValue == "token" }
         )
-        #expect(row["preview"]?.stringValue?.count == DefaultPreferencesPlugin.previewLimit)
+        #expect(row["preview"]?.stringValue?.count == NectoPreferencesPlugin.previewLimit)
         #expect(row["isTruncated"] == .bool(true))
 
         let detail = try await call(
@@ -95,7 +95,7 @@ struct DefaultPreferencesPluginTests {
     /// only name the ones the app said it keeps.
     @Test("refuses a suite the app never offered")
     func refusesAnUnofferedSuite() async {
-        let plugin = DefaultPreferencesPlugin()
+        let plugin = NectoPreferencesPlugin()
         await #expect(throws: NectoBridgeError.self) {
             try await call(plugin, "preferences.list", ["suite": "group.someone.else"])
         }
@@ -106,7 +106,7 @@ struct DefaultPreferencesPluginTests {
         let suite = makeSuite()
         defer { UserDefaults.standard.removePersistentDomain(forName: suite.name) }
 
-        let plugin = DefaultPreferencesPlugin(suites: [suite.name])
+        let plugin = NectoPreferencesPlugin(suites: [suite.name])
         _ = try await call(plugin, "preferences.set", [
             "suite": .string(suite.name), "key": "launchCount", "value": .number(47),
         ])
@@ -122,7 +122,7 @@ struct DefaultPreferencesPluginTests {
     func keepsTypesAcrossAnEdit() async throws {
         let suite = makeSuite()
         defer { UserDefaults.standard.removePersistentDomain(forName: suite.name) }
-        let plugin = DefaultPreferencesPlugin(suites: [suite.name])
+        let plugin = NectoPreferencesPlugin(suites: [suite.name])
 
         _ = try await call(plugin, "preferences.set", [
             "suite": .string(suite.name), "key": "count", "value": .number(47), "type": "Int",
@@ -140,7 +140,7 @@ struct DefaultPreferencesPluginTests {
 
     @Test("refuses a date that is not one")
     func refusesABadDate() async {
-        let plugin = DefaultPreferencesPlugin()
+        let plugin = NectoPreferencesPlugin()
         await #expect(throws: NectoBridgeError.self) {
             try await call(plugin, "preferences.set", ["key": "when", "value": "yesterday-ish", "type": "Date"])
         }
@@ -148,14 +148,14 @@ struct DefaultPreferencesPluginTests {
 
     @Test("says which stores it can open")
     func listsItsSuites() async throws {
-        let plugin = DefaultPreferencesPlugin(suites: ["group.com.example"])
+        let plugin = NectoPreferencesPlugin(suites: ["group.com.example"])
         let output = try await call(plugin, "preferences.suites")
         #expect(output["suites"]?.arrayValue == [.string("standard"), .string("group.com.example")])
     }
 
     @Test("says so when asked for a key it does not have")
     func unknownKey() async {
-        let plugin = DefaultPreferencesPlugin()
+        let plugin = NectoPreferencesPlugin()
         await #expect(throws: NectoBridgeError.self) {
             try await call(plugin, "preferences.detail", ["key": "nothing-like-this"])
         }

@@ -59,7 +59,7 @@ struct ManifestContractTests {
 
     @Test("what the events plugin returns is what its manifest promised")
     func eventsMatchTheirManifest() async throws {
-        let plugin = DefaultEventsPlugin()
+        let plugin = NectoEventsPlugin()
         let event = NectoEvent(level: .warn, tag: "Cache", message: "evicted", detail: ["freed": "3.2 MB"])
         plugin.report(event)
 
@@ -70,7 +70,7 @@ struct ManifestContractTests {
 
     @Test("what the network plugin returns is what its manifest promised")
     func recordsMatchTheirManifest() async throws {
-        let plugin = DefaultNetworkPlugin()
+        let plugin = NectoNetworkPlugin()
         let record = NectoNetworkRecord(
             id: "r1",
             method: "GET",
@@ -90,7 +90,7 @@ struct ManifestContractTests {
 
     @Test("what the performance plugin returns is what its manifest promised")
     func performanceMatchesItsManifest() async throws {
-        let plugin = DefaultPerformancePlugin(metrics: [
+        let plugin = NectoPerformancePlugin(metrics: [
             NectoMetric(id: "memory", title: "Memory", unit: "MB"),
             NectoMetric(id: "fps", title: "Frame rate", unit: "fps", budget: .atLeast(55)),
         ])
@@ -117,7 +117,7 @@ struct ManifestContractTests {
         defaults.set("dark", forKey: "theme")
         defaults.set(47, forKey: "count")
 
-        let plugin = DefaultPreferencesPlugin(suites: [suiteName])
+        let plugin = NectoPreferencesPlugin(suites: [suiteName])
         let suite: NectoJSONValue = ["suite": .string(suiteName)]
 
         try await check(plugin, "necto.device.preferences.list", in: "preferences", input: suite)
@@ -150,7 +150,7 @@ struct ManifestContractTests {
         defer { try? FileManager.default.removeItem(at: root) }
         try Data("hello".utf8).write(to: root.appending(path: "note.txt"))
 
-        let plugin = DefaultFilesPlugin(roots: [.init(id: "test", name: "Test", url: root)])
+        let plugin = NectoFilesPlugin(roots: [.init(id: "test", name: "Test", url: root)])
         try await check(plugin, "necto.device.files.roots", in: "files")
         try await check(plugin, "necto.device.files.list", in: "files", input: ["root": "test"])
         try await check(plugin, "necto.device.files.preview", in: "files", input: ["root": "test", "path": "note.txt"])

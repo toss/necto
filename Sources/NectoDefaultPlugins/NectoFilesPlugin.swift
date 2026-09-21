@@ -12,10 +12,10 @@ import Foundation
 /// the sandbox is already there.
 ///
 /// ```swift
-/// NectoSDK.register(DefaultFilesPlugin())
-/// NectoSDK.register(DefaultFilesPlugin(groups: ["group.com.example"]))
+/// NectoSDK.register(NectoFilesPlugin())
+/// NectoSDK.register(NectoFilesPlugin(groups: ["group.com.example"]))
 /// ```
-public final class DefaultFilesPlugin: NectoPluginable, @unchecked Sendable {
+public final class NectoFilesPlugin: NectoPluginable, @unchecked Sendable {
     /// Enough of a text file to recognise it by. The point of a preview is to say what
     /// a file is, not to be an editor.
     static let previewLimit = 32 * 1024

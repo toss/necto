@@ -16,7 +16,7 @@ struct ExampleApp: App {
 
         // This app happens to use URLSession, so it registers the plugin with the
         // ready-made capture wired in. An app with its own stack registers
-        // `DefaultNetworkPlugin()` instead and calls `report(_:)` from wherever it
+        // `NectoNetworkPlugin()` instead and calls `report(_:)` from wherever it
         // already knows about a request.
         NectoSDK.register(URLSessionNetworkPlugin())
 
@@ -31,8 +31,8 @@ struct ExampleApp: App {
 
         // These need nothing reported: they read what is already there. The seeds give
         // both panels something real to show on a fresh install.
-        NectoSDK.register(DefaultPreferencesPlugin())
-        NectoSDK.register(DefaultFilesPlugin())
+        NectoSDK.register(NectoPreferencesPlugin())
+        NectoSDK.register(NectoFilesPlugin())
         NectoSDK.register(DefaultViewInspectorPlugin())
         Self.seedPreferences()
         Self.seedFiles()

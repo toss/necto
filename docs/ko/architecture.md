@@ -33,7 +33,7 @@ NectoPluginRegistry
 
 - `once`는 결과를 한 번 반환해요.
 - `stream`은 완료되거나 취소될 때까지 이벤트를 반환해요. 예를 들어
-  `DefaultNetworkPlugin`은 앱에 레코드를 보관하고 `network-records.observe`를
+  `NectoNetworkPlugin`은 앱에 레코드를 보관하고 `network-records.observe`를
   구독 중인 호출자에게 `NectoHandler.Out`으로 변경을 전달해요.
 
 둘 다 같은 공통 메시지를 사용해요. 앱 기능을 추가할 때는 플러그인의 핸들러와

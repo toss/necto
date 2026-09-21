@@ -33,7 +33,7 @@ and receives `plugin.result`, paired by request ID through `NectoDeviceBridgeCli
 
 - `once` returns one result.
 - `stream` returns events until completion or cancellation. For example,
-  `DefaultNetworkPlugin` stores records in the app and sends changes to active
+  `NectoNetworkPlugin` stores records in the app and sends changes to active
   `network-records.observe` subscribers through `NectoHandler.Out`.
 
 Both use the same generic messages. Adding an app feature means adding a plugin's
