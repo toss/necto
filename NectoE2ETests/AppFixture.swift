@@ -16,6 +16,7 @@ final class AppFixture {
     private let logs: URL
     private var publicKey: String?
     private var simulator: String?
+    private var hostCommand: Command?
     private var commands: [Command] = []
 
     init() throws {
@@ -70,6 +71,7 @@ final class AppFixture {
             try await hostStart()
         } else {
             let hostCommand = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
+            self.hostCommand = hostCommand
             try await waitForControlSocket(hostCommand)
         }
         try await launchExample()
@@ -259,10 +261,12 @@ final class AppFixture {
     func finish(_ command: Command, deadline: ContinuousClock.Instant) async throws -> Result {
         while command.process.isRunning {
             if ContinuousClock.now >= deadline {
-                kill(command.process.processIdentifier, SIGKILL)
+                let diagnostics = await captureStalledProcesses(for: command)
+                if command.process.isRunning { kill(command.process.processIdentifier, SIGKILL) }
                 throw Failure(message: """
                     Command timed out: \(command.process.arguments ?? []). Logs: \(logs.path)
                     \(command.logTail())
+                    \(diagnostics.joined(separator: "\n"))
                     """)
             }
             do { try await Task.sleep(for: .milliseconds(50)) }
@@ -272,6 +276,27 @@ final class AppFixture {
             }
         }
         return try command.result()
+    }
+
+    private func captureStalledProcesses(for command: Command) async -> [String] {
+        guard command.process.executableURL?.lastPathComponent == "necto-cli" else { return [] }
+        let processes: [(String, Process)] = [("cli", command.process)] +
+            (hostCommand.map { [("host", $0.process)] } ?? [])
+        var diagnostics: [String] = []
+        for (name, process) in processes where process.isRunning {
+            let path = logs.appending(path: "\(name)-\(command.process.processIdentifier).sample.txt")
+            do {
+                let profiler = try launch(URL(filePath: "/usr/bin/sample"), [
+                    String(process.processIdentifier), "1", "-file", path.path,
+                ])
+                let result = try await finish(profiler, timeout: .seconds(10))
+                diagnostics.append(result.status == 0 ? "Process sample: \(path.path)" :
+                    "Process sample failed: \(result.error)")
+            } catch {
+                diagnostics.append("Process sample failed: \(error)")
+            }
+        }
+        return diagnostics
     }
 
     private func run(_ path: String, _ arguments: [String], timeout: Duration = .seconds(30)) async throws -> Result {
