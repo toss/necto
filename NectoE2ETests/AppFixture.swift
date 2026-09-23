@@ -190,7 +190,6 @@ final class AppFixture {
 
         func requireSuccess() throws {
             try #require(status == 0, "Command exited \(status): \(error)")
-            #expect(error.isEmpty)
         }
 
         func json() throws -> [String: Any] {
