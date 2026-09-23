@@ -407,13 +407,18 @@ public actor NectoConnectionCenter {
         }
         guard !removable.isEmpty else { return }
 
+        var closing: [NectoMessageSession] = []
         for id in removable {
-            connections.removeValue(forKey: id)?.session.close()
+            if let session = connections.removeValue(forKey: id)?.session { closing.append(session) }
             usbDeviceIDs.removeValue(forKey: id)
             localPorts.removeValue(forKey: id)
             devicePorts.removeValue(forKey: id)
         }
         publish()
+        // A slow socket close must not hold the actor that answers CLI target queries.
+        for session in closing {
+            Task.detached(priority: .utility) { session.close() }
+        }
     }
 
     private func removeObserver(_ id: UUID) {
