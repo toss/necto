@@ -58,8 +58,8 @@ CLI로 기기와 플러그인을 조회하고 `plugin help`를 확인해요. Use
 
 CI와 로컬 모두 부팅 상태와 관계없이 `iPhone 17 Pro`를 사용해요. 여러 iOS 버전에
 있으면 최신 버전을 선택하고, 해당 기기가 없으면 바로 실패해요.
-Simulator 앱은 열지 않고 `simctl bootstatus -b`로 부팅을 기다린 뒤 테스트용
-ExampleApp(`im.toss.necto.e2e.example`)을 설치해요. 부팅과 설치에는 합쳐서 10분의
+Simulator 앱은 열지 않고 기기를 조회한 뒤 `simctl bootstatus -b`로 부팅을 기다려요.
+그다음 테스트용 ExampleApp(`im.toss.necto.e2e.example`)을 설치해요. 조회·부팅·설치에는 합쳐서 10분의
 제한 시간을 적용해요. 중단된 실행에서 남은 앱은 덮어쓰고, 검증할 값은 테스트에서 직접 저장해요.
 끝나면 해당 앱과 임시 Mac 홈을 제거해요. 시뮬레이터는 켜둔 채로 유지하며
 초기화하거나 삭제하지 않아요. 다른 앱도 그대로 두어요. 호스트끼리 SDK의
