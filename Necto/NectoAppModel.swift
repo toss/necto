@@ -442,11 +442,11 @@ final class NectoAppModel {
     private func startControlServer() async {
         let server = NectoControlServer(handler: NectoControlBridge(
             registry: registry,
-            connectedApps: { [weak self] in
-                await MainActor.run { self?.connectedApps ?? [] }
+            connectedApps: { [connections] in
+                await connections.connectedApps
             },
-            unauthorizedApps: { [weak self] in
-                await MainActor.run { self?.unauthorizedApps ?? [] }
+            unauthorizedApps: { [connections] in
+                await connections.unauthorizedApps
             },
             install: { [weak self] source in
                 guard let self else {
