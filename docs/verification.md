@@ -75,17 +75,20 @@ test the connection service; the GUI and CLI flow above runs separately.
 
 Both CI and local runs use `iPhone 17 Pro` on the newest available iOS runtime that
 has one, regardless of boot state. If none exists, the test fails immediately.
-It opens Simulator and waits for boot to finish before installing the test ExampleApp
-(`im.toss.necto.e2e.example`). An installation left by an interrupted run is replaced;
+It waits for `simctl bootstatus -b` before installing the test ExampleApp
+(`im.toss.necto.e2e.example`), without opening Simulator.app. Boot and installation
+share a 10-minute preparation deadline, so first-boot services can finish without a
+separate 120-second installation cutoff. An interrupted run's installation is replaced;
 each test writes its own values. The app and temporary Mac home are removed afterward.
 The simulator is left booted; it is never erased or deleted, and other installed apps
 are left intact.
 
-Launching Simulator or ExampleApp and waiting for the Mac host's control socket
-each get a 120-second deadline for cold startup. Connection and plugin readiness
+Launching ExampleApp and waiting for the Mac host's control socket each get a
+120-second deadline for cold startup. Connection and plugin readiness
 checks retain their 30-second deadline. If the host exits during startup, the test
 fails immediately. Startup failures include the host
-output and the last CLI probe's output in the test log.
+output and the last CLI probe's output in the test log. Simulator preparation
+failures include both the boot and installation command output.
 
 Other Necto instances must be closed because hosts share the SDK's loopback ports.
 Waits check observable state with deadlines, not fixed startup delays or performance

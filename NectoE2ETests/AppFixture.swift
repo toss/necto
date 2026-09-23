@@ -47,16 +47,25 @@ final class AppFixture {
         let id = try #require(phone["udid"] as? String)
         try #require(UUID(uuidString: id) != nil)
         print("E2E simulator: iPhone 17 Pro (\(id))")
-        // Pre-created CI devices may still need their first boot; -b also accepts booted devices.
-        let boot = try launch(URL(filePath: "/usr/bin/xcrun"), ["simctl", "bootstatus", id, "-b"])
-        let bootResult = try await finish(boot, timeout: .seconds(600))
-        try #require(bootResult.status == 0, "Simulator boot failed: \(bootResult.error)")
-        // Simulator also boots the selected device, so open it only after simctl has finished booting.
-        _ = try await run("/usr/bin/open", ["-a", "Simulator", "--args", "-CurrentDeviceUDID", id], timeout: .seconds(120))
-        print("E2E: simulator ready")
-        simulator = id
-        _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path], timeout: .seconds(120))
-        print("E2E: Example installed")
+        // First-boot services can still delay installation after bootstatus completes.
+        // Share one preparation deadline; the connection test does not need Simulator.app.
+        let preparationDeadline = ContinuousClock.now + .seconds(600)
+        let preparationStart = commands.count
+        do {
+            _ = try await run("/usr/bin/xcrun", ["simctl", "bootstatus", id, "-b"], deadline: preparationDeadline)
+            print("E2E: simulator booted")
+            simulator = id
+            _ = try await run("/usr/bin/xcrun", ["simctl", "install", id, example.path], deadline: preparationDeadline)
+            print("E2E: Example installed")
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw Failure(message: """
+                Simulator preparation failed: \(error)
+                Preparation command logs:
+                \(commands.dropFirst(preparationStart).map { $0.logTail() }.joined(separator: "\n"))
+                """)
+        }
         if let hostStart {
             try await hostStart()
         } else {
@@ -245,7 +254,10 @@ final class AppFixture {
     }
 
     func finish(_ command: Command, timeout: Duration = .seconds(30)) async throws -> Result {
-        let deadline = ContinuousClock.now + timeout
+        try await finish(command, deadline: ContinuousClock.now + timeout)
+    }
+
+    func finish(_ command: Command, deadline: ContinuousClock.Instant) async throws -> Result {
         while command.process.isRunning {
             if ContinuousClock.now >= deadline {
                 kill(command.process.processIdentifier, SIGKILL)
@@ -264,7 +276,15 @@ final class AppFixture {
     }
 
     private func run(_ path: String, _ arguments: [String], timeout: Duration = .seconds(30)) async throws -> Result {
-        let result = try await finish(launch(URL(filePath: path), arguments), timeout: timeout)
+        try await run(path, arguments, deadline: ContinuousClock.now + timeout)
+    }
+
+    func run(_ path: String, _ arguments: [String], deadline: ContinuousClock.Instant) async throws -> Result {
+        try Task.checkCancellation()
+        guard ContinuousClock.now < deadline else {
+            throw Failure(message: "Command deadline expired before launch: \(path) \(arguments). Logs: \(logs.path)")
+        }
+        let result = try await finish(launch(URL(filePath: path), arguments), deadline: deadline)
         try #require(result.status == 0, "\(path) \(arguments): \(result.error)")
         return result
     }
