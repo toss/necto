@@ -232,3 +232,10 @@
 
 "Search plugins" = "Search plugins";
 "No plugins found" = "No plugins found";
+"Unauthorized" = "Unauthorized";
+"Install this app's connection key on your Mac to start debugging." = "Install this app's connection key on your Mac to start debugging.";
+"Authentication failed. Check that the Mac key matches the app's public key." = "Authentication failed. Check that the Mac key matches the app's public key.";
+"The connection key could not be read. Check your Mac Keychain access." = "The connection key could not be read. Check your Mac Keychain access.";
+"Authentication required" = "Authentication required";
+"Debugging this app is blocked in both Necto and the CLI." = "Debugging this app is blocked in both Necto and the CLI.";
+"Ask the app's maintainer how to set up its connection key on this Mac. Necto reconnects automatically once the correct key is available." = "Ask the app's maintainer how to set up its connection key on this Mac. Necto reconnects automatically once the correct key is available.";

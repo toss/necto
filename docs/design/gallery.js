@@ -245,6 +245,10 @@ const sidebar = (onSettings = false) => `
       ${phoneIcon}<span>iPad Pro 11"</span>
       <span class="necto-trailing">iOS 27.0</span><span class="necto-conn necto-conn-off" title="Not connected"></span>
     </button>
+    <button type="button" class="necto-sidebar-item gallery-unauthorized" aria-label="iPhone 17, Unauthorized" title="Install this app's connection key on your Mac to start debugging.">
+      ${phoneIcon}<span>iPhone 17</span>
+      <span class="necto-trailing">Unauthorized</span><span class="necto-conn necto-conn-denied"></span>
+    </button>
 
     <div class="necto-sidebar-group gallery-plugin-group"><span>Device Plugins</span>${pluginSearchButton}</div>
     <button type="button" class="necto-sidebar-item">${sampleIcon}<span>Plugin Sample</span><span class="necto-trailing">1.0.0</span></button>
@@ -261,6 +265,17 @@ const sidebar = (onSettings = false) => `
       <button type="button" class="necto-sidebar-item" aria-selected="${onSettings}">${gearIcon}<span>Settings</span></button>
     </div>
   </div>`;
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".gallery-unauthorized")) return;
+  window.alert([
+    "Authentication required",
+    "Necto Example\nim.toss.necto.example",
+    "Install this app's connection key on your Mac to start debugging.",
+    "Debugging this app is blocked in both Necto and the CLI.",
+    "Ask the app's maintainer how to set up its connection key on this Mac. Necto reconnects automatically once the correct key is available.",
+  ].join("\n\n"));
+});
 
 const pluginSearch = document.createElement("div");
 pluginSearch.id = "gallery-plugin-search-popover";

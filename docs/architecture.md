@@ -90,6 +90,13 @@ stable one for itself.
 A hello with a different protocol version is rejected. Necto does not negotiate
 protocol versions.
 
+An SDK configured with `start(publicKey:)` first sends public `NectoSecurityOffer`
+metadata, then requires TLS 1.3 with a pinned host public key before the normal hello.
+The Mac selects a Keychain credential by bundle ID. Refused sessions are displayed
+separately from connected targets and never reach plugin registration or dispatch.
+SDKs configured with `start()` keep the existing transport. See
+[connection security](connection-security.md) for roles and trust boundaries.
+
 ## Plugin identity
 
 `NectoApp` owns one `NectoAppModel`, including the registry, control server, installer,

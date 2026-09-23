@@ -62,7 +62,10 @@ struct Device: AsyncParsableCommand {
                 let targets = groups[id] ?? []
                 return ["id": .string(id), "name": targets.first?["deviceName"] ?? .string(id),
                         "apps": .array(targets.map {
-                            ["bundleID": $0["appBundleID"] ?? .null, "name": $0["appName"] ?? .null]
+                            var app: [String: NectoJSONValue] = ["bundleID": $0["appBundleID"] ?? .null, "name": $0["appName"] ?? .null]
+                            if let status = $0["status"] { app["status"] = status }
+                            if let reason = $0["reason"] { app["reason"] = reason }
+                            return .object(app)
                         }.sorted { ($0["bundleID"]?.stringValue ?? "") < ($1["bundleID"]?.stringValue ?? "") })]
             })]
         }
@@ -75,7 +78,8 @@ struct Device: AsyncParsableCommand {
             for device in devices {
                 print(displayText("\(device["id"]?.stringValue ?? "?")  \(device["name"]?.stringValue ?? "")"))
                 for app in device["apps"]?.arrayValue ?? [] {
-                    print(displayText("  \(app["bundleID"]?.stringValue ?? "?")  \(app["name"]?.stringValue ?? "")"))
+                    let status = app["status"] == "unauthorized" ? "  [unauthorized]" : ""
+                    print(displayText("  \(app["bundleID"]?.stringValue ?? "?")  \(app["name"]?.stringValue ?? "")\(status)"))
                 }
             }
         }

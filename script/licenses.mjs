@@ -31,12 +31,29 @@ async function notices(sections) {
 export async function writeAppNotices(app) {
   const peerTalkLicense = await readFile(join(root, "LICENSES/PeerTalk.txt"), "utf8");
   const swiftLicense = await readFile(join(root, "NectoMac/.build/checkouts/swift-argument-parser/LICENSE.txt"), "utf8");
+  const boringSSLRevision = "817ab07ebb53da35afea409ab9328f578492832d";
+  const sslManifest = await readFile(join(root, "NectoMac/.build/checkouts/swift-nio-ssl/Package.swift"), "utf8");
+  // swift-nio-ssl links to BoringSSL's license but omits its text from the checkout.
+  if (!sslManifest.includes(`// BoringSSL Commit: ${boringSSLRevision}\n`)) {
+    throw new Error("BoringSSL revision changed. Review and update its supplemental license before packaging.");
+  }
+  const boringSSLLicense = await readFile(join(root, "script/licenses/BoringSSL-817ab07.txt"), "utf8");
+  const transportLicenses = await Promise.all([
+    "swift-nio", "swift-nio-ssl", "swift-atomics", "swift-collections", "swift-system",
+  ].map(async name => {
+    const directory = join(root, "NectoMac/.build/checkouts", name);
+    const license = await readFile(join(directory, "LICENSE.txt"), "utf8");
+    const notice = ["swift-nio", "swift-nio-ssl"].includes(name)
+      ? await readFile(join(directory, "NOTICE.txt"), "utf8") : "";
+    return `${name}\n\n${license}\n${notice}`;
+  }));
   const vite = await packageNotice(dirname(require.resolve("vite/package.json")));
   const resources = join(app, "Contents/Resources");
   await mkdir(resources, { recursive: true });
   await writeFile(join(resources, "THIRD_PARTY_NOTICES.txt"), await notices([
     `PeerTalk — https://github.com/rsms/peertalk\n\n${peerTalkLicense}`,
-    `swift-argument-parser\n\n${swiftLicense}`, vite,
+    `swift-argument-parser\n\n${swiftLicense}`, ...transportLicenses,
+    `BoringSSL ${boringSSLRevision}\n\n${boringSSLLicense}`, vite,
   ]));
 }
 

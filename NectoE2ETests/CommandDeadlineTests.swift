@@ -8,6 +8,13 @@ import Testing
 @Suite("E2E command deadlines", .serialized)
 @MainActor
 struct CommandDeadlineTests {
+    @Test("successful commands may write diagnostics to stderr")
+    func successfulCommandWithStderr() throws {
+        let result = AppFixture.Result(status: 0, output: "ok", error: "warning")
+        try result.requireSuccess()
+        #expect(result.error == "warning")
+    }
+
     @Test("an exhausted preparation budget does not launch the next command")
     func expiredBeforeLaunch() async throws {
         let app = try AppFixture()

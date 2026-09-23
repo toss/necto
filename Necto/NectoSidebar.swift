@@ -294,6 +294,69 @@ struct AppHeader: View {
     }
 }
 
+struct UnauthorizedDeviceRow: View {
+    let device: NectoUnauthorizedApp
+    let scale: CGFloat
+
+    @State private var isShowingGuidance = false
+    @State private var isHovering = false
+
+    var body: some View {
+        Button { isShowingGuidance = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: device.connection == .simulator ? "laptopcomputer.and.iphone" : "iphone")
+                    .foregroundStyle(NectoTheme.textTertiary)
+                    .frame(width: 16)
+                Text(device.deviceName)
+                    .foregroundStyle(NectoTheme.textSecondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                Spacer(minLength: 6)
+                Text("Unauthorized")
+                    .font(.necto(.caption, scale: scale))
+                    .foregroundStyle(NectoTheme.textTertiary)
+                    .lineLimit(1)
+                Circle().fill(NectoTheme.danger).frame(width: 6, height: 6)
+            }
+            .font(.necto(.label, scale: scale))
+            .padding(.horizontal, 8)
+            .frame(height: NectoTheme.rowHeight * scale)
+            .background(isHovering ? NectoTheme.hover : .clear, in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .onHover { isHovering = $0 }
+        .help(tooltip)
+        .accessibilityLabel(device.deviceName + ", " + NectoL10n.text("Unauthorized"))
+        .accessibilityIdentifier("unauthorized-" + device.id)
+        .alert("Authentication required", isPresented: $isShowingGuidance) {
+            Button("Done", role: .cancel) {}
+        } message: {
+            Text([
+                device.appName + "\n" + device.appBundleID,
+                failureReason,
+                NectoL10n.text("Debugging this app is blocked in both Necto and the CLI."),
+                NectoL10n.text("Ask the app's maintainer how to set up its connection key on this Mac. Necto reconnects automatically once the correct key is available."),
+            ].joined(separator: "\n\n"))
+        }
+    }
+
+    private var failureReason: String {
+        let reason: String
+        switch device.reason {
+        case .missingKey: reason = "Install this app's connection key on your Mac to start debugging."
+        case .rejectedKey: reason = "Authentication failed. Check that the Mac key matches the app's public key."
+        case .credentialUnavailable: reason = "The connection key could not be read. Check your Mac Keychain access."
+        }
+        return NectoL10n.text(reason)
+    }
+
+    private var tooltip: String {
+        [NectoL10n.text("Unauthorized"), device.appBundleID, failureReason].joined(separator: "\n")
+    }
+}
+
 /// One device the app is running on. Selecting it is what points a plugin somewhere.
 struct DeviceRow: View {
     let device: NectoConnectedApp

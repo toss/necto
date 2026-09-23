@@ -29,7 +29,7 @@ struct ConnectionView: View {
 
                 Section {
                     Button("Stop listening") { NectoSDK.stop() }
-                    Button("Start listening") { NectoSDK.start() }
+                    Button("Start listening") { ExampleApp.startNecto() }
                 } footer: {
                     Text("Necto reaches this app over USB on a device, and over loopback in a simulator.")
                 }

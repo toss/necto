@@ -49,8 +49,14 @@ public enum NectoSDK {
     public static var plugins: [any NectoPluginable] { runtime.plugins }
 
     /// Starts listening. Safe to call at app start up; it does not block the caller.
-    public static func start(port: UInt16 = NectoDeviceListener.defaultPort) {
-        runtime.start(port: port)
+    public static func start() {
+        runtime.start(port: NectoDeviceListener.defaultPort)
+    }
+
+    /// Requires a host holding the private key for this Base64 P-256 public key.
+    /// Invalid keys fail startup; authentication failures never fall back to plaintext.
+    public static func start(publicKey: String) {
+        runtime.start(port: NectoDeviceListener.defaultPort, publicKey: publicKey)
     }
 
     public static func stop() {

@@ -159,6 +159,10 @@ struct ContentView: View {
                     }
                     .plainRow()
                 }
+                ForEach(app.unauthorized) { device in
+                    UnauthorizedDeviceRow(device: device, scale: scale)
+                        .plainRow()
+                }
             }
 
             if !window.activeDevicePlugins.isEmpty || !window.disabledDevicePlugins.isEmpty {
