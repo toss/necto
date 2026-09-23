@@ -16,6 +16,7 @@ struct ConnectionTests {
         do {
             try await app.start()
             try await app.waitForPlugins()
+            try await waitForPreferencesReady(app)
 
             let onceHelp = try await app.json(["plugin", "help", "preferences", "preferences.detail", "--json"])
             let once = try #require(onceHelp["operation"] as? [String: Any])
@@ -47,6 +48,7 @@ struct ConnectionTests {
 
             try await app.launchExample()
             try await app.waitForPlugins()
+            try await waitForPreferencesReady(app)
             try await checkOnce(app)
             try await checkStream(app)
         } catch {
@@ -117,6 +119,16 @@ struct ConnectionTests {
         _ = try await host.invoke("preferences.set", input: ["key": "necto.e2e.security", "value": value], target: target)
         let result = try await host.invoke("preferences.detail", input: ["key": "necto.e2e.security"], target: target)
         #expect(result["entry"]?["value"] == value)
+    }
+
+    private func waitForPreferencesReady(_ app: AppFixture) async throws {
+        // Registration can arrive while a cold simulator is still unable to answer a device call.
+        try await app.wait("preferences provider readiness", timeout: .seconds(120)) {
+            let result = try await app.cli(["plugin", "send", "preferences", "preferences.suites"])
+            if result.status == 0 { return true }
+            try #require(result.error.hasPrefix("Error: TIMEOUT:"), "Unexpected provider response: \(result.error)")
+            return false
+        }
     }
 
     private func checkOnce(_ app: AppFixture) async throws {
