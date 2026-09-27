@@ -212,13 +212,34 @@ struct FailureTests {
         }
     }
 
-    @Test("buffer limits reject a stalled reader")
+    @Test("buffer limits reject excess data even with a pending read")
     func bufferLimit() async throws {
         try await withSockets(limit: 64) { pair in
             let reading = Task { try await pair.host.read(count: 64) }
-            try await pair.device.write(Data(repeating: 7, count: 65))
+            try await pair.device.write(Data(repeating: 7, count: 129))
             await #expect(throws: NectoSecurityError.bufferLimit) { _ = try await reading.value }
             await #expect(throws: NectoSecurityError.bufferLimit) { _ = try await pair.host.read(count: 1) }
+        }
+    }
+
+    @Test("a maximum-size TLS frame followed by another frame preserves both messages", arguments: [false, true], [false, true])
+    func maximumFrameBoundary(sentByDevice: Bool, closeAfterWrite: Bool) async throws {
+        let fixture = try CredentialFixture()
+        try await withSockets(tcp: true) { pair in
+            let (device, host) = try await secureSessions(pair, identity: fixture.identity)
+            let sender = sentByDevice ? device : host
+            let receiver = sentByDevice ? host : device
+            let large = Data(repeating: 0x71, count: NectoMessageSession.maximumMessageBytes)
+            let following = Data("following frame".utf8)
+            let sending = Task {
+                try await sender.send(large)
+                try await sender.send(following)
+                if closeAfterWrite { sender.close() }
+            }
+            defer { sending.cancel() }
+            #expect(try await receiver.receive() == large)
+            #expect(try await receiver.receive() == following)
+            try await sending.value
         }
     }
 

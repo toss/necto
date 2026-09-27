@@ -158,11 +158,19 @@ public final class NectoTLSStream: NectoByteStream, @unchecked Sendable {
     fileprivate func receive(_ data: Data) {
         let overflow = lock.withLock {
             guard failure == nil, !reachedEOF else { return false }
-            guard data.count <= limit - buffer.count else { return true }
-            buffer.append(data)
-            if let pending, buffer.count >= pending.count {
+            if let pending, data.count >= pending.count - buffer.count {
+                let needed = pending.count - buffer.count
+                // One TLS read can finish a maximum-size frame and begin the next.
+                // Deliver the pending read before applying the limit to unread bytes.
+                guard data.count - needed <= limit else { return true }
+                buffer.append(data.prefix(needed))
+                let result = Data(buffer)
+                buffer = Data(data.dropFirst(needed))
                 self.pending = nil
-                pending.continuation.resume(returning: consume(pending.count))
+                pending.continuation.resume(returning: result)
+            } else {
+                guard data.count <= limit - buffer.count else { return true }
+                buffer.append(data)
             }
             return false
         }
