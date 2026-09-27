@@ -21,20 +21,20 @@ NectoPluginRegistry
          ↕ NectoDeviceBridgeClient / session
        usbmuxd (device) · loopback (simulator)
          ↕ NectoSDK
-       NectoPluginable → NectoHandler (in the iOS app)
+       NectoPlugin → NectoRegistrar (in the iOS app)
 ```
 
 플러그인은 자기 매니페스트에 있는 오퍼레이션 id를 호출해요. 런타임은
 이름·버전·종류를 프로바이더 디스크립터와 대조하고 매니페스트에 따라 입력을
 검증한 뒤 프로바이더를 호출해요. 셸 프로바이더는 호출자의 셸 권한도 확인해요.
 
-앱 플러그인은 `NectoHandler`로 핸들러를 등록해요. 호스트는 `plugin.invoke`를
+앱 플러그인은 `NectoRegistrar`로 핸들러를 등록해요. 호스트는 `plugin.invoke`를
 보내고 `plugin.result`를 받아요. `NectoDeviceBridgeClient`가 요청 ID로 응답을 연결해요.
 
 - `once`는 결과를 한 번 반환해요.
 - `stream`은 완료되거나 취소될 때까지 이벤트를 반환해요. 예를 들어
   `NectoNetworkPlugin`은 앱에 레코드를 보관하고 `network-records.observe`를
-  구독 중인 호출자에게 `NectoHandler.Out`으로 변경을 전달해요.
+  구독 중인 호출자에게 `NectoRegistrar.Out`으로 변경을 전달해요.
 
 둘 다 같은 공통 메시지를 사용해요. 앱 기능을 추가할 때는 플러그인의 핸들러와
 매니페스트 바인딩을 추가하며 기능 전용 호스트 어댑터나 와이어 메시지는 필요 없어요.

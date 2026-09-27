@@ -353,7 +353,7 @@ func dropsWhatABrowserAppendsToAnAddress(_ text: String) throws {
 /// The public GitHub written the other ways a person writes it. Read as somewhere
 /// private, each one sends someone to install gh for a repository that needs nothing.
 @Test(arguments: ["https://www.github.com/toss/toss-necto", "https://github.com./toss/toss-necto"])
-func recognisesThePublicHostHoweverItIsSpelled(_ text: String) throws {
+func recognizesThePublicHostHoweverItIsSpelled(_ text: String) throws {
     #expect(try Source.repository(from: text).isPublic)
 }
 

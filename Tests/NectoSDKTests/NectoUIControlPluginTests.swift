@@ -9,7 +9,7 @@ import Testing
 @testable import NectoSDK
 
 private func call(_ plugin: NectoUIControlPlugin, _ name: String, _ input: NectoJSONValue = [:]) async throws -> NectoJSONValue {
-    let collector = NectoHandler()
+    let collector = NectoRegistrar()
     plugin.register(collector)
     guard case let .once(body)? = collector.registrations["necto.device.control.\(name)@1"]?.body else {
         throw NectoBridgeError(code: .operationUnavailable, message: name)
@@ -132,7 +132,7 @@ struct NectoUIControlPluginTests {
 
     @Test("only the control contract is registered")
     func contract() {
-        let collector = NectoHandler()
+        let collector = NectoRegistrar()
         plugin([]).register(collector)
         #expect(Set(collector.registrations.keys) == [
             "necto.device.control.actionTargets@1", "necto.device.control.readAccessibility@1", "necto.device.control.tap@1",

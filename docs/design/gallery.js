@@ -121,9 +121,9 @@ document.getElementById("events").innerHTML = `
     <div class="necto-detail-body"><dl class="necto-pairs"><div><dt>freed</dt><dd>3.2 MB</dd></div><div><dt>count</dt><dd>240</dd></div></dl></div>
   </aside>`;
 
-const spark = (points, colour) => `
+const spark = (points, color) => `
   <svg class="necto-spark" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true">
-    <polyline points="${points}" fill="none" stroke="${colour}" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+    <polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" />
   </svg>`;
 
 document.getElementById("performance").innerHTML = `

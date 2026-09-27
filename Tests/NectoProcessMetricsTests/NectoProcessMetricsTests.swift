@@ -10,11 +10,11 @@ import Testing
 @testable import NectoSDK
 
 private func answer(
-    _ plugin: any NectoPluginable,
+    _ plugin: any NectoPlugin,
     _ key: String,
     _ input: NectoJSONValue = [:]
 ) async throws -> NectoJSONValue {
-    let collector = NectoHandler()
+    let collector = NectoRegistrar()
     plugin.register(collector)
     guard case let .once(body)? = collector.registrations["\(key)@1"]?.body else {
         throw NectoBridgeError(code: .operationUnavailable, message: key)

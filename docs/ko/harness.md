@@ -23,7 +23,7 @@ Web plugin (manifest.json + JS)        dynamic, installed at runtime
 Mac host  ── runtime ──┬─ host bridge      storage, targets, shell
                        └─ app bridge ──┐   contracts a connected app registers
                                        ▼
-                              USB ── NectoSDK ── NectoPluginable
+                              USB ── NectoSDK ── NectoPlugin
                                                   the app's own permission
 ```
 
@@ -38,11 +38,11 @@ Mac host  ── runtime ──┬─ host bridge      storage, targets, shell
 | `NectoSDK`에 속하는 것 | 속하지 않는 것 |
 | --- | --- |
 | 리스닝, 핸드셰이크, 세션 | 개별 기능 구현 |
-| `NectoPluginable`, `NectoHandler` | `URLProtocol`, 뷰 워커, 플래그 저장소 |
+| `NectoPlugin`, `NectoRegistrar` | `URLProtocol`, 뷰 워커, 플래그 저장소 |
 | 계약 키에 따른 라우팅 | 개별 계약 키의 동작 구현 |
 | 다섯 가지 `plugin.*` 메시지 종류 | 새 기능을 위한 여섯 번째 종류 |
 
-새 권한은 별도 모듈에 `NectoPluginable`을 구현해 추가해요. 와이어 메시지 종류나
+새 권한은 별도 모듈에 `NectoPlugin`을 구현해 추가해요. 와이어 메시지 종류나
 `NectoSDKRuntime` 코드를 추가하지 않아요.
 
 **검사** — Swift 패키지의 실제 의존성과 SDK만 추가한 앱의 연결을 확인해요.
@@ -82,7 +82,7 @@ NectoURLSessionCapture    // one implementation, its own module, opt-in
 | 정체 | `manifest.json` + JS | 앱에 컴파일되는 Swift |
 | 추가 시점 | 런타임에 | 빌드 타임에 |
 | 선언하는 것 | 오퍼레이션 | 계약 |
-| 대화 방식 | `necto.device.send(...)` / `necto.desktop.send(...)` | `NectoPluginable` + `NectoHandler` |
+| 대화 방식 | `necto.device.send(...)` / `necto.desktop.send(...)` | `NectoPlugin` + `NectoRegistrar` |
 | 허용 범위 | 사용자가 승인한 권한 | 앱이 이미 할 수 있는 모든 것 |
 
 웹 플러그인은 자신의 오퍼레이션 id로 호출해요. 브리지 키, 디바이스 id,

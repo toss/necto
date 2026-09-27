@@ -26,7 +26,7 @@ Web plugin (manifest.json + JS)        dynamic, added like an Obsidian plugin
 Mac host  ── runtime ──┬─ host bridge      storage, targets, shell
                        └─ app bridge ──┐   contracts a connected app registers
                                        ▼
-                              USB ── NectoSDK ── NectoPluginable
+                              USB ── NectoSDK ── NectoPlugin
                                                   the app's own permission
 ```
 
@@ -42,11 +42,11 @@ in separate plugin modules.
 | Belongs in `NectoSDK` | Does not |
 | --- | --- |
 | Listening, handshake, session | Feature implementations |
-| `NectoPluginable`, `NectoHandler` | A `URLProtocol`, a view walker, a flag store |
+| `NectoPlugin`, `NectoRegistrar` | A `URLProtocol`, a view walker, a flag store |
 | Routing by contract key | Implementing individual contracts |
 | The five `plugin.*` message kinds | A sixth kind for a new feature |
 
-A new permission adds an `NectoPluginable` implementation in its own module. It never adds a wire message
+A new permission adds a `NectoPlugin` implementation in its own module. It never adds a wire message
 kind, and it never adds a line to `NectoSDKRuntime`.
 
 **Check:** test the evaluated Swift package dependencies and the SDK-only consumer.
@@ -86,7 +86,7 @@ mechanism is always a separate target.
 | Is | `manifest.json` + JS | Swift compiled into the app |
 | Added | at runtime | at build time |
 | Declares | operations | contracts |
-| Talks | `necto.device.send(...)` / `necto.desktop.send(...)` | `NectoPluginable` + `NectoHandler` |
+| Talks | `necto.device.send(...)` / `necto.desktop.send(...)` | `NectoPlugin` + `NectoRegistrar` |
 | Granted | permissions the user approves | whatever the app already can do |
 
 A web plugin calls its own operation id. It never sees a bridge key, a device id, a

@@ -11,14 +11,14 @@ import Testing
 
 /// Runs a plugin's registration the way the runtime does, so a test can call what it
 /// registered without a socket.
-private func registrations(of plugin: any NectoPluginable) -> [String: NectoHandler.Registration] {
-    let collector = NectoHandler()
+private func registrations(of plugin: any NectoPlugin) -> [String: NectoRegistrar.Registration] {
+    let collector = NectoRegistrar()
     plugin.register(collector)
     return collector.registrations
 }
 
 private func answer(
-    _ plugin: any NectoPluginable,
+    _ plugin: any NectoPlugin,
     _ key: String,
     _ input: NectoJSONValue = [:]
 ) async throws -> NectoJSONValue {
@@ -117,10 +117,10 @@ private func makeRecord(id: String = "record-1", url: String = "https://example.
 }
 
 /// The other half of the bridge: a plugin that waits to be asked.
-private struct ContractPlugin: NectoPluginable {
+private struct ContractPlugin: NectoPlugin {
     let id = "com.example.stub"
 
-    func register(_ necto: NectoHandler) {
+    func register(_ necto: NectoRegistrar) {
         necto.handle("com.example.variables") { input in
             ["echoed": input["value"] ?? .null]
         }
@@ -144,9 +144,9 @@ private struct ContractPlugin: NectoPluginable {
     #expect(runtime.plugins.count == 1)
 }
 
-private struct DuplicatePlugin: NectoPluginable {
+private struct DuplicatePlugin: NectoPlugin {
     let id = "com.example.stub"
-    func register(_ necto: NectoHandler) {
+    func register(_ necto: NectoRegistrar) {
         Issue.record("A duplicate plugin must be rejected before its registration runs")
     }
 }
@@ -168,11 +168,11 @@ private struct DuplicatePlugin: NectoPluginable {
     #expect(runtime.plugins.isEmpty)
 }
 
-private struct RepeatedContractPlugin: NectoPluginable {
+private struct RepeatedContractPlugin: NectoPlugin {
     let id: String
     var repeatInsidePlugin = false
 
-    func register(_ necto: NectoHandler) {
+    func register(_ necto: NectoRegistrar) {
         necto.handle("shared.contract") { input in input }
         if repeatInsidePlugin { necto.handle("shared.contract") { input in input } }
     }

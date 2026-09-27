@@ -28,7 +28,7 @@ import Foundation
 /// Shipped with Necto, and still an ordinary plugin: it declares contracts and answers
 /// them, exactly as one written in an app would. Nothing on the Mac side knows this
 /// plugin exists.
-public final class NectoNetworkPlugin: NectoPluginable, NectoNetworkReporting, @unchecked Sendable {
+public final class NectoNetworkPlugin: NectoPlugin, NectoNetworkReporting, @unchecked Sendable {
     /// Keeps memory bounded on a long session. Older records fall off the end.
     public static let capacity = 2000
 
@@ -39,11 +39,11 @@ public final class NectoNetworkPlugin: NectoPluginable, NectoNetworkReporting, @
 
     private let lock = NSLock()
     private var records: [NectoNetworkRecord] = []
-    private var observers: [UUID: NectoHandler.Out] = [:]
+    private var observers: [UUID: NectoRegistrar.Out] = [:]
 
     public init() {}
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle("network-records.list") { [self] input in
             let limit = Int(input["limit"]?.numberValue ?? 200)
             let page = lock.withLock { Array(records.prefix(limit)) }
@@ -84,7 +84,7 @@ public final class NectoNetworkPlugin: NectoPluginable, NectoNetworkReporting, @
     /// Send a record twice to show progress, once when the request starts and once
     /// when it ends, keeping the same `id`. Necto replaces rather than appends.
     public func report(_ record: NectoNetworkRecord) {
-        let listeners = lock.withLock { () -> [NectoHandler.Out] in
+        let listeners = lock.withLock { () -> [NectoRegistrar.Out] in
             if let index = records.firstIndex(where: { $0.id == record.id }) {
                 records[index] = record
             } else {

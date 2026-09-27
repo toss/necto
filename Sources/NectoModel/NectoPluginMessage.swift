@@ -87,10 +87,14 @@ public struct NectoPluginResult: Sendable, Hashable, Codable {
 }
 
 /// Host to app. Ends a stream the host no longer reads.
-public struct NectoPluginCancel: Sendable, Hashable, Codable {
+public struct NectoPluginCancellation: Sendable, Hashable, Codable {
     public let requestID: String
 
     public init(requestID: String) {
         self.requestID = requestID
     }
 }
+
+/// Use `NectoPluginCancellation` for cancellation messages.
+@available(*, deprecated, renamed: "NectoPluginCancellation")
+public typealias NectoPluginCancel = NectoPluginCancellation

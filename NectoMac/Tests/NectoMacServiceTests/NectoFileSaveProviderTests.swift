@@ -56,7 +56,7 @@ struct NectoFileSaveProviderTests {
 
     /// The name is content, not a path: whatever it says, the file stays in the folder.
     @Test("a name cannot climb out of the folder")
-    func sanitisesNames() async throws {
+    func sanitizesNames() async throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
         let provider = NectoFileSaveProvider(directory: directory)
