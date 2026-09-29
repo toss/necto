@@ -68,7 +68,8 @@ final class AppFixture {
         }
         let hostCommand = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
         try await waitForControlSocket(hostCommand)
-        try await launchExample()
+        // The first launch can still wait for services settling after a cold boot.
+        try await launchExample(timeout: .seconds(300))
     }
 
     // A cold AppKit launch on CI can outlast the operation-level deadline.
@@ -100,8 +101,8 @@ final class AppFixture {
         }
     }
 
-    func launchExample() async throws {
-        _ = try await run("/usr/bin/xcrun", ["simctl", "launch", try #require(simulator), Self.exampleID], timeout: .seconds(120))
+    func launchExample(timeout: Duration = .seconds(120)) async throws {
+        _ = try await run("/usr/bin/xcrun", ["simctl", "launch", try #require(simulator), Self.exampleID], timeout: timeout)
     }
 
     func terminateExample() async throws {

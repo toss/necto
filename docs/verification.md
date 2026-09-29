@@ -76,8 +76,11 @@ each test writes its own values. The app and temporary Mac home are removed afte
 The simulator is left booted; it is never erased or deleted, and other installed apps
 are left intact.
 
-Launching ExampleApp and waiting for the Mac host's control socket each get a
-120-second deadline for cold startup. Connection and plugin readiness
+The first ExampleApp launch gets a 300-second deadline for services settling after
+a cold boot. Relaunching ExampleApp and waiting for the Mac host's control socket
+each retain a 120-second deadline. The connection test has a 20-minute limit, and
+its CI job has a 25-minute limit to allow for test-runner startup and diagnostics.
+Connection and plugin readiness
 checks retain their 30-second deadline. If the host exits during startup, the test
 fails immediately. Startup failures include the host
 output and the last CLI probe's output in the test log. Simulator preparation
