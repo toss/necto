@@ -70,6 +70,10 @@ dependencies and inspect the actual Release output for remaining code and resour
 
 ## What connecting involves
 
+Internal apps can require a provisioned Mac key with `NectoSDK.start(publicKey:)`.
+See [optional connection authentication](connection-security.md) for setup, TLS,
+compatibility, and security boundaries.
+
 - **Simulator**: the Mac reaches the app over loopback.
 - **Device**: over the USB cable, through `usbmuxd`.
 - The SDK listens on a local TCP port. If another simulator app holds it, the SDK

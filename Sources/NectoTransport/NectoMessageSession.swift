@@ -37,6 +37,26 @@ public final class NectoMessageSession: @unchecked Sendable {
         stream.close()
     }
 
+    /// Call only between completed messages, with no concurrent reader or writer.
+    /// The returned session exclusively owns the socket, even if TLS fails.
+    public func upgradingTLS(_ role: NectoTLSStream.Role) async throws -> NectoMessageSession {
+        let descriptor = try receiveLock.withLock {
+            guard !receiving else { throw Failure.concurrentReceive }
+            guard let source = stream as? any NectoSocketTransferring else {
+                throw NectoSecurityError.unsupportedNegotiation
+            }
+            return try source.takeSocketDescriptor()
+        }
+        let secured = try await NectoTLSStream.adopt(descriptor: descriptor)
+        do {
+            try await secured.startTLS(role)
+            return NectoMessageSession(stream: secured)
+        } catch {
+            secured.close()
+            throw error
+        }
+    }
+
     /// Sends one message, framed as a 4 byte big endian length followed by the payload.
     public func send(_ message: Data) async throws {
         guard message.count <= Self.maximumMessageBytes else {

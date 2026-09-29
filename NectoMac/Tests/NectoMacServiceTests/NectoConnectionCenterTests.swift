@@ -9,6 +9,34 @@ import Testing
 
 @testable import NectoMacService
 
+private func signalled(_ semaphore: DispatchSemaphore, within seconds: Int) -> Bool {
+    semaphore.wait(timeout: .now() + .seconds(seconds)) == .success
+}
+
+private final class DelayedCloseStream: NectoByteStream, @unchecked Sendable {
+    let entered = DispatchSemaphore(value: 0)
+    let release = DispatchSemaphore(value: 0)
+    private let base: NectoSocketStream
+    private let lock = NSLock()
+    private var closing = false
+
+    init(descriptor: Int32) { base = NectoSocketStream(descriptor: descriptor) }
+
+    func write(_ data: Data) async throws { try await base.write(data) }
+    func read(count: Int) async throws -> Data { try await base.read(count: count) }
+    func close() {
+        let first = lock.withLock {
+            guard !closing else { return false }
+            closing = true
+            return true
+        }
+        guard first else { return }
+        entered.signal()
+        release.wait()
+        base.close()
+    }
+}
+
 @Suite("Which ports a transport dials")
 struct NectoConnectionCenterTests {
     @Test("a port range near UInt16.max is clipped rather than overflowing")
@@ -55,6 +83,51 @@ struct NectoConnectionCenterTests {
 
 @Suite("Host connection lifecycle", .timeLimit(.minutes(1)))
 struct NectoHostConnectionLifecycleTests {
+    @Test("a slow socket close cannot block target discovery after disconnect")
+    func targetDiscoveryDuringClose() async throws {
+        let center = NectoConnectionCenter()
+        var descriptors: [Int32] = [-1, -1]
+        try #require(socketpair(AF_UNIX, SOCK_STREAM, 0, &descriptors) == 0)
+        let app = NectoMessageSession(stream: NectoSocketStream(descriptor: descriptors[0]))
+        let delayed = DelayedCloseStream(descriptor: descriptors[1])
+        let host = NectoMessageSession(stream: delayed)
+        defer {
+            delayed.release.signal()
+            app.close()
+            host.close()
+        }
+
+        let accepting = Task {
+            try await center.accept(session: host, deviceID: "simulator", connection: .simulator, usbDeviceID: nil)
+        }
+        try await app.send(NectoHandshakeHello(
+            appBundleID: "com.example.close", appName: "Close test", appVersion: "1.0.0",
+            deviceName: "Test simulator", sdkVersion: "0.4.2", simulatorID: "test-simulator"
+        ))
+        #expect(try await app.receive(NectoHandshakeAck.self).accepted)
+        let reader = try #require(try await accepting.value)
+        app.close()
+
+        let closing = await Task.detached {
+            signalled(delayed.entered, within: 5)
+        }.value
+        try #require(closing, "The host did not start closing the disconnected socket")
+
+        let answered = DispatchSemaphore(value: 0)
+        let discovery = Task.detached {
+            let apps = await center.connectedApps
+            answered.signal()
+            return apps
+        }
+        let responsive = await Task.detached {
+            signalled(answered, within: 3)
+        }.value
+        delayed.release.signal()
+        #expect(responsive, "Target discovery waited for socket close")
+        #expect(await discovery.value.isEmpty)
+        await reader.value
+    }
+
     @Test("a silent hello is bounded by the production handshake deadline")
     func silentHandshake() async throws {
         let center = NectoConnectionCenter()

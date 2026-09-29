@@ -12,6 +12,7 @@ public enum NectoBridgeErrorCode: String, Sendable, Codable, CaseIterable {
     case operationNotFound = "OPERATION_NOT_FOUND"
     case operationUnavailable = "OPERATION_UNAVAILABLE"
     case permissionDenied = "PERMISSION_DENIED"
+    case unauthorized = "UNAUTHORIZED"
     case targetDisconnected = "TARGET_DISCONNECTED"
     case timeout = "TIMEOUT"
     case cancelled = "CANCELLED"

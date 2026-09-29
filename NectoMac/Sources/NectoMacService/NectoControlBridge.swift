@@ -10,12 +10,14 @@ import Foundation
 public struct NectoControlBridge: NectoControlHandling {
     private let registry: NectoPluginRegistry
     private let connectedApps: @Sendable () async -> [NectoConnectedApp]
+    private let unauthorizedApps: @Sendable () async -> [NectoUnauthorizedApp]
     private let install: @Sendable (NectoPluginInstallSource) async throws -> NectoJSONValue
     private let delete: @Sendable (String) async throws -> NectoJSONValue
 
     public init(
         registry: NectoPluginRegistry,
         connectedApps: @escaping @Sendable () async -> [NectoConnectedApp],
+        unauthorizedApps: @escaping @Sendable () async -> [NectoUnauthorizedApp] = { [] },
         install: @escaping @Sendable (NectoPluginInstallSource) async throws -> NectoJSONValue = { _ in
             throw NectoBridgeError(code: .operationUnavailable, message: "Plugin installation is unavailable.")
         },
@@ -25,6 +27,7 @@ public struct NectoControlBridge: NectoControlHandling {
     ) {
         self.registry = registry
         self.connectedApps = connectedApps
+        self.unauthorizedApps = unauthorizedApps
         self.install = install
         self.delete = delete
     }
@@ -37,14 +40,23 @@ public struct NectoControlBridge: NectoControlHandling {
 
     public func targets() async -> NectoJSONValue {
         let apps = await connectedApps()
-        return ["targets": .array(apps.sorted { $0.id < $1.id }.map { app in
+        let connected: [NectoJSONValue] = apps.sorted { $0.id < $1.id }.map { app in
             [
                 "appBundleID": .string(app.appBundleID),
                 "appName": .string(app.appName),
                 "deviceID": .string(app.target.deviceID),
                 "deviceName": .string(app.deviceName),
+                "status": "connected",
             ]
-        })]
+        }
+        let denied: [NectoJSONValue] = await unauthorizedApps().filter { blocked in
+            !apps.contains { $0.target == blocked.target }
+        }.map { app in
+            ["appBundleID": .string(app.appBundleID), "appName": .string(app.appName),
+             "deviceID": .string(app.target.deviceID), "deviceName": .string(app.deviceName),
+             "status": "unauthorized", "reason": .string(app.reason.rawValue)]
+        }
+        return ["targets": .array(connected + denied)]
     }
 
     public func plugins(
@@ -148,6 +160,9 @@ public struct NectoControlBridge: NectoControlHandling {
             throw NectoBridgeError(code: .invalidInput, message: "Pass both --device and --app, or --desktop. Run necto device list. Connected targets: \(candidates.isEmpty ? "none" : candidates)")
         }
         let matches = apps.filter { $0.appBundleID == app && $0.target.deviceID == device }
+        if matches.isEmpty, await unauthorizedApps().contains(where: { $0.appBundleID == app && $0.target.deviceID == device }) {
+            throw NectoBridgeError(code: .unauthorized, message: "Authentication is required for '\(app)' on '\(device)'. Set up this app's key on this Mac.")
+        }
         guard matches.count == 1, let match = matches.first else {
             throw NectoBridgeError(code: .targetDisconnected, message: "No unique connected app '\(app)' on device '\(device)'. Run necto device list.")
         }

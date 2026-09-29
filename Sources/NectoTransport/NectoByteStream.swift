@@ -12,11 +12,22 @@ public protocol NectoByteStream: Sendable {
     func close()
 }
 
+/// Transfers an idle socket to another transport. The old stream must not be used afterwards.
+public protocol NectoSocketTransferring: NectoByteStream {
+    func takeSocketDescriptor() throws -> Int32
+}
+
 /// Adapts asynchronous Dispatch I/O to Swift concurrency.
-public final class NectoSocketStream: NectoByteStream, @unchecked Sendable {
+public final class NectoSocketStream: NectoSocketTransferring, @unchecked Sendable {
     public enum Failure: Error, CustomStringConvertible {
         case closed
-        public var description: String { "The connection closed" }
+        case busy
+        public var description: String {
+            switch self {
+            case .closed: "The connection closed"
+            case .busy: "The socket still has pending I/O"
+            }
+        }
     }
 
     private let descriptor: Int32
@@ -24,6 +35,7 @@ public final class NectoSocketStream: NectoByteStream, @unchecked Sendable {
     private let queue = DispatchQueue(label: "im.toss.necto.socket")
     private let lock = NSLock()
     private var closed = false
+    private var pendingIO = 0
 
     /// Takes ownership of a connected descriptor, including its eventual close.
     public init(descriptor: Int32) {
@@ -36,6 +48,30 @@ public final class NectoSocketStream: NectoByteStream, @unchecked Sendable {
     }
 
     deinit { close() }
+
+    public func takeSocketDescriptor() throws -> Int32 {
+        let transferred = try lock.withLock {
+            guard !closed else { throw Failure.closed }
+            guard pendingIO == 0 else { throw Failure.busy }
+            let duplicate = fcntl(descriptor, F_DUPFD_CLOEXEC, 0)
+            guard duplicate >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            closed = true
+            return duplicate
+        }
+        // DispatchIO still owns the original descriptor. Close it without shutdown,
+        // which would also shut down the duplicate now owned by TLS.
+        channel.close(flags: .stop)
+        return transferred
+    }
+
+    private func beginIO() throws {
+        try lock.withLock {
+            guard !closed else { throw Failure.closed }
+            pendingIO += 1
+        }
+    }
+
+    private func endIO() { lock.withLock { pendingIO -= 1 } }
 
     public func close() {
         lock.withLock {
@@ -50,6 +86,8 @@ public final class NectoSocketStream: NectoByteStream, @unchecked Sendable {
     public func write(_ data: Data) async throws {
         try await withTaskCancellationHandler {
             try Task.checkCancellation()
+            try beginIO()
+            defer { endIO() }
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
                 let bytes = data.withUnsafeBytes { DispatchData(bytes: $0) }
                 channel.write(offset: 0, data: bytes, queue: queue) { done, _, error in
@@ -67,6 +105,8 @@ public final class NectoSocketStream: NectoByteStream, @unchecked Sendable {
         guard count > 0 else { return Data() }
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
+            try beginIO()
+            defer { endIO() }
             let data = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, any Error>) in
                 let buffer = ReadBuffer()
                 channel.read(offset: 0, length: count, queue: queue) { done, bytes, error in

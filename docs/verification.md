@@ -64,12 +64,21 @@ events as JSONL (`stream`). It then terminates ExampleApp during a live subscrip
 checks that the CLI exits with an error and the target disappears, and relaunches
 ExampleApp to repeat both operations without restarting Necto.
 
+Security cases run the simulator SDK against `NectoConnectionCenter`, with its
+credential lookup supplied by the test. They use a disposable Keychain and real
+TLS connections, without changing the GUI's startup code or the user's Keychain.
+They cover no public key, matching keys, missing keys, and mismatched keys.
+Rejected apps must expose no plugins or accept commands, including after relaunch.
+Installing a missing key must allow automatic reconnection. Successful cases also
+write and read a value through the SDK before and after reconnecting. These cases
+test the connection service; the GUI and CLI flow above runs separately.
+
 Both CI and local runs use `iPhone 17 Pro` on the newest available iOS runtime that
 has one, regardless of boot state. If none exists, the test fails immediately.
-It waits for `simctl bootstatus -b` before installing the test ExampleApp
-(`im.toss.necto.e2e.example`), without opening Simulator.app. Boot and installation
-share a 10-minute preparation deadline, so first-boot services can finish without a
-separate 120-second installation cutoff. An interrupted run's installation is replaced;
+It discovers the simulator, waits for `simctl bootstatus -b`, then installs the test
+ExampleApp (`im.toss.necto.e2e.example`) without opening Simulator.app. Discovery,
+boot, and installation share a 10-minute preparation deadline, so cold-start services
+can finish within one bounded budget. An interrupted run's installation is replaced;
 each test writes its own values. The app and temporary Mac home are removed afterward.
 The simulator is left booted; it is never erased or deleted, and other installed apps
 are left intact.
@@ -79,7 +88,7 @@ Launching ExampleApp and waiting for the Mac host's control socket each get a
 checks retain their 30-second deadline. If the host exits during startup, the test
 fails immediately. Startup failures include the host
 output and the last CLI probe's output in the test log. Simulator preparation
-failures include both the boot and installation command output.
+failures include discovery, boot, and installation command output.
 
 Other Necto instances must be closed because hosts share the SDK's loopback ports.
 Waits check observable state with deadlines, not fixed startup delays or performance
@@ -108,8 +117,7 @@ xcrun simctl launch <device-id> im.toss.necto.example
 
 The app shows the listening port, and the Mac app lists it under the sidebar within a
 couple of seconds. `lsof -nP -iTCP:9979-9986 -sTCP:LISTEN` checks the default SDK
-port range when it does not appear. If you configured another base port, check that
-range instead.
+port range when it does not appear. The public SDK API selects its port automatically.
 
 For concurrent connections, launch SDK-enabled apps on two booted simulators. The
 SDK chooses a free port within the eight-port range and the Mac probes all eight.

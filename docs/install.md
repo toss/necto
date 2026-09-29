@@ -28,7 +28,7 @@ compromised repository account; the release repository is the trust source.
 
 ## Source build requirements
 
-- macOS 14 or later, with an Xcode toolchain that provides Swift 6.0 or later.
+- macOS 14 or later, with an Xcode toolchain that provides Swift 6.1 or later.
 - Node.js 22.12.0 or later and Yarn 4.6.0 to run `script/build`.
 
 ## Build and launch

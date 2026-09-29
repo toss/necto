@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 
 import PackageDescription
 
@@ -14,10 +14,20 @@ let package = Package(
             "NectoURLSessionCapture", "NectoModel", "NectoTransport",
         ]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", exact: "2.37.5"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.98.0"),
+    ],
     targets: [
         .target(name: "NectoModel"),
         .target(
-            name: "NectoTransport"
+            name: "NectoTransport",
+            dependencies: [
+                .product(name: "NIOSSL", package: "swift-nio-ssl"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
+                .product(name: "NIOTLS", package: "swift-nio"),
+            ]
         ),
         .target(
             name: "NectoSDK",

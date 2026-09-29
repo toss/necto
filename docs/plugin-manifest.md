@@ -331,6 +331,7 @@ before it is delivered to the caller.
 | `OPERATION_UNAVAILABLE` | Not usable in the current state or surface |
 | `PERMISSION_DENIED` | The caller's identity or shell policy does not allow the request |
 | `TARGET_DISCONNECTED` | No connected app is selected, or it disconnected |
+| `UNAUTHORIZED` | The selected app requires a valid Mac connection key |
 | `TIMEOUT` | The provider exceeded `timeoutMs` |
 | `CANCELLED` | The call was cancelled |
 | `PROVIDER_FAILED` | The provider raised an error |

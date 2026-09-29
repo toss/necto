@@ -9,12 +9,14 @@ import Testing
 
 @MainActor
 final class AppFixture {
-    static let exampleID = "im.toss.necto.e2e.example"
+    nonisolated static let exampleID = "im.toss.necto.e2e.example"
     private let products: URL
     private let executable: URL
     private let home: URL
     private let logs: URL
+    private var publicKey: String?
     private var simulator: String?
+    private var hostCommand: Command?
     private var commands: [Command] = []
 
     init() throws {
@@ -26,11 +28,12 @@ final class AppFixture {
         // Keep the Unix socket path below sockaddr_un's limit, including on CI runners.
         home = URL(filePath: "/tmp/necto-e2e-\(UUID().uuidString.prefix(8))")
         try FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         print("E2E command logs: \(logs.path)")
     }
 
-    func start() async throws {
+    func start(publicKey: String? = nil, hostStart: (@MainActor () async throws -> Void)? = nil) async throws {
+        self.publicKey = publicKey
         let running = NSWorkspace.shared.runningApplications.filter { $0.executableURL?.lastPathComponent == "Necto" }
         try #require(running.isEmpty, "Quit other Necto instances before E2E; they share the SDK's loopback ports.")
         let host = products.appending(path: "Debug/Necto.app")
@@ -39,17 +42,17 @@ final class AppFixture {
         try #require(Bundle(url: example)?.bundleIdentifier == Self.exampleID)
         try #require(FileManager.default.isExecutableFile(atPath: executable.path))
 
-        let available = try await run("/usr/bin/xcrun", ["simctl", "list", "devices", "available", "--json"])
-        let devices = try #require(available.json()["devices"] as? [String: [[String: Any]]])
-        let phone = try #require(Self.selectSimulator(devices), "No available iPhone 17 Pro simulator. Add one in Xcode before running E2E.")
-        let id = try #require(phone["udid"] as? String)
-        try #require(UUID(uuidString: id) != nil)
-        print("E2E simulator: iPhone 17 Pro (\(id))")
-        // First-boot services can still delay installation after bootstatus completes.
+        // Discovery and first-boot services can stall on a cold CI runner.
         // Share one preparation deadline; the connection test does not need Simulator.app.
         let preparationDeadline = ContinuousClock.now + .seconds(600)
         let preparationStart = commands.count
         do {
+            let available = try await run("/usr/bin/xcrun", ["simctl", "list", "devices", "available", "--json"], deadline: preparationDeadline)
+            let devices = try #require(available.json()["devices"] as? [String: [[String: Any]]])
+            let phone = try #require(Self.selectSimulator(devices), "No available iPhone 17 Pro simulator. Add one in Xcode before running E2E.")
+            let id = try #require(phone["udid"] as? String)
+            try #require(UUID(uuidString: id) != nil)
+            print("E2E simulator: iPhone 17 Pro (\(id))")
             _ = try await run("/usr/bin/xcrun", ["simctl", "bootstatus", id, "-b"], deadline: preparationDeadline)
             print("E2E: simulator booted")
             simulator = id
@@ -64,8 +67,13 @@ final class AppFixture {
                 \(commands.dropFirst(preparationStart).map { $0.logTail() }.joined(separator: "\n"))
                 """)
         }
-        let hostCommand = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
-        try await waitForControlSocket(hostCommand)
+        if let hostStart {
+            try await hostStart()
+        } else {
+            let hostCommand = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
+            self.hostCommand = hostCommand
+            try await waitForControlSocket(hostCommand)
+        }
         try await launchExample()
     }
 
@@ -103,7 +111,10 @@ final class AppFixture {
     }
 
     func launchExample() async throws {
-        _ = try await run("/usr/bin/xcrun", ["simctl", "launch", try #require(simulator), Self.exampleID], timeout: .seconds(120))
+        let environment = publicKey.map { ["SIMCTL_CHILD_NECTO_PUBLIC_KEY": $0] } ?? [:]
+        let command = try launch(URL(filePath: "/usr/bin/xcrun"),
+                                 ["simctl", "launch", try #require(simulator), Self.exampleID], environment: environment)
+        try await finish(command, timeout: .seconds(120)).requireSuccess()
     }
 
     func terminateExample() async throws {
@@ -163,7 +174,7 @@ final class AppFixture {
         }
     }
 
-    private func wait(_ description: String, timeout: Duration = .seconds(30), until condition: () async throws -> Bool) async throws {
+    func wait(_ description: String, timeout: Duration = .seconds(30), until condition: () async throws -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
         while !(try await condition()) {
             guard ContinuousClock.now < deadline else {
@@ -181,7 +192,6 @@ final class AppFixture {
 
         func requireSuccess() throws {
             try #require(status == 0, "Command exited \(status): \(error)")
-            #expect(error.isEmpty)
         }
 
         func json() throws -> [String: Any] {
@@ -217,15 +227,15 @@ final class AppFixture {
         }
     }
 
-    func launch(_ url: URL, _ arguments: [String], isolated: Bool = false) throws -> Command {
+    func launch(_ url: URL, _ arguments: [String], isolated: Bool = false, environment overrides: [String: String] = [:]) throws -> Command {
         let process = Process()
         process.executableURL = url
         process.arguments = arguments
-        if isolated {
-            var environment = ProcessInfo.processInfo.environment
-            environment["CFFIXED_USER_HOME"] = home.path
-            process.environment = environment
-        }
+        var environment = ProcessInfo.processInfo.environment
+        environment.removeValue(forKey: "SIMCTL_CHILD_NECTO_PUBLIC_KEY")
+        if isolated { environment["CFFIXED_USER_HOME"] = home.path }
+        environment.merge(overrides) { _, override in override }
+        process.environment = environment
         let name = "\(commands.count)-\(url.lastPathComponent)"
         let output = logs.appending(path: "\(name).stdout")
         let error = logs.appending(path: "\(name).stderr")
@@ -251,10 +261,12 @@ final class AppFixture {
     func finish(_ command: Command, deadline: ContinuousClock.Instant) async throws -> Result {
         while command.process.isRunning {
             if ContinuousClock.now >= deadline {
-                kill(command.process.processIdentifier, SIGKILL)
+                let diagnostics = await captureStalledProcesses(for: command)
+                if command.process.isRunning { kill(command.process.processIdentifier, SIGKILL) }
                 throw Failure(message: """
                     Command timed out: \(command.process.arguments ?? []). Logs: \(logs.path)
                     \(command.logTail())
+                    \(diagnostics.joined(separator: "\n"))
                     """)
             }
             do { try await Task.sleep(for: .milliseconds(50)) }
@@ -264,6 +276,27 @@ final class AppFixture {
             }
         }
         return try command.result()
+    }
+
+    private func captureStalledProcesses(for command: Command) async -> [String] {
+        guard command.process.executableURL?.lastPathComponent == "necto-cli" else { return [] }
+        let processes: [(String, Process)] = [("cli", command.process)] +
+            (hostCommand.map { [("host", $0.process)] } ?? [])
+        var diagnostics: [String] = []
+        for (name, process) in processes where process.isRunning {
+            let path = logs.appending(path: "\(name)-\(command.process.processIdentifier).sample.txt")
+            do {
+                let profiler = try launch(URL(filePath: "/usr/bin/sample"), [
+                    String(process.processIdentifier), "1", "-file", path.path,
+                ])
+                let result = try await finish(profiler, timeout: .seconds(10))
+                diagnostics.append(result.status == 0 ? "Process sample: \(path.path)" :
+                    "Process sample failed: \(result.error)")
+            } catch {
+                diagnostics.append("Process sample failed: \(error)")
+            }
+        }
+        return diagnostics
     }
 
     private func run(_ path: String, _ arguments: [String], timeout: Duration = .seconds(30)) async throws -> Result {

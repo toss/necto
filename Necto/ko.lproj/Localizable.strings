@@ -232,3 +232,10 @@
 
 "Search plugins" = "플러그인 검색";
 "No plugins found" = "검색 결과가 없어요";
+"Unauthorized" = "인증되지 않음";
+"Install this app's connection key on your Mac to start debugging." = "디버깅을 시작하려면 Mac에 이 앱의 연결 키를 설치하세요.";
+"Authentication failed. Check that the Mac key matches the app's public key." = "인증에 실패했어요. Mac의 키가 앱의 공개키와 일치하는지 확인하세요.";
+"The connection key could not be read. Check your Mac Keychain access." = "연결 키를 읽지 못했어요. Mac 키체인 접근 권한을 확인하세요.";
+"Authentication required" = "연결 인증이 필요해요";
+"Debugging this app is blocked in both Necto and the CLI." = "Necto와 CLI에서 이 앱을 디버깅할 수 없어요.";
+"Ask the app's maintainer how to set up its connection key on this Mac. Necto reconnects automatically once the correct key is available." = "설정 방법은 앱 담당자에게 문의하세요. 이 Mac에 올바른 연결 키를 설정하면 자동으로 다시 연결돼요.";

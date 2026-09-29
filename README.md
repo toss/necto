@@ -30,7 +30,7 @@ Download the DMG from [Releases](https://github.com/toss/necto/releases) and
 drag Necto into Applications. See the [installation guide](docs/install.md) for
 checksum verification and the app's ad-hoc signing policy.
 
-Building from source requires macOS 14 or later, Xcode with Swift 6.0 or later,
+Building from source requires macOS 14 or later, Xcode with Swift 6.1 or later,
 Node.js 22.12 or later and Yarn 4.6.0. The iOS SDK supports iOS 16 or later.
 
 ```bash

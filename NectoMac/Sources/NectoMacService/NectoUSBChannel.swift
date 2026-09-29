@@ -7,14 +7,13 @@ import NectoTransport
 
 /// A connection to the usbmuxd unix socket.
 ///
-/// Mirrors `PTUSBChannel` in PeerTalk (`PTUSBHub.m`), ported to Swift so this package
-/// stays dependency free. Names are kept close to the original so upstream changes
-/// remain easy to follow.
+/// Mirrors `PTUSBChannel` in PeerTalk (`PTUSBHub.m`). Names stay close to the original
+/// so upstream changes remain easy to follow.
 ///
 /// usbmuxd frames every control message as a 16 byte header followed by a plist.
 /// After a successful `Connect` the same socket becomes a raw pipe to the device,
 /// which is why raw reads and writes stay available once the control phase ends.
-final class NectoUSBChannel: NectoByteStream, @unchecked Sendable {
+final class NectoUSBChannel: NectoSocketTransferring, @unchecked Sendable {
     enum Failure: Error, CustomStringConvertible {
         case cannotOpen(String)
         case closed
@@ -43,6 +42,10 @@ final class NectoUSBChannel: NectoByteStream, @unchecked Sendable {
 
     func close() {
         stream.close()
+    }
+
+    func takeSocketDescriptor() throws -> Int32 {
+        try stream.takeSocketDescriptor()
     }
 
     // MARK: Control phase
