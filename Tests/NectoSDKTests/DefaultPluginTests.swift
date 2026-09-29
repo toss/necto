@@ -11,14 +11,14 @@ import Testing
 
 /// Runs a plugin's registration the way the runtime does, so a test can call what it
 /// registered without a socket.
-private func handlers(of plugin: any NectoPluginable) -> [String: NectoHandler.Registration] {
-    let collector = NectoHandler()
+private func handlers(of plugin: any NectoPlugin) -> [String: NectoRegistrar.Registration] {
+    let collector = NectoRegistrar()
     plugin.register(collector)
     return collector.registrations
 }
 
 private func answer(
-    _ plugin: any NectoPluginable,
+    _ plugin: any NectoPlugin,
     _ key: String,
     _ input: NectoJSONValue = [:]
 ) async throws -> NectoJSONValue {
@@ -284,7 +284,7 @@ struct NectoPerformancePluginTests {
             Issue.record("performance.observe is not a stream")
             return
         }
-        let out = NectoHandler.Out(yield: { _ in })
+        let out = NectoRegistrar.Out(yield: { _ in })
 
         let first = Task { try await body(["interval": 0.1], out) }
         #expect(await eventually { sampler.counts.starts == 1 })

@@ -158,7 +158,7 @@ covers when `binding.version` moves.
 
 ## Answering on the device
 
-[`NectoPluginable`](https://github.com/toss/necto/blob/main/Sources/NectoSDK/NectoPluginable.swift)
+[`NectoPlugin`](https://github.com/toss/necto/blob/main/Sources/NectoSDK/NectoPlugin.swift)
 requires you to implement `id` and `register(_:)`. Its `panel` property defaults to
 `nil`; plugins with a panel override it to point to the `Panel` directory in the
 module's resources.
@@ -171,7 +171,7 @@ import NectoModel
 import NectoSDK
 
 /// How long the app has been running, asked once or watched live.
-public struct UptimePlugin: NectoPluginable {
+public struct UptimePlugin: NectoPlugin {
     public let id = "uptime"
 
     private let startedAt = Date()
@@ -180,7 +180,7 @@ public struct UptimePlugin: NectoPluginable {
 
     public init() {}
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle("uptime.get") { _ in
             [
                 "startedAt": .string(ISO8601DateFormatter().string(from: startedAt)),

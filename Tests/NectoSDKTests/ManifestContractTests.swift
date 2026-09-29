@@ -37,14 +37,14 @@ struct ManifestContractTests {
     /// Runs one operation the way the runtime does and checks the result against the
     /// schema the manifest promised for it.
     private func check(
-        _ plugin: any NectoPluginable,
+        _ plugin: any NectoPlugin,
         _ key: String,
         in manifest: String,
         input: NectoJSONValue = [:]
     ) async throws {
         let operation = try #require(try operations(of: manifest)[key], "\(key) is not in the manifest")
 
-        let collector = NectoHandler()
+        let collector = NectoRegistrar()
         plugin.register(collector)
         guard case let .once(body)? = collector.registrations["\(key)@1"]?.body else {
             Issue.record("\(key) is not a once-and-done handler")

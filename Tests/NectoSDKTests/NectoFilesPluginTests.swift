@@ -11,11 +11,11 @@ import Testing
 
 /// Runs a plugin's registration the way the runtime does.
 private func call(
-    _ plugin: any NectoPluginable,
+    _ plugin: any NectoPlugin,
     _ name: String,
     _ input: NectoJSONValue = [:]
 ) async throws -> NectoJSONValue {
-    let collector = NectoHandler()
+    let collector = NectoRegistrar()
     plugin.register(collector)
     guard case let .once(body)? = collector.registrations["necto.device.\(name)@1"]?.body else {
         throw NectoBridgeError(code: .operationUnavailable, message: name)

@@ -30,10 +30,10 @@ private final class FakeApp: NectoDeviceMessenger, @unchecked Sendable {
             .compactMap { try? $0.decode(NectoPluginInvocation.self) }
     }
 
-    func cancels() -> [NectoPluginCancel] {
+    func cancels() -> [NectoPluginCancellation] {
         envelopes
             .filter { $0.type == .pluginCancel }
-            .compactMap { try? $0.decode(NectoPluginCancel.self) }
+            .compactMap { try? $0.decode(NectoPluginCancellation.self) }
     }
 
     /// Waits for the host to have sent an invocation, since it is sent from a task.

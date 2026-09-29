@@ -22,7 +22,7 @@ func sdkConsumer() throws {
     let events = NectoEventsPlugin()
     let performance = ProcessPerformancePlugin()
     let network = URLSessionNetworkPlugin()
-    for plugin in [events as any NectoPluginable, performance, network] {
+    for plugin in [events as any NectoPlugin, performance, network] {
         let panel = try #require(plugin.panel)
         #expect(FileManager.default.fileExists(atPath: panel.root.appendingPathComponent("index.html").path))
     }

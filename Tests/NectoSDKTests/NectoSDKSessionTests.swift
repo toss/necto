@@ -8,12 +8,12 @@ import NectoTransport
 import Testing
 @testable import NectoSDK
 
-private struct SessionPlugin: NectoPluginable {
+private struct SessionPlugin: NectoPlugin {
     let id = "com.example.session-tests"
     let started: AsyncStream<String>.Continuation
     let cancelled: AsyncStream<String>.Continuation
 
-    func register(_ necto: NectoHandler) {
+    func register(_ necto: NectoRegistrar) {
         necto.handle("session.echo") { input in input }
         necto.handle("session.wait") { input in
             let id = input["id"]?.stringValue ?? ""
@@ -34,11 +34,11 @@ private struct SessionPlugin: NectoPluginable {
     }
 }
 
-private struct CatalogPlugin: NectoPluginable {
+private struct CatalogPlugin: NectoPlugin {
     let id = "com.example.catalog"
     let version: Int
 
-    func register(_ necto: NectoHandler) {
+    func register(_ necto: NectoRegistrar) {
         necto.handle("catalog.echo", version: version) { $0 }
     }
 }
@@ -221,7 +221,7 @@ struct NectoSDKSessionTests {
         defer { host.close(); harness.runtime.stop(); worker.cancel() }
         try await host.handshake(timeout: .seconds(3)) {
             try await invoke(host, id: "cancelled", name: "wait")
-            try await host.send(NectoEnvelope(type: .pluginCancel, encoding: NectoPluginCancel(requestID: "cancelled")))
+            try await host.send(NectoEnvelope(type: .pluginCancel, encoding: NectoPluginCancellation(requestID: "cancelled")))
             try await invoke(host, id: "echo", name: "echo")
             let reply = try await result(host)
             #expect(reply.requestID == "echo")

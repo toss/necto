@@ -86,7 +86,7 @@ public actor NectoDeviceBridgeClient {
         continuation.resume(throwing: CancellationError())
 
         // The app may still be alive and merely slow; telling it saves it the work.
-        let cancel = NectoPluginCancel(requestID: requestID)
+        let cancel = NectoPluginCancellation(requestID: requestID)
         try? await messenger.send(NectoEnvelope(type: .pluginCancel, encoding: cancel), to: target)
     }
 
@@ -170,7 +170,7 @@ public actor NectoDeviceBridgeClient {
         guard streams.removeValue(forKey: requestID) != nil else { return }
         targets.removeValue(forKey: requestID)
 
-        let cancel = NectoPluginCancel(requestID: requestID)
+        let cancel = NectoPluginCancellation(requestID: requestID)
         try? await messenger.send(NectoEnvelope(type: .pluginCancel, encoding: cancel), to: target)
     }
 

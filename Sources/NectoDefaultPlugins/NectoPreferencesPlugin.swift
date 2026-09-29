@@ -17,7 +17,7 @@ import Foundation
 ///
 /// A suite can be named for apps that keep their own, and the standard store is always
 /// available under `standard`.
-public final class NectoPreferencesPlugin: NectoPluginable, @unchecked Sendable {
+public final class NectoPreferencesPlugin: NectoPlugin, @unchecked Sendable {
     /// Enough of a value to recognise a row by. The whole thing is behind `detail`,
     /// because a token or a cached response is not something to put in a list.
     static let previewLimit = 120
@@ -35,7 +35,7 @@ public final class NectoPreferencesPlugin: NectoPluginable, @unchecked Sendable 
         self.suites = suites
     }
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle("preferences.list") { [self] input in
             let defaults = try store(named: input["suite"]?.stringValue)
             let prefix = input["prefix"]?.stringValue ?? ""

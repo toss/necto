@@ -110,7 +110,7 @@ public protocol NectoPerformanceSampling: AnyObject, Sendable {
 ///
 /// performance.report(148, for: "memory")
 /// ```
-public final class NectoPerformancePlugin: NectoPluginable, NectoPerformanceReporting, @unchecked Sendable {
+public final class NectoPerformancePlugin: NectoPlugin, NectoPerformanceReporting, @unchecked Sendable {
     /// About twenty minutes at one reading a second. Enough to see a trend, bounded
     /// enough that an app running all day does not grow without limit.
     public static let capacity = 1200
@@ -124,7 +124,7 @@ public final class NectoPerformancePlugin: NectoPluginable, NectoPerformanceRepo
     private let monitor: NectoPerformanceMonitor?
     private let lock = NSLock()
     private var samples: [String: [NectoSample]] = [:]
-    private var listeners: [UUID: NectoHandler.Out] = [:]
+    private var listeners: [UUID: NectoRegistrar.Out] = [:]
 
     public init(metrics: [NectoMetric]) {
         self.metrics = metrics
@@ -141,7 +141,7 @@ public final class NectoPerformancePlugin: NectoPluginable, NectoPerformanceRepo
         monitor = NectoPerformanceMonitor(sampler: sampler)
     }
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle("performance.metrics") { [self] _ in
             ["metrics": .array(metrics.map(Self.describe))]
         }
@@ -214,7 +214,7 @@ public final class NectoPerformancePlugin: NectoPluginable, NectoPerformanceRepo
         guard let metric = metrics.first(where: { $0.id == metricID }) else { return }
 
         let sample = NectoSample(value: value)
-        let out = lock.withLock { () -> [NectoHandler.Out] in
+        let out = lock.withLock { () -> [NectoRegistrar.Out] in
             samples[metricID, default: []].append(sample)
             if samples[metricID]!.count > Self.capacity {
                 samples[metricID]!.removeFirst(samples[metricID]!.count - Self.capacity)

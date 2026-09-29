@@ -223,10 +223,10 @@ appBundleID)`로 범위가 한정돼요. 선택된 타깃이 없는 호출은 �
 앱은 핸들러를 등록해서 이를 선언해요.
 
 ```swift
-struct VariablesPlugin: NectoPluginable {
+struct VariablesPlugin: NectoPlugin {
     let id = "com.example.variables"
 
-    func register(_ necto: NectoHandler) {
+    func register(_ necto: NectoRegistrar) {
         necto.handle("variables.list") { input in
             ["variables": …]
         }
@@ -268,7 +268,7 @@ NectoSDK.unregister(id: "com.example.variables")
 등록 해제한 뒤 새 구현을 등록하세요. 중복 등록은 디버그 빌드에서 assertion을
 발생시키고 모든 빌드에서 거부돼요.
 
-앱 플러그인은 활성 구독의 `NectoHandler.Out`으로 스트림 이벤트를 보내요.
+앱 플러그인은 활성 구독의 `NectoRegistrar.Out`으로 스트림 이벤트를 보내요.
 `NectoNetworkPlugin.report(_:)`는 앱에 레코드를 저장하고
 `network-records.observe` 구독자에게 변경을 알려요. 패널은
 `necto.device.subscribe("records.observe", ...)`로 구독해요. 이를 위한 공개

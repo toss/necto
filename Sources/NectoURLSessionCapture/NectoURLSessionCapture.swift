@@ -18,7 +18,7 @@ import Foundation
 /// Capture starts when the plugin is registered — the two are one decision, so they
 /// are one line. An app that reports some requests itself as well reaches the plugin
 /// through `network`.
-public struct URLSessionNetworkPlugin: NectoPluginable {
+public struct URLSessionNetworkPlugin: NectoPlugin {
     public let network = NectoNetworkPlugin()
 
     public var id: String { network.id }
@@ -27,7 +27,7 @@ public struct URLSessionNetworkPlugin: NectoPluginable {
 
     public init() {}
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         network.register(necto)
         NectoURLSessionCapture.install(reporting: network)
     }
@@ -43,7 +43,7 @@ public struct URLSessionNetworkPlugin: NectoPluginable {
 /// `URLSessionNetworkPlugin` above is the one-liner; these entry points are for an
 /// app that pairs the capture with a reporter of its own.
 public enum NectoURLSessionCapture {
-    /// Starts capturing. Records go to `plugin` until `remove()` is called.
+    /// Starts capturing. Records go to `reporter` until `uninstall()` is called.
     ///
     /// This installs a `URLProtocol` into the app's loading system, which affects
     /// sessions built from `URLSessionConfiguration.default`. Sessions the app
@@ -55,8 +55,13 @@ public enum NectoURLSessionCapture {
         NectoNetworkObserver.start { record in reporter.report(record) }
     }
 
-    public static func remove() {
+    public static func uninstall() {
         NectoNetworkObserver.stop()
+    }
+
+    @available(*, deprecated, renamed: "uninstall()")
+    public static func remove() {
+        uninstall()
     }
 
     /// For apps that build their own `URLSessionConfiguration`.
