@@ -4,7 +4,7 @@
 
 import NectoSDK
 
-public struct __PLUGIN_MODULE__: NectoPluginable {
+public struct __PLUGIN_MODULE__: NectoPlugin {
     public let id = "__PLUGIN_ID__"
 
     public init() {}
@@ -13,7 +13,7 @@ public struct __PLUGIN_MODULE__: NectoPluginable {
         NectoPluginPanel(bundle: .module)
     }
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle(
             "message.get",
             outputSchema: [

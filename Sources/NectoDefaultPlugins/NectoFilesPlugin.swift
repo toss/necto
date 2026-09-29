@@ -15,7 +15,7 @@ import Foundation
 /// NectoSDK.register(NectoFilesPlugin())
 /// NectoSDK.register(NectoFilesPlugin(groups: ["group.com.example"]))
 /// ```
-public final class NectoFilesPlugin: NectoPluginable, @unchecked Sendable {
+public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
     /// Enough of a text file to recognise it by. The point of a preview is to say what
     /// a file is, not to be an editor.
     static let previewLimit = 32 * 1024
@@ -87,7 +87,7 @@ public final class NectoFilesPlugin: NectoPluginable, @unchecked Sendable {
         self.roots = roots
     }
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle("files.roots") { [self] _ in
             ["roots": .array(roots.map { root in
                 [

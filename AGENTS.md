@@ -37,7 +37,7 @@ WebPackages/Bridge/               @necto/bridge, the plugin facing web library
 
 - **Feature screens are web plugins.** Do not add a SwiftUI screen for a new feature.
 - **The SDK is a bridge.** No feature lives in `NectoSDK`, and no feature gets its own
-  wire message. A plugin is an `NectoPluginable` in its own module, and the protocol
+  wire message. A plugin is a `NectoPlugin` in its own module, and the protocol
   is two members: an id and a chance to register handlers. Adding a plugin must
   never change that shape.
 - **Two sides, named for who answers.** `desktop` bridges are answered by the Mac app,
@@ -45,7 +45,7 @@ WebPackages/Bridge/               @necto/bridge, the plugin facing web library
   device. A web plugin says which at the call site: `necto.desktop.send(…)` or
   `necto.device.send(…)`. Only `device` can fail because nothing is connected.
 - **No plugin is a special case.** The ones Necto ships are ordinary adopters of
-  `NectoPluginable`: they declare contracts and answer them, and nothing on the Mac
+  `NectoPlugin`: they declare contracts and answer them, and nothing on the Mac
   side knows any of them by name. A plugin that needs desktop code written for it is
   a plugin designed wrongly.
 - **Two kinds of plugin, named for where they live.** A *device plugin* rides in the

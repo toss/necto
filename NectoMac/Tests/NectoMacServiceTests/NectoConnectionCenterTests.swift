@@ -211,11 +211,11 @@ struct NectoHostConnectionLifecycleTests {
     }
 
     private func expectRoundTrip(_ center: NectoConnectionCenter, peer: Peer) async throws {
-        let outgoing = try NectoEnvelope(type: .pluginCancel, encoding: NectoPluginCancel(requestID: "current-session"))
+        let outgoing = try NectoEnvelope(type: .pluginCancel, encoding: NectoPluginCancellation(requestID: "current-session"))
         try await peer.app.handshake(timeout: .seconds(3)) {
             try await center.send(outgoing, to: peer.target)
             let received = try await peer.app.receive(NectoEnvelope.self)
-            #expect(try received.decode(NectoPluginCancel.self).requestID == "current-session")
+            #expect(try received.decode(NectoPluginCancellation.self).requestID == "current-session")
         }
     }
 
@@ -246,7 +246,7 @@ struct NectoHostConnectionLifecycleTests {
         await first.reader.value
         #expect(await center.connectedApps.isEmpty)
         await #expect(throws: NectoBridgeError.self) {
-            try await center.send(NectoEnvelope(type: .pluginCancel, encoding: NectoPluginCancel(requestID: "stopped")), to: first.target)
+            try await center.send(NectoEnvelope(type: .pluginCancel, encoding: NectoPluginCancellation(requestID: "stopped")), to: first.target)
         }
         let second = try await connect(center)
         defer { second.app.close() }

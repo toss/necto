@@ -31,7 +31,7 @@ final class NectoSDKRuntime: @unchecked Sendable {
     private var session: NectoMessageSession?
     private var storedStatus: NectoSDK.Status = .stopped
     private var statusContinuations: [UUID: AsyncStream<NectoSDK.Status>.Continuation] = [:]
-    private var registered: [any NectoPluginable] = []
+    private var registered: [any NectoPlugin] = []
     private var registeringIDs: Set<String> = []
     private var requests: [String: (token: UUID, task: Task<Void, Never>)] = [:]
     private var registrationUpdates: AsyncStream<NectoPluginRegistration>.Continuation?
@@ -70,22 +70,22 @@ final class NectoSDKRuntime: @unchecked Sendable {
         }
     }
 
-    var plugins: [any NectoPluginable] { lock.withLock { registered } }
+    var plugins: [any NectoPlugin] { lock.withLock { registered } }
 
     /// What each plugin answers, read from `register(_:)` when it was added.
-    private var handlers: [String: [String: NectoHandler.Registration]] = [:]
+    private var handlers: [String: [String: NectoRegistrar.Registration]] = [:]
 
     /// Panels read once at registration, held whole. A panel is a few tens of
     /// kilobytes; reading it again for every host that connects would buy nothing.
     private var panels: [String: NectoPanelArchive] = [:]
 
-    private func registration(for invocation: NectoPluginInvocation) -> NectoHandler.Registration? {
+    private func registration(for invocation: NectoPluginInvocation) -> NectoRegistrar.Registration? {
         let identity = "\(invocation.name)@\(invocation.version)"
         return lock.withLock { handlers.values.compactMap { $0[identity] }.first }
     }
 
     @discardableResult
-    func register(_ plugin: any NectoPluginable) -> Bool {
+    func register(_ plugin: any NectoPlugin) -> Bool {
         let id = plugin.id
         let reserved = lock.withLock {
             guard !registered.contains(where: { $0.id == id }) else { return false }
@@ -94,7 +94,7 @@ final class NectoSDKRuntime: @unchecked Sendable {
         guard reserved else { return false }
         defer { _ = lock.withLock { registeringIDs.remove(id) } }
 
-        let collector = NectoHandler()
+        let collector = NectoRegistrar()
         plugin.register(collector)
         guard !collector.hasDuplicateContracts else { return false }
         let registrations = collector.registrations
@@ -343,7 +343,7 @@ final class NectoSDKRuntime: @unchecked Sendable {
             }
 
         case .pluginCancel:
-            guard let cancel = try? envelope.decode(NectoPluginCancel.self) else { return }
+            guard let cancel = try? envelope.decode(NectoPluginCancellation.self) else { return }
             let task = lock.withLock { () -> Task<Void, Never>? in
                 guard self.session === session else { return nil }
                 return requests.removeValue(forKey: cancel.requestID)?.task
@@ -404,7 +404,7 @@ final class NectoSDKRuntime: @unchecked Sendable {
             }
 
         case let .stream(body):
-                let out = NectoHandler.Out { value in
+                let out = NectoRegistrar.Out { value in
                     await send(NectoPluginResult(
                         requestID: invocation.requestID,
                         output: value,

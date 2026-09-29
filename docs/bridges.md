@@ -232,10 +232,10 @@ before a provider is looked up.
 An app declares them by registering handlers:
 
 ```swift
-struct VariablesPlugin: NectoPluginable {
+struct VariablesPlugin: NectoPlugin {
     let id = "com.example.variables"
 
-    func register(_ necto: NectoHandler) {
+    func register(_ necto: NectoRegistrar) {
         necto.handle("variables.list") { input in
             ["variables": …]
         }
@@ -275,7 +275,7 @@ Reconnecting resends each existing registration. To replace a plugin in
 the SDK, unregister its ID before registering the new implementation; a duplicate
 registration asserts in debug and is rejected in every build.
 
-An app plugin sends stream events through the `NectoHandler.Out` of an active
+An app plugin sends stream events through the `NectoRegistrar.Out` of an active
 subscription. `NectoNetworkPlugin.report(_:)` stores records in the app and notifies
 its `network-records.observe` subscribers. The panel subscribes through
 `necto.device.subscribe("records.observe", ...)`; there is no public `bridge.emit`

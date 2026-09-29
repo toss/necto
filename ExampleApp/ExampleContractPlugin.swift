@@ -12,7 +12,7 @@ import Foundation
 /// The interesting half of the bridge: everything else in this app pushes, while this
 /// waits to be asked. A plugin on the Mac calls its own operation id, the runtime
 /// resolves that to `com.example.app.state@1`, and the request travels here.
-struct ExampleContractPlugin: NectoPluginable {
+struct ExampleContractPlugin: NectoPlugin {
     let id = "plugin-sample"
 
     // Carried in the app bundle rather than a package: the folder reference in the
@@ -22,7 +22,7 @@ struct ExampleContractPlugin: NectoPluginable {
         Bundle.main.url(forResource: "plugin-sample", withExtension: nil).map(NectoPluginPanel.init(root:))
     }
 
-    func register(_ necto: NectoHandler) {
+    func register(_ necto: NectoRegistrar) {
         necto.handle("com.example.app.state") { input in
             // The note is echoed back so a caller can prove the input reached the
             // device rather than being answered somewhere on the way.

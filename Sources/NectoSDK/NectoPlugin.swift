@@ -12,10 +12,10 @@ import Foundation
 /// adding a capability never changes this shape and never changes the SDK.
 ///
 /// ```swift
-/// struct ThingsPlugin: NectoPluginable {
+/// struct ThingsPlugin: NectoPlugin {
 ///     let id = "com.example.things"
 ///
-///     func register(_ necto: NectoHandler) {
+///     func register(_ necto: NectoRegistrar) {
 ///         necto.handle("things.list") { _ in ["things": .array(…)] }
 ///         necto.handle("things.observe") { _, out in
 ///             for await change in changes { await out.send(change) }
@@ -26,7 +26,7 @@ import Foundation
 ///
 /// Not `AnyObject`: a plugin that keeps no mutable state of its own, or keeps it behind
 /// a reference, is fine as a `struct`.
-public protocol NectoPluginable: Sendable {
+public protocol NectoPlugin: Sendable {
     /// Stable and unique within the app, separate from the panel's display name.
     /// Lowercase reverse-domain IDs are recommended (for example `com.example.things`).
     var id: String { get }
@@ -41,10 +41,10 @@ public protocol NectoPluginable: Sendable {
 
     /// Called once per successful registration. To change what it offers, explicitly
     /// unregister the existing ID before registering the replacement.
-    func register(_ necto: NectoHandler)
+    func register(_ necto: NectoRegistrar)
 }
 
-public extension NectoPluginable {
+public extension NectoPlugin {
     var panel: NectoPluginPanel? { nil }
 }
 
@@ -72,7 +72,7 @@ public struct NectoPluginPanel: Sendable {
 ///
 /// Only useful for the length of `register(_:)`. Nothing is called back through it, so
 /// a plugin never has to hold on to it.
-public final class NectoHandler: @unchecked Sendable {
+public final class NectoRegistrar: @unchecked Sendable {
     /// One registration: the contract and the work, in one place, so a name is written
     /// once rather than declared in one list and switched on in another.
     struct Registration {
@@ -171,3 +171,11 @@ public final class NectoHandler: @unchecked Sendable {
         }
     }
 }
+
+/// Use `NectoPlugin` for app-provided plugins.
+@available(*, deprecated, renamed: "NectoPlugin")
+public typealias NectoPluginable = NectoPlugin
+
+/// Use `NectoRegistrar` to register a plugin's handlers.
+@available(*, deprecated, renamed: "NectoRegistrar")
+public typealias NectoHandler = NectoRegistrar

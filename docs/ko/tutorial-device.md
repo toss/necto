@@ -158,7 +158,7 @@ JSON을 주고받으며 런타임이 입력과 출력을 스키마로 검증해�
 
 ## 디바이스에서 응답하기
 
-[`NectoPluginable`](https://github.com/toss/necto/blob/main/Sources/NectoSDK/NectoPluginable.swift)을
+[`NectoPlugin`](https://github.com/toss/necto/blob/main/Sources/NectoSDK/NectoPlugin.swift)을
 채택하면 `id`와 `register(_:)`를 구현해야 해요. `panel`의 기본값은 `nil`이며
 패널을 포함하는 플러그인은 이 프로퍼티로 모듈 리소스의 `Panel` 디렉터리를 지정해요.
 
@@ -170,7 +170,7 @@ import NectoModel
 import NectoSDK
 
 /// How long the app has been running, asked once or watched live.
-public struct UptimePlugin: NectoPluginable {
+public struct UptimePlugin: NectoPlugin {
     public let id = "uptime"
 
     private let startedAt = Date()
@@ -179,7 +179,7 @@ public struct UptimePlugin: NectoPluginable {
 
     public init() {}
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle("uptime.get") { _ in
             [
                 "startedAt": .string(ISO8601DateFormatter().string(from: startedAt)),

@@ -10,7 +10,7 @@ import Foundation
 ///
 /// Opens a port for Necto, answers the handshake, and carries plugin messages in both
 /// directions. That is the whole job: the SDK is a bridge, and every permission an
-/// app exposes arrives as an `NectoPluginable` the app registers. Nothing here knows what
+/// app exposes arrives as a `NectoPlugin` the app registers. Nothing here knows what
 /// a network request, a view tree or a feature flag is.
 ///
 /// ```swift
@@ -36,7 +36,7 @@ public enum NectoSDK {
     /// Adds a plugin, at any point. One added while a host is attached joins that
     /// session rather than waiting for the next one. Duplicate IDs assert in debug
     /// and are rejected in every build. Unregister first to intentionally replace one.
-    public static func register(_ plugin: any NectoPluginable) {
+    public static func register(_ plugin: any NectoPlugin) {
         let registered = runtime.register(plugin)
         assert(registered, "Plugin '\(plugin.id)' duplicates a registered ID or bridge contract. Use unique IDs and contract names, or unregister the previous plugin before replacing it.")
     }
@@ -46,7 +46,7 @@ public enum NectoSDK {
         runtime.unregister(id: id)
     }
 
-    public static var plugins: [any NectoPluginable] { runtime.plugins }
+    public static var plugins: [any NectoPlugin] { runtime.plugins }
 
     /// Starts listening. Safe to call at app start up; it does not block the caller.
     public static func start() {

@@ -64,7 +64,7 @@ public struct NectoEvent: Sendable, Hashable, Identifiable {
 ///
 /// events.report(NectoEvent(level: .warn, tag: "Cache", message: "Evicted 240 entries"))
 /// ```
-public final class NectoEventsPlugin: NectoPluginable, NectoEventReporting, @unchecked Sendable {
+public final class NectoEventsPlugin: NectoPlugin, NectoEventReporting, @unchecked Sendable {
     /// Keeps memory bounded on a long session. Older events fall off the end.
     public static let capacity = 5000
 
@@ -75,11 +75,11 @@ public final class NectoEventsPlugin: NectoPluginable, NectoEventReporting, @unc
 
     private let lock = NSLock()
     private var events: [NectoEvent] = []
-    private var listeners: [UUID: NectoHandler.Out] = [:]
+    private var listeners: [UUID: NectoRegistrar.Out] = [:]
 
     public init() {}
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle("events.list") { [self] input in
             let limit = Int(input["limit"]?.numberValue ?? 500)
             let wanted = input["level"]?.stringValue.flatMap(NectoEvent.Level.init(rawValue:))
@@ -123,7 +123,7 @@ public final class NectoEventsPlugin: NectoPluginable, NectoEventReporting, @unc
     /// attached: the app keeps its own log, so it collects from the moment it starts
     /// rather than from the moment someone opens the panel.
     public func report(_ event: NectoEvent) {
-        let out = lock.withLock { () -> [NectoHandler.Out] in
+        let out = lock.withLock { () -> [NectoRegistrar.Out] in
             events.insert(event, at: 0)
             if events.count > Self.capacity {
                 events.removeLast(events.count - Self.capacity)

@@ -25,7 +25,7 @@ struct LogRow: View {
                 .foregroundStyle(NectoTheme.textTertiary)
 
             Circle()
-                .fill(colour)
+                .fill(color)
                 .frame(width: 6, height: 6)
                 .padding(.top, 5)
 
@@ -56,7 +56,7 @@ struct LogRow: View {
         }
     }
 
-    private var colour: Color {
+    private var color: Color {
         switch entry.severity {
         case .info: NectoTheme.textTertiary
         case .warning: NectoTheme.warning

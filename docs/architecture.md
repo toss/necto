@@ -21,20 +21,20 @@ NectoPluginRegistry
          ↕ NectoDeviceBridgeClient / session
        usbmuxd (device) · loopback (simulator)
          ↕ NectoSDK
-       NectoPluginable → NectoHandler (in the iOS app)
+       NectoPlugin → NectoRegistrar (in the iOS app)
 ```
 
 A plugin calls an operation id from its own manifest. The runtime matches it against
 provider descriptors by name, version and kind, validates input against the manifest,
 and then invokes the provider. Shell providers also check the caller's shell policy.
 
-App plugins register handlers through `NectoHandler`. The host sends `plugin.invoke`
+App plugins register handlers through `NectoRegistrar`. The host sends `plugin.invoke`
 and receives `plugin.result`, paired by request ID through `NectoDeviceBridgeClient`:
 
 - `once` returns one result.
 - `stream` returns events until completion or cancellation. For example,
   `NectoNetworkPlugin` stores records in the app and sends changes to active
-  `network-records.observe` subscribers through `NectoHandler.Out`.
+  `network-records.observe` subscribers through `NectoRegistrar.Out`.
 
 Both use the same generic messages. Adding an app feature means adding a plugin's
 handlers and manifest bindings, not a feature-specific host adapter or wire message.

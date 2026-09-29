@@ -56,7 +56,7 @@ public struct NectoControlTarget: Sendable {
 
 /// Discovers action targets and dispatches tap, input, swipe, and back requests.
 /// UIKit support is included; other UI implementations can supply the same contract.
-public final class NectoUIControlPlugin: NectoPluginable, @unchecked Sendable {
+public final class NectoUIControlPlugin: NectoPlugin, @unchecked Sendable {
     public let id = "control"
     public var panel: NectoPluginPanel? { NectoPluginPanel(bundle: .module, subdirectory: "Panels/control") }
 
@@ -85,7 +85,7 @@ public final class NectoUIControlPlugin: NectoPluginable, @unchecked Sendable {
     }
     #endif
 
-    public func register(_ necto: NectoHandler) {
+    public func register(_ necto: NectoRegistrar) {
         necto.handle("control.actionTargets") { [self] input in
             let query = input["query"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let available = await actionTargets().filter { !$0.actions.isEmpty }
