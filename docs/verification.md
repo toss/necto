@@ -64,8 +64,10 @@ events as JSONL (`stream`). It then terminates ExampleApp during a live subscrip
 checks that the CLI exits with an error and the target disappears, and relaunches
 ExampleApp to repeat both operations without restarting Necto.
 
-Both CI and local runs use `iPhone 17 Pro` on the newest available iOS runtime that
-has one, regardless of boot state. If none exists, the test fails immediately.
+Both CI and local runs use `iPhone 17 Pro` on iOS 26.2, regardless of boot state.
+The runtime is pinned so runner image updates cannot silently change the connection
+baseline. If it is missing, the test fails immediately instead of selecting another
+runtime. Update the pin only after validating the replacement on hosted CI.
 It waits for `simctl bootstatus -b` before installing the test ExampleApp
 (`im.toss.necto.e2e.example`), without opening Simulator.app. Boot and installation
 share a 10-minute preparation deadline, so first-boot services can finish without a
