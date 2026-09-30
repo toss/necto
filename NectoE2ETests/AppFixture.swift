@@ -41,17 +41,17 @@ final class AppFixture {
         try #require(Bundle(url: example)?.bundleIdentifier == Self.exampleID)
         try #require(FileManager.default.isExecutableFile(atPath: executable.path))
 
-        let available = try await run("/usr/bin/xcrun", ["simctl", "list", "devices", "available", "--json"])
-        let devices = try #require(available.json()["devices"] as? [String: [[String: Any]]])
-        let phone = try #require(Self.selectSimulator(devices), "No available iPhone 17 Pro simulator on iOS 26.2. Add one in Xcode before running E2E.")
-        let id = try #require(phone["udid"] as? String)
-        try #require(UUID(uuidString: id) != nil)
-        print("E2E simulator: iPhone 17 Pro, iOS 26.2 (\(id))")
-        // First-boot services can still delay installation after bootstatus completes.
-        // Share one preparation deadline; the connection test does not need Simulator.app.
+        // Discovery starts CoreSimulator on a cold runner; it shares the boot/install
+        // budget instead of the shorter deadline used for connected-app operations.
         let preparationDeadline = ContinuousClock.now + .seconds(600)
         let preparationStart = commands.count
         do {
+            let available = try await run("/usr/bin/xcrun", ["simctl", "list", "devices", "available", "--json"], deadline: preparationDeadline)
+            let devices = try #require(available.json()["devices"] as? [String: [[String: Any]]])
+            let phone = try #require(Self.selectSimulator(devices), "No available iPhone 17 Pro simulator on iOS 26.2. Add one in Xcode before running E2E.")
+            let id = try #require(phone["udid"] as? String)
+            try #require(UUID(uuidString: id) != nil)
+            print("E2E simulator: iPhone 17 Pro, iOS 26.2 (\(id))")
             _ = try await run("/usr/bin/xcrun", ["simctl", "bootstatus", id, "-b"], deadline: preparationDeadline)
             print("E2E: simulator booted")
             simulator = id

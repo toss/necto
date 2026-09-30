@@ -69,9 +69,10 @@ The runtime is pinned so runner image updates cannot silently change the connect
 baseline. If it is missing, the test fails immediately instead of selecting another
 runtime. Update the pin only after validating the replacement on hosted CI.
 It waits for `simctl bootstatus -b` before installing the test ExampleApp
-(`im.toss.necto.e2e.example`), without opening Simulator.app. Boot and installation
-share a 10-minute preparation deadline, so first-boot services can finish without a
-separate 120-second installation cutoff. An interrupted run's installation is replaced;
+(`im.toss.necto.e2e.example`), without opening Simulator.app. Device discovery, boot
+and installation share a 10-minute preparation deadline: the initial `simctl list`
+can start CoreSimulator on a cold runner and must not use the 30-second operation
+deadline. An interrupted run's installation is replaced;
 each test writes its own values. The app and temporary Mac home are removed afterward.
 The simulator is left booted; it is never erased or deleted, and other installed apps
 are left intact.
@@ -84,7 +85,7 @@ Connection and plugin readiness
 checks retain their 30-second deadline. If the host exits during startup, the test
 fails immediately. Startup failures include the host
 output and the last CLI probe's output in the test log. Simulator preparation
-failures include both the boot and installation command output.
+failures include the discovery, boot and installation command output.
 
 Other Necto instances must be closed because hosts share the SDK's loopback ports.
 Waits check observable state with deadlines, not fixed startup delays or performance
