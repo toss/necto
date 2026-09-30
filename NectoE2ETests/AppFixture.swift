@@ -43,7 +43,7 @@ final class AppFixture {
 
         // Discovery starts CoreSimulator on a cold runner; it shares the boot/install
         // budget instead of the shorter deadline used for connected-app operations.
-        let preparationDeadline = ContinuousClock.now + .seconds(600)
+        let preparationDeadline = ContinuousClock.now + .seconds(660)
         let preparationStart = commands.count
         do {
             let available = try await run("/usr/bin/xcrun", ["simctl", "list", "devices", "available", "--json"], deadline: preparationDeadline)

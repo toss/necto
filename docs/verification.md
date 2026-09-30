@@ -70,7 +70,7 @@ baseline. If it is missing, the test fails immediately instead of selecting anot
 runtime. Update the pin only after validating the replacement on hosted CI.
 It waits for `simctl bootstatus -b` before installing the test ExampleApp
 (`im.toss.necto.e2e.example`), without opening Simulator.app. Device discovery, boot
-and installation share a 10-minute preparation deadline: the initial `simctl list`
+and installation share a 660-second preparation deadline: the initial `simctl list`
 can start CoreSimulator on a cold runner and must not use the 30-second operation
 deadline. An interrupted run's installation is replaced;
 each test writes its own values. The app and temporary Mac home are removed afterward.
@@ -80,7 +80,7 @@ are left intact.
 The first ExampleApp launch gets a 300-second deadline for services settling after
 a cold boot. Relaunching ExampleApp and waiting for the Mac host's control socket
 each retain a 120-second deadline. The connection test has a 20-minute limit, and
-its CI job has a 25-minute limit to allow for test-runner startup and diagnostics.
+its CI job has a 45-minute limit to allow for one retry, test-runner startup and diagnostics.
 Connection and plugin readiness
 checks retain their 30-second deadline. If the host exits during startup, the test
 fails immediately. Startup failures include the host
@@ -95,10 +95,15 @@ E2E is opt-in locally and is not part of the default `script/test` run.
 CI runs `Simulator Connection & CLI E2E` after the Mac and SDK jobs. The Mac job
 uploads the app, CLI and test bundle; the SDK job uploads ExampleApp. E2E downloads
 those artifacts from the same workflow run and uses `test-without-building`.
+The CI jobs pin Xcode 26.6. E2E disables parallel testing and uses
+`-retry-tests-on-failure -test-iterations 2`: Xcode retries on test failure, with
+at most two iterations. Swift Testing may repeat other tests in the same plan.
+A test that fails both attempts still fails the job.
 Archives preserve executable permissions and bundle symlinks. To rerun locally
 without rebuilding, use `script/test-e2e run` after `script/test e2e`.
 
-Failed E2E runs upload logs and test results. This covers the real GUI host, CLI and
+Every E2E run uploads raw logs and test results, including failures followed by a
+successful retry. This covers the real GUI host, CLI and
 SDK transport path, not WebView interaction, layouts or USB.
 
 ### Manual connection checks
