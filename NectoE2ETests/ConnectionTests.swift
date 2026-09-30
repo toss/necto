@@ -5,7 +5,7 @@
 import Foundation
 import Testing
 
-@Suite("Simulator connection and CLI", .serialized, .timeLimit(.minutes(15)))
+@Suite("Simulator connection and CLI", .serialized, .timeLimit(.minutes(20)))
 @MainActor
 struct ConnectionTests {
     @Test("discover plugins, call once, stream, disconnect and reconnect")

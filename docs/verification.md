@@ -64,22 +64,28 @@ events as JSONL (`stream`). It then terminates ExampleApp during a live subscrip
 checks that the CLI exits with an error and the target disappears, and relaunches
 ExampleApp to repeat both operations without restarting Necto.
 
-Both CI and local runs use `iPhone 17 Pro` on the newest available iOS runtime that
-has one, regardless of boot state. If none exists, the test fails immediately.
+Both CI and local runs use `iPhone 17 Pro` on iOS 26.2, regardless of boot state.
+The runtime is pinned so runner image updates cannot silently change the connection
+baseline. If it is missing, the test fails immediately instead of selecting another
+runtime. Update the pin only after validating the replacement on hosted CI.
 It waits for `simctl bootstatus -b` before installing the test ExampleApp
-(`im.toss.necto.e2e.example`), without opening Simulator.app. Boot and installation
-share a 10-minute preparation deadline, so first-boot services can finish without a
-separate 120-second installation cutoff. An interrupted run's installation is replaced;
+(`im.toss.necto.e2e.example`), without opening Simulator.app. Device discovery, boot
+and installation share a 660-second preparation deadline: the initial `simctl list`
+can start CoreSimulator on a cold runner and must not use the 30-second operation
+deadline. An interrupted run's installation is replaced;
 each test writes its own values. The app and temporary Mac home are removed afterward.
 The simulator is left booted; it is never erased or deleted, and other installed apps
 are left intact.
 
-Launching ExampleApp and waiting for the Mac host's control socket each get a
-120-second deadline for cold startup. Connection and plugin readiness
+The first ExampleApp launch gets a 300-second deadline for services settling after
+a cold boot. Relaunching ExampleApp and waiting for the Mac host's control socket
+each retain a 120-second deadline. The connection test has a 20-minute limit, and
+its CI job has a 45-minute limit to allow for one retry, test-runner startup and diagnostics.
+Connection and plugin readiness
 checks retain their 30-second deadline. If the host exits during startup, the test
 fails immediately. Startup failures include the host
 output and the last CLI probe's output in the test log. Simulator preparation
-failures include both the boot and installation command output.
+failures include the discovery, boot and installation command output.
 
 Other Necto instances must be closed because hosts share the SDK's loopback ports.
 Waits check observable state with deadlines, not fixed startup delays or performance
@@ -89,10 +95,15 @@ E2E is opt-in locally and is not part of the default `script/test` run.
 CI runs `Simulator Connection & CLI E2E` after the Mac and SDK jobs. The Mac job
 uploads the app, CLI and test bundle; the SDK job uploads ExampleApp. E2E downloads
 those artifacts from the same workflow run and uses `test-without-building`.
+The CI jobs pin Xcode 26.6. E2E disables parallel testing and uses
+`-retry-tests-on-failure -test-iterations 2`: Xcode retries on test failure, with
+at most two iterations. Swift Testing may repeat other tests in the same plan.
+A test that fails both attempts still fails the job.
 Archives preserve executable permissions and bundle symlinks. To rerun locally
 without rebuilding, use `script/test-e2e run` after `script/test e2e`.
 
-Failed E2E runs upload logs and test results. This covers the real GUI host, CLI and
+Every E2E run uploads raw logs and test results, including failures followed by a
+successful retry. This covers the real GUI host, CLI and
 SDK transport path, not WebView interaction, layouts or USB.
 
 ### Manual connection checks

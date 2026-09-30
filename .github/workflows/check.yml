@@ -90,7 +90,7 @@ jobs:
     needs: [mac, sdk]
     if: github.server_url == 'https://github.com'
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
@@ -116,8 +116,8 @@ jobs:
           tar -xzf Build/E2E/sdk.tar.gz -C Build/E2E/Products
       - name: Test simulator connection and CLI
         run: script/test-e2e run
-      - name: Upload E2E results on failure
-        if: failure()
+      - name: Upload E2E results
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: simulator-e2e-results

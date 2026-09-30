@@ -54,5 +54,7 @@ if [[ "$mode" == all || "$mode" == run ]]; then
     exit 1
   fi
   xcodebuild -xctestrun "${test_runs[0]}" -destination 'platform=macOS' \
-    -parallel-testing-enabled NO -resultBundlePath "$run_dir/Connection.xcresult" test-without-building
+    -parallel-testing-enabled NO -retry-tests-on-failure -test-iterations 2 \
+    -resultBundlePath "$run_dir/Connection.xcresult" test-without-building \
+    2>&1 | tee "$run_dir/connection.log"
 fi

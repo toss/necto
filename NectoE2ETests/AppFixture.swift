@@ -10,6 +10,8 @@ import Testing
 @MainActor
 final class AppFixture {
     static let exampleID = "im.toss.necto.e2e.example"
+    // Keep the connection baseline independent of runtimes added to the CI image.
+    static let simulatorRuntime = "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
     private let products: URL
     private let executable: URL
     private let home: URL
@@ -39,17 +41,17 @@ final class AppFixture {
         try #require(Bundle(url: example)?.bundleIdentifier == Self.exampleID)
         try #require(FileManager.default.isExecutableFile(atPath: executable.path))
 
-        let available = try await run("/usr/bin/xcrun", ["simctl", "list", "devices", "available", "--json"])
-        let devices = try #require(available.json()["devices"] as? [String: [[String: Any]]])
-        let phone = try #require(Self.selectSimulator(devices), "No available iPhone 17 Pro simulator. Add one in Xcode before running E2E.")
-        let id = try #require(phone["udid"] as? String)
-        try #require(UUID(uuidString: id) != nil)
-        print("E2E simulator: iPhone 17 Pro (\(id))")
-        // First-boot services can still delay installation after bootstatus completes.
-        // Share one preparation deadline; the connection test does not need Simulator.app.
-        let preparationDeadline = ContinuousClock.now + .seconds(600)
+        // Discovery starts CoreSimulator on a cold runner; it shares the boot/install
+        // budget instead of the shorter deadline used for connected-app operations.
+        let preparationDeadline = ContinuousClock.now + .seconds(660)
         let preparationStart = commands.count
         do {
+            let available = try await run("/usr/bin/xcrun", ["simctl", "list", "devices", "available", "--json"], deadline: preparationDeadline)
+            let devices = try #require(available.json()["devices"] as? [String: [[String: Any]]])
+            let phone = try #require(Self.selectSimulator(devices), "No available iPhone 17 Pro simulator on iOS 26.2. Add one in Xcode before running E2E.")
+            let id = try #require(phone["udid"] as? String)
+            try #require(UUID(uuidString: id) != nil)
+            print("E2E simulator: iPhone 17 Pro, iOS 26.2 (\(id))")
             _ = try await run("/usr/bin/xcrun", ["simctl", "bootstatus", id, "-b"], deadline: preparationDeadline)
             print("E2E: simulator booted")
             simulator = id
@@ -66,7 +68,8 @@ final class AppFixture {
         }
         let hostCommand = try launch(host.appending(path: "Contents/MacOS/Necto"), [], isolated: true)
         try await waitForControlSocket(hostCommand)
-        try await launchExample()
+        // The first launch can still wait for services settling after a cold boot.
+        try await launchExample(timeout: .seconds(300))
     }
 
     // A cold AppKit launch on CI can outlast the operation-level deadline.
@@ -93,17 +96,13 @@ final class AppFixture {
     }
 
     static func selectSimulator(_ devices: [String: [[String: Any]]]) -> [String: Any]? {
-        devices.keys.filter {
-            $0.hasPrefix("com.apple.CoreSimulator.SimRuntime.iOS-")
-        }.sorted {
-            $0.compare($1, options: .numeric) == .orderedDescending
-        }.flatMap { devices[$0] ?? [] }.first {
+        devices[simulatorRuntime]?.first {
             $0["name"] as? String == "iPhone 17 Pro"
         }
     }
 
-    func launchExample() async throws {
-        _ = try await run("/usr/bin/xcrun", ["simctl", "launch", try #require(simulator), Self.exampleID], timeout: .seconds(120))
+    func launchExample(timeout: Duration = .seconds(120)) async throws {
+        _ = try await run("/usr/bin/xcrun", ["simctl", "launch", try #require(simulator), Self.exampleID], timeout: timeout)
     }
 
     func terminateExample() async throws {
