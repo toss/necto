@@ -17,6 +17,40 @@ import Foundation
 public actor NectoConnectionCenter {
     public static let simulatorDeviceID = "simulator"
 
+    /// A private Unix socket forwarded by the caller over an authorized ADB transport.
+    public struct AndroidEndpoint: Sendable, Hashable {
+        public let serial: String
+        public let socketPath: String
+        public let appBundleID: String
+
+        public init(serial: String, socketPath: String, appBundleID: String) {
+            self.serial = serial
+            self.socketPath = socketPath
+            self.appBundleID = appBundleID
+        }
+
+        public static func fromEnvironment(_ environment: [String: String]) -> Self? {
+            guard let serial = environment["NECTO_ANDROID_SERIAL"], !serial.isEmpty,
+                  let path = environment["NECTO_ANDROID_SOCKET"], path.hasPrefix("/"), !path.contains("\0"),
+                  path.utf8.count < 104,
+                  let app = environment["NECTO_ANDROID_APP"],
+                  app.range(of: "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$", options: .regularExpression) != nil
+            else { return nil }
+            return Self(serial: serial, socketPath: path, appBundleID: app)
+        }
+
+        func connect() async throws -> NectoMessageSession {
+            let parent = URL(filePath: socketPath).deletingLastPathComponent().path
+            var directory = stat()
+            var socket = stat()
+            guard lstat(parent, &directory) == 0, directory.st_mode & S_IFMT == S_IFDIR,
+                  directory.st_uid == getuid(), directory.st_mode & 0o077 == 0,
+                  lstat(socketPath, &socket) == 0, socket.st_mode & S_IFMT == S_IFSOCK,
+                  socket.st_uid == getuid() else { throw POSIXError(.EACCES) }
+            return try await NectoMessageSession(stream: NectoSocketStream.connect(unixPath: socketPath))
+        }
+    }
+
     private struct Connection {
         let app: NectoConnectedApp
         let session: NectoMessageSession
@@ -25,6 +59,7 @@ public actor NectoConnectionCenter {
     private enum Endpoint: Hashable {
         case local(port: UInt16)
         case usb(device: NectoUSBDevice, port: UInt16)
+        case android(AndroidEndpoint)
 
         var usbDeviceID: Int? {
             if case let .usb(device, _) = self { return device.deviceID }
@@ -34,6 +69,9 @@ public actor NectoConnectionCenter {
 
     private let port: UInt16
     private let probeInterval: Duration
+    private let androidEndpoint: AndroidEndpoint?
+    private let appleDiscoveryEnabled: Bool
+    private var started = false
     private let deviceEvents: @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>
     private var onEnvelope: (@Sendable (NectoEnvelope, NectoTarget) -> Void)?
 
@@ -45,19 +83,26 @@ public actor NectoConnectionCenter {
 
     public init(
         port: UInt16 = NectoTransportDefaults.devicePort,
-        probeInterval: Duration = .seconds(2)
+        probeInterval: Duration = .seconds(2),
+        androidEndpoint: AndroidEndpoint? = nil,
+        appleDiscoveryEnabled: Bool = true
     ) {
-        self.init(port: port, probeInterval: probeInterval, deviceEvents: NectoUSBHub.deviceEvents)
+        self.init(port: port, probeInterval: probeInterval, deviceEvents: NectoUSBHub.deviceEvents,
+                  androidEndpoint: androidEndpoint, appleDiscoveryEnabled: appleDiscoveryEnabled)
     }
 
     init(
         port: UInt16,
         probeInterval: Duration,
-        deviceEvents: @escaping @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>
+        deviceEvents: @escaping @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>,
+        androidEndpoint: AndroidEndpoint? = nil,
+        appleDiscoveryEnabled: Bool = true
     ) {
         self.port = port
         self.probeInterval = probeInterval
         self.deviceEvents = deviceEvents
+        self.androidEndpoint = androidEndpoint
+        self.appleDiscoveryEnabled = appleDiscoveryEnabled
     }
 
     public var connectedApps: [NectoConnectedApp] {
@@ -120,16 +165,21 @@ public actor NectoConnectionCenter {
     }
 
     public func start() {
-        guard deviceWatcher == nil else { return }
+        guard !started else { return }
+        started = true
 
-        notes?(.watchingForDevices)
-        deviceWatcher = Task { await watchDevices() }
-        for candidate in Self.portsToDial(from: port, skipping: []) {
-            startProbe(.local(port: candidate))
+        if appleDiscoveryEnabled {
+            notes?(.watchingForDevices)
+            deviceWatcher = Task { await watchDevices() }
+            for candidate in Self.portsToDial(from: port, skipping: []) {
+                startProbe(.local(port: candidate))
+            }
         }
+        if let androidEndpoint { startProbe(.android(androidEndpoint)) }
     }
 
     public func stop() {
+        started = false
         deviceWatcher?.cancel()
         deviceWatcher = nil
         for probe in probes.values { probe.cancel() }
@@ -225,6 +275,23 @@ public actor NectoConnectionCenter {
                 }
             case let .usb(device, candidate) where !connectedPorts(usbDeviceID: device.deviceID).contains(candidate):
                 await connectToDevice(device, port: candidate)
+            case let .android(endpoint) where !connections.values.contains(where: { $0.app.target.deviceID == "android:\(endpoint.serial)" }):
+                do {
+                    let session = try await endpoint.connect()
+                    try await withTaskCancellationHandler {
+                        try await accept(
+                            session: session,
+                            deviceID: "android:\(endpoint.serial)",
+                            connection: endpoint.serial.hasPrefix("emulator-") ? .androidEmulator : .androidDevice,
+                            usbDeviceID: nil,
+                            expectedAppBundleID: endpoint.appBundleID
+                        )
+                    } onCancel: {
+                        session.close()
+                    }
+                } catch {
+                    // ADB forwarding survives an app restart; retry the same endpoint.
+                }
             default:
                 break
             }
@@ -255,10 +322,15 @@ public actor NectoConnectionCenter {
         usbDeviceID: Int?,
         deviceName: String? = nil,
         localPort: UInt16? = nil,
-        devicePort: UInt16? = nil
+        devicePort: UInt16? = nil,
+        expectedAppBundleID: String? = nil
     ) async throws -> Task<Void, Never>? {
         let (hello, ack) = try await session.handshake {
             let hello = try await session.receive(NectoHandshakeHello.self)
+            if let expectedAppBundleID, hello.appBundleID != expectedAppBundleID {
+                session.close()
+                throw POSIXError(.EACCES)
+            }
             let ack = NectoHandshakeAck.evaluate(hello)
             try await session.send(ack)
             return (hello, ack)

@@ -67,7 +67,7 @@ final class NectoPluginPage {
         configuration.websiteDataStore = plugin.principal == nil ? .nonPersistent() : (websiteDataStore ?? .default())
         configuration.userContentController = controller
         configuration.setURLSchemeHandler(
-            NectoPluginSchemeHandler(originHost: originHost, archive: plugin.archive),
+            NectoPluginSchemeHandler(originHost: originHost, archive: plugin.archive, allowedOrigins: plugin.manifest.allowedOrigins),
             forURLScheme: NectoPluginSchemeHandler.scheme
         )
         webView = WKWebView(frame: .zero, configuration: configuration)

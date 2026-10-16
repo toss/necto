@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Verify what the Android build ships: the SDK asks for no permissions, carries the
+iOS panels unchanged, and the sample is debuggable in debug builds only."""
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import zipfile
+
+root = Path(__file__).resolve().parent.parent
+android = root / "SDK/Android"
+sdk = Path(os.environ.get("ANDROID_HOME", Path.home() / "Library/Android/sdk"))
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--aapt", default=str(sdk / "build-tools/35.0.0/aapt"))
+args = parser.parse_args()
+results = {}
+
+# The SDK must not change what the app asks the user for.
+aar = android / "necto-android/build/outputs/aar/necto-android-release.aar"
+with zipfile.ZipFile(aar) as archive:
+    assert "classes.jar" in archive.namelist()
+    manifest = archive.read("AndroidManifest.xml").decode()
+    assert "uses-permission" not in manifest, "necto-android declares a permission"
+results["nectoAndroidAAR"] = dict(bytes=aar.stat().st_size, permissions=0)
+
+# The panels are the built iOS ones; only the overridden manifests may differ.
+panels = root / "SDK/iOS/Sources/NectoDefaultPlugins/Panels"
+overrides = android / "necto-core/src/main/panel-manifests"
+jar = next((android / "necto-core/build/libs").glob("necto-core-*[0-9].jar"))
+compared = 0
+with zipfile.ZipFile(jar) as archive:
+    for panel in sorted(path for path in panels.iterdir() if path.is_dir()):
+        for file in sorted(path for path in panel.rglob("*") if path.is_file()):
+            relative = file.relative_to(panel).as_posix()
+            expected = file.read_bytes()
+            override = overrides / f"{panel.name}.json"
+            if relative == "manifest.json" and override.exists():
+                expected = override.read_bytes()
+            actual = archive.read(f"necto/panels/{panel.name}/{relative}")
+            assert actual == expected, f"{panel.name}/{relative} differs from its source"
+            compared += 1
+results["panels"] = dict(files=compared)
+
+# Necto starts in debuggable builds only, so a release must not be debuggable.
+for variant, suffix in (("debug", ""), ("release", "-unsigned")):
+    apk = android / f"sample/build/outputs/apk/{variant}/sample-{variant}{suffix}.apk"
+    badging = subprocess.check_output([args.aapt, "dump", "badging", str(apk)], text=True)
+    debuggable = "application-debuggable" in badging.splitlines()
+    assert debuggable == (variant == "debug"), f"Unexpected debuggable flag in {variant}"
+    results[variant] = dict(debuggable=debuggable)
+
+output = root / "Build/Android/artifact-results.json"
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text(json.dumps(results, indent=2))
+print(f"PASS: no SDK permissions, {compared} panel files match, debuggable in debug only")

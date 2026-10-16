@@ -10,6 +10,13 @@ public struct NectoConnectedApp: Sendable, Hashable, Identifiable {
     public enum Connection: String, Sendable, Hashable {
         case usb
         case simulator
+        case androidDevice
+        case androidEmulator
+
+        public var isEmulator: Bool { self == .simulator || self == .androidEmulator }
+        public var osName: String {
+            self == .androidDevice || self == .androidEmulator ? "Android" : "iOS"
+        }
     }
 
     public let target: NectoTarget

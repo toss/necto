@@ -15,9 +15,23 @@ final class NectoPluginSchemeHandler: NSObject, WKURLSchemeHandler {
 
     private let originHost: String
     private let files: [String: Data]
+    private let contentSecurityPolicy: String
 
-    init(originHost: String, archive: NectoPanelArchive) {
+    init(originHost: String, archive: NectoPanelArchive, allowedOrigins: [String] = ["self"]) {
         self.originHost = originHost
+        let external = allowedOrigins.compactMap { value -> String? in
+            guard let url = URLComponents(string: value), url.scheme == "https", let host = url.host, !host.isEmpty,
+                  host.allSatisfy({ "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-:[]".contains($0) }),
+                  url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+                  url.path.isEmpty || url.path == "/",
+                  url.port.map({ (1...65535).contains($0) }) ?? true else { return nil }
+            return "https://" + host + (url.port.map { ":\($0)" } ?? "")
+        }.joined(separator: " ")
+        let local = "'self' " + external
+        contentSecurityPolicy = "default-src \(local); connect-src \(local); "
+            + "script-src \(local) 'unsafe-inline'; style-src \(local) 'unsafe-inline'; "
+            + "img-src \(local) data: blob:; font-src \(local) data:; media-src \(local) blob:; "
+            + "frame-src 'self'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
         files = Dictionary(archive.files.map { ($0.path, $0.data) }, uniquingKeysWith: { first, _ in first })
     }
 
@@ -45,12 +59,15 @@ final class NectoPluginSchemeHandler: NSObject, WKURLSchemeHandler {
             return
         }
 
-        let response = URLResponse(
-            url: url,
-            mimeType: Self.mimeType(for: URL(filePath: path)),
-            expectedContentLength: data.count,
-            textEncodingName: "utf-8"
-        )
+        guard let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [
+            "Content-Type": Self.mimeType(for: URL(filePath: path)) + "; charset=utf-8",
+            "Content-Security-Policy": contentSecurityPolicy,
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "no-referrer",
+        ]) else {
+            task.didFailWithError(URLError(.badServerResponse))
+            return
+        }
         task.didReceive(response)
         task.didReceive(data)
         task.didFinish()

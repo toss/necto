@@ -34,7 +34,8 @@ private func makeOperation(
 
 private func makeManifest(
     operations: [NectoOperation] = [makeOperation()],
-    version: String = "1.0.0"
+    version: String = "1.0.0",
+    allowedOrigins: [String] = ["self"]
 ) -> NectoPluginManifest {
     NectoPluginManifest(
         id: "network-logger",
@@ -44,7 +45,7 @@ private func makeManifest(
         author: "Necto",
         icon: .init(systemName: "network"),
         assets: ["index.html"],
-        allowedOrigins: ["self"],
+        allowedOrigins: allowedOrigins,
         operations: operations
     )
 }
@@ -157,4 +158,16 @@ private func makeManifest(
 @Test func onlyDeviceBridgesNeedATarget() {
     #expect(makeBinding(name: "necto.device.events.list").requiresTarget)
     #expect(!makeBinding(name: "necto.desktop.storage.set").requiresTarget)
+}
+
+@Test(arguments: ["self", "https://example.com", "https://example.com:8443/", "https://[::1]:443"])
+func acceptsExactNetworkOrigins(_ origin: String) throws {
+    try makeManifest(allowedOrigins: [origin]).validate()
+}
+
+@Test(arguments: ["http://example.com", "https://example.com/path", "https://user@example.com",
+                  "https://example.com?query=1", "https://example.com#fragment", "https://*.example.com",
+                  "https://example.com:0", "https://example.com:65536", "https://example.com;script-src"])
+func rejectsAmbiguousNetworkOrigins(_ origin: String) {
+    #expect(throws: NectoManifestValidationError.self) { try makeManifest(allowedOrigins: [origin]).validate() }
 }

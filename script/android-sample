@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Builds the Android sample and a separate Necto.app, installs the sample on a USB device
+# or a local emulator, and connects the two through script/android-connect.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+serial="${1:?Usage: script/android-sample ADB_SERIAL [--no-build]}"
+mode="${2:-build}"
+case "$mode" in build|--no-build) ;; *) echo "Unknown option: $mode" >&2; exit 2 ;; esac
+sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+adb="$sdk/platform-tools/adb"
+[[ -x "$adb" ]] || { echo "Set ANDROID_HOME to an installed Android SDK." >&2; exit 1; }
+[[ "$("$adb" -s "$serial" get-state)" == device ]]
+if [[ "$serial" =~ ^emulator-[0-9]+$ ]]; then
+    [[ "$("$adb" -s "$serial" shell getprop ro.kernel.qemu)" == 1 ]]
+else
+    [[ "$("$adb" -s "$serial" get-devpath)" == usb:* ]] || {
+        echo "Use a USB device or a local emulator." >&2
+        exit 1
+    }
+fi
+
+out="$PWD/Build/Android"
+mkdir -p "$out/Logs"
+run() {
+    local name="$1"
+    shift
+    echo "==> $name"
+    if ! "$@" >"$out/Logs/$name.log" 2>&1; then
+        tail -n 10 "$out/Logs/$name.log"
+        return 1
+    fi
+}
+
+if [[ "$mode" == build ]]; then
+    if [[ -z "${JAVA_HOME:-}" && -d "/Applications/Android Studio.app/Contents/jbr/Contents/Home" ]]; then
+        export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+    fi
+    export ANDROID_HOME="$sdk"
+    run android SDK/Android/gradlew -p SDK/Android :sample:assembleDebug :necto-core:test :necto-android:testDebugUnitTest
+    run mac xcodebuild -project Necto.xcodeproj -scheme Necto -destination 'platform=macOS' \
+        -derivedDataPath "$out/DerivedData" SYMROOT="$out/Products" OBJROOT="$out/Intermediates" \
+        PRODUCT_BUNDLE_IDENTIFIER=im.toss.necto.android-sample build
+    run cli swift build --package-path NectoMac --product necto-cli
+fi
+
+host="$out/Products/Debug/Necto.app/Contents/MacOS/Necto"
+cli="$PWD/NectoMac/.build/debug/necto-cli"
+[[ -x "$host" && -x "$cli" ]] || { echo "Build first: run without --no-build." >&2; exit 1; }
+run install "$adb" -s "$serial" install -r SDK/Android/sample/build/outputs/apk/debug/sample-debug.apk
+run launch "$adb" -s "$serial" shell am start -W -n im.toss.necto.sample/.MainActivity
+exec script/android-connect "$serial" im.toss.necto.sample --adb "$adb" --host "$host" --cli "$cli" \
+    --state "$out/current-run.json" --log "$out/Logs/host.log"

@@ -32,6 +32,7 @@ builds, release packaging tests, and a fresh vulnerability scan.
 | Anything that reaches the app | `script/build`, then launch it |
 | The SDK's public API | `script/build` with a simulator booted, including ExampleApp's SDK integration |
 | Connection lifecycle or CLI device operations | `script/test e2e` |
+| Android SDK or the Mac's Android connection | `SDK/Android/gradlew -p SDK/Android build`, then the Android checks below |
 | Contract change | Update fixtures in the same commit |
 
 `script/test` runs Swift and Vitest unit tests, native cache and WebView integration
@@ -131,6 +132,24 @@ another SDK instance cannot start listening in that range.
 For a device, attach it over USB and confirm it appears. A `connectionRefused` result
 means the tunnel reached the device but nothing was listening, which is the expected
 answer when the app is not running.
+
+### Android connection
+
+Boot an emulator or attach a USB device, then:
+
+```bash
+script/android-sample <serial>
+```
+
+It builds the Android sample and a separate Necto.app (`im.toss.necto.android-sample`),
+installs the sample, and keeps Necto connected to it through `script/android-connect`
+until Ctrl-C. While it runs, from another terminal:
+
+| Script | What it checks |
+| --- | --- |
+| `script/test-android-sample` | Every shipped panel's operations through `necto-cli`, a stream cancelled and resubscribed, invalid input, then a force stop that removes the target and a relaunch that brings it back |
+| `script/test-android-security` | Malformed peers on the private socket: a silent handshake, frames outside the limits, deep nesting, a stalled frame, too many requests. Each is dropped and the next connection works |
+| `script/test-android-artifacts` | `necto-android` declares no permission, the packaged panels equal the iOS ones, and only the debug sample is debuggable. Needs a full Gradle build, not a running app |
 
 ## Verifying a plugin
 
@@ -289,10 +308,12 @@ read this bundle value, not an independent source-code version.
 
 Public CI uses GitHub-hosted runners. The Mac job ad-hoc signs its app and test
 bundle; the SDK job builds ExampleApp without signing.
-`Check` runs five jobs: `Mac Build & Tests`, `SDK Build & Tests`,
-`Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`, and `Documentation Build`.
-Mac, SDK and E2E use Xcode 26.6 on `macos-26`; web and documentation builds use
-`ubuntu-24.04`. The four non-E2E jobs use Node 22.12.0, and web and documentation
+`Check` runs six jobs: `Mac Build & Tests`, `SDK Build & Tests`,
+`Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`,
+`Android SDK Build & Tests`, and `Documentation Build`.
+Mac, SDK and E2E use Xcode 26.6 on `macos-26`; web, Android and documentation builds use
+`ubuntu-24.04`. The Android job uses Temurin JDK 17 and runs `./gradlew build` in
+`SDK/Android`, then `script/test-android-artifacts`. The four non-E2E jobs use Node 22.12.0, and web and documentation
 builds use Yarn 4.6.0.
 Documentation deployment remains a separate manual workflow. GitHub Pages must be
 configured to deploy from Actions.
@@ -328,6 +349,8 @@ that backup if restoring it failed.
 ## What cannot be verified here
 
 - **USB in a simulator.** The simulator has no usbmuxd path; it uses loopback.
+- **Android USB in an emulator.** An emulator's ADB transport is not USB; run the
+  Android checks on a device before calling the USB path verified.
 - **Appearance without runtime evidence.** Build and static-check results do not prove
   how the app looks. Use Loupe or an authorized capture path; report the gap if the
   required runtime access or screen recording permission is unavailable.

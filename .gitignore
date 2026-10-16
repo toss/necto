@@ -28,3 +28,9 @@ WebBridge/dist/
 .claude/
 /_workspace/
 **/.vitepress/cache/
+
+# Local Android builds and SDK configuration.
+SDK/Android/**/.gradle/
+SDK/Android/**/.kotlin/
+SDK/Android/**/build/
+SDK/Android/local.properties

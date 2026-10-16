@@ -145,6 +145,35 @@ jobs:
       - name: Test web packages and panel contracts
         run: script/test web
 
+  android:
+    name: Android SDK Build & Tests
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - name: Install Android SDK packages
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Build and test the Android SDK and sample
+        working-directory: SDK/Android
+        run: ./gradlew build --console=plain
+      - name: Test Android artifacts
+        run: script/test-android-artifacts
+      - name: Upload Android test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-test-results
+          path: SDK/Android/*/build/reports/tests
+          retention-days: 7
+
   docs:
     name: Documentation Build
     if: github.server_url == 'https://github.com'
