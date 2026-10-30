@@ -310,6 +310,39 @@ class RuntimeTests {
         }
     }
 
+    @Test
+    fun aNewerHostReplacesOneThatWentQuiet() = runBlocking<Unit> {
+        withTimeout(10_000) {
+            runtime.register(testPlugin)
+            // A host whose cable was pulled: the connection stays open and says nothing.
+            val quiet = connect()
+            val next = FakeHost(listen())
+            next.handshake()
+            quiet.awaitClosed()
+            next.invoke("replaced", "test.echo")
+            assertEquals("replaced", next.result().requestID)
+            assertTrue(runtime.status.value is NectoSDK.Status.Connected)
+        }
+    }
+
+    @Test
+    fun aHostStillSayingHelloLeavesTheConnectedOneAlone() = runBlocking<Unit> {
+        withTimeout(10_000) {
+            runtime.register(testPlugin)
+            val host = connect()
+            val pending = FakeHost(listen())
+            pending.receive()
+            host.invoke("kept", "test.echo")
+            assertEquals("kept", host.result().requestID)
+            // A refused handshake does not replace it either, nor change what it reports.
+            pending.session.send(NectoHandshakeAck(accepted = false, rejection = NectoHandshakeAck.Rejection.MISSING_APP_IDENTITY).toJson())
+            pending.awaitClosed()
+            host.invoke("still", "test.echo")
+            assertEquals("still", host.result().requestID)
+            assertTrue(runtime.status.value is NectoSDK.Status.Connected)
+        }
+    }
+
     // MARK: A host that misbehaves
 
     /**

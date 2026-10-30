@@ -24,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -49,6 +50,8 @@ internal class NectoSdkRuntime(
 
     /** Held for the life of the connection. */
     private var session: NectoMessageSession? = null
+    /** Sessions still saying hello. One takes over [session] once the host accepts it. */
+    private val handshaking = HashSet<NectoMessageSession>()
     private val statusFlow = MutableStateFlow<NectoSDK.Status>(NectoSDK.Status.Stopped)
     private val registered = ArrayList<NectoPlugin>()
     private val registeringIDs = HashSet<String>()
@@ -148,7 +151,10 @@ internal class NectoSdkRuntime(
         }
     }
 
-    /** Accepts connections until the listener goes away. One session at a time. */
+    /**
+     * Accepts connections until the listener goes away. Each is handled on its own, so a
+     * newer host can take over from a connection that went quiet without being closed.
+     */
     private suspend fun serve(listen: () -> NectoListener, generation: Any) {
         val listener = try {
             listen()
@@ -170,13 +176,15 @@ internal class NectoSdkRuntime(
         }
 
         try {
-            while (currentCoroutineContext().isActive) {
-                val session = listener.accept()
-                if (!currentCoroutineContext().isActive) {
-                    session.close()
-                    break
+            coroutineScope {
+                while (isActive) {
+                    val session = listener.accept()
+                    if (!isActive) {
+                        session.close()
+                        break
+                    }
+                    launch { handle(session) }
                 }
-                handle(session)
             }
         } catch (error: CancellationException) {
             throw error
@@ -193,6 +201,8 @@ internal class NectoSdkRuntime(
     fun stop() {
         val closing = synchronized(lock) {
             val closing = Triple(serveJob, listener, session)
+            val greeting = handshaking.toList()
+            handshaking.clear()
             serveJob = null
             generation = null
             listener = null
@@ -201,13 +211,14 @@ internal class NectoSdkRuntime(
             val pending = requests.values.map { it.second }
             requests.clear()
             setStatusLocked(NectoSDK.Status.Stopped)
-            closing to pending
+            Triple(closing, pending, greeting)
         }
-        val (jobs, pending) = closing
+        val (jobs, pending, greeting) = closing
         jobs.first?.cancel()
         pending.forEach { it.cancel() }
         // Closing is what wakes a blocked accept or read.
         jobs.third?.close()
+        greeting.forEach { it.close() }
         jobs.second?.stop()
     }
 
@@ -224,23 +235,19 @@ internal class NectoSdkRuntime(
         handle(session)
     }
 
-    /** Says hello, tells the host what this app offers, then reads until it goes away. */
+    /**
+     * Says hello, tells the host what this app offers, then reads until it goes away.
+     *
+     * A session replaces the current one only once the host accepts its handshake. A phone
+     * can hold a connection open after its cable is pulled, so the host's next one has to be
+     * able to take over, and one that never answers must not end a session that works.
+     */
     private suspend fun handle(session: NectoMessageSession) {
         val active = currentCoroutineContextIsActive()
-        val previous = synchronized(lock) {
-            if (!active) return@synchronized null
-            val previous = this.session to requests.values.map { it.second }
-            requests.clear()
-            stopRegistrationUpdatesLocked()
-            this.session = session
-            previous
-        }
-        if (previous == null) {
+        if (!synchronized(lock) { active && handshaking.add(session) }) {
             session.close()
             return
         }
-        previous.first?.close()
-        previous.second.forEach { it.cancel() }
 
         try {
             val identity = identity
@@ -259,14 +266,27 @@ internal class NectoSdkRuntime(
                 NectoHandshakeAck.fromJson(session.receiveJson(MAXIMUM_ACK_BYTES))
             }
             if (!ack.accepted) {
-                setStatus(NectoSDK.Status.Failed("Necto refused the connection: ${ack.rejection?.rawValue ?: "unknown"}"), session)
+                setHandshakeStatus(NectoSDK.Status.Failed("Necto refused the connection: ${ack.rejection?.rawValue ?: "unknown"}"), session)
                 session.close()
                 return
             }
-            if (synchronized(lock) { this.session !== session } || !currentCoroutineContextIsActive()) {
+
+            val stillActive = currentCoroutineContextIsActive()
+            val previous = synchronized(lock) {
+                // Gone from the set when the runtime stopped while the host was answering.
+                if (!handshaking.remove(session) || !stillActive) return@synchronized null
+                val previous = this.session to requests.values.map { it.second }
+                requests.clear()
+                stopRegistrationUpdatesLocked()
+                this.session = session
+                previous
+            }
+            if (previous == null) {
                 session.close()
                 return
             }
+            previous.first?.close()
+            previous.second.forEach { it.cancel() }
             setStatus(NectoSDK.Status.Connected(hello.appBundleID), session)
 
             startRegistrationUpdates(session)
@@ -274,10 +294,18 @@ internal class NectoSdkRuntime(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            setStatus(NectoSDK.Status.Failed(error.message ?: error.toString()), session)
+            setHandshakeStatus(NectoSDK.Status.Failed(error.message ?: error.toString()), session)
             session.close()
         } finally {
+            synchronized(lock) { handshaking.remove(session) }
             disconnect(session)
+        }
+    }
+
+    /** Reports on [session] unless another one is connected, which keeps its own status. */
+    private fun setHandshakeStatus(value: NectoSDK.Status, session: NectoMessageSession) {
+        synchronized(lock) {
+            if (this.session === session || (this.session == null && session in handshaking)) setStatusLocked(value)
         }
     }
 
