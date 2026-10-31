@@ -17,9 +17,11 @@ import im.toss.necto.model.NectoPluginResult
 import im.toss.necto.model.NectoSemanticVersion
 import im.toss.necto.model.jsonObject
 import im.toss.necto.model.jsonOf
+import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -142,6 +144,20 @@ class ModelTests {
             "https://example.com:0", "https://example.com:65536", "https://example.com;script-src",
         )) {
             assertFailsWith<NectoManifestValidationError>(origin) { manifest(origin).validate() }
+        }
+    }
+
+    @Test
+    fun shippedPanelManifestsValidate() {
+        // Generated from the iOS SDK's built panels before the tests compile.
+        val panels = File("build/generated/panelResources/necto/panels").listFiles()!!.filter { it.isDirectory }
+        assertTrue(panels.size >= 6)
+        for (panel in panels) {
+            val manifest = NectoPluginManifest.fromJson(NectoJsonValue.parse(panel.resolve("manifest.json").readText()))
+            manifest.validate()
+            assertEquals(panel.name, manifest.id)
+            assertTrue(manifest.requiresTarget)
+            assertNotNull(NectoPanelArchive.read(panel).files.firstOrNull { it.path == "index.html" })
         }
     }
 }

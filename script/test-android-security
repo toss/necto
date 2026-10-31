@@ -132,19 +132,19 @@ try:
     with connect() as client:
         for number in range(33):
             try:
-                invoke(client, str(number), "com.example.app.counter", "stream")
+                invoke(client, str(number), "events.observe", "stream")
             except BrokenPipeError:
                 break
         closed(client)
         results["concurrentRequestLimit"] = True
 
     with connect() as client:
-        invoke(client, "recovered", "com.example.app.state")
+        invoke(client, "recovered", "events.list")
         # Every plugin registers on its own, so the answer follows the remaining ones.
         while (reply := receive(client))["type"] != "plugin.result":
             assert reply["type"] == "plugin.register"
         assert reply["payload"]["requestID"] == "recovered"
-        assert "appVersion" in reply["payload"]["output"]
+        assert "events" in reply["payload"]["output"]
         results["recoversWithoutAppRestart"] = True
 finally:
     os.kill(run["pid"], signal.SIGCONT)

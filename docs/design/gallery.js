@@ -882,6 +882,18 @@ const editorRows = [
       </div>
       <button type="button" class="necto-button necto-button-quiet" style="align-self:flex-start">+ Add item</button>
     </div>`],
+  ["StringSet", "example.tags",
+    `<div style="display:flex; flex-direction:column; gap:6px; width:280px">
+      <div style="display:flex; gap:6px">
+        <input class="necto-field" style="flex:1; font-family:var(--necto-font-mono)" value="1.0" aria-label="Item 1" />
+        <button type="button" class="necto-button necto-button-quiet" aria-label="Remove item">✕</button>
+      </div>
+      <div style="display:flex; gap:6px">
+        <input class="necto-field" style="flex:1; font-family:var(--necto-font-mono)" value="&quot;quoted&quot;" aria-label="Item 2" />
+        <button type="button" class="necto-button necto-button-quiet" aria-label="Remove item">✕</button>
+      </div>
+      <button type="button" class="necto-button necto-button-quiet" style="align-self:flex-start">+ Add item</button>
+    </div>`],
   ["Dictionary", "example.flags",
     `<div style="display:flex; flex-direction:column; gap:6px; width:380px">
       <div style="display:flex; gap:6px">
