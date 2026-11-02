@@ -17,6 +17,10 @@ import im.toss.necto.model.NectoPluginRegistration
 import im.toss.necto.model.NectoPluginResult
 import im.toss.necto.model.jsonObject
 import im.toss.necto.model.jsonOf
+import im.toss.necto.plugins.NectoEvent
+import im.toss.necto.plugins.NectoEventsPlugin
+import im.toss.necto.plugins.NectoNetworkPlugin
+import im.toss.necto.plugins.NectoNetworkRecord
 import im.toss.necto.sdk.NectoAppIdentity
 import im.toss.necto.sdk.NectoPlugin
 import im.toss.necto.sdk.NectoRegistrar
@@ -61,15 +65,6 @@ class RuntimeTests {
                 }
             }
         }
-    }
-
-    /** A panel carried as Java resources, the way an app brings one along. */
-    private val testPanel = NectoPluginPanel.resources("panels/test-panel", RuntimeTests::class.java.classLoader!!)
-
-    private fun panelPlugin(id: String) = object : NectoPlugin {
-        override val id = id
-        override val panel = testPanel
-        override fun register(necto: NectoRegistrar) = Unit
     }
 
     init {
@@ -195,12 +190,12 @@ class RuntimeTests {
             assertEquals(NectoOperationKind.STREAM, registration.catalog.bridges.first { it.name == "necto.device.test.ticks" }.kind)
 
             // A plugin added mid-session joins it; removal is an empty catalog.
-            runtime.register(panelPlugin("late"))
-            val late = host.awaitRegistration("late")
-            assertNotNull(late.panel?.contentHash)
-            host.registrations.remove("late")
-            runtime.unregister("late")
-            assertTrue(host.awaitRegistration("late").catalog.bridges.isEmpty())
+            runtime.register(NectoEventsPlugin())
+            val events = host.awaitRegistration("event-log")
+            assertNotNull(events.panel?.contentHash)
+            host.registrations.remove("event-log")
+            runtime.unregister("event-log")
+            assertTrue(host.awaitRegistration("event-log").catalog.bridges.isEmpty())
         }
     }
 
@@ -250,11 +245,12 @@ class RuntimeTests {
     @Test
     fun panelsAreServedByTheSdk() = runBlocking<Unit> {
         withTimeout(10_000) {
-            runtime.register(panelPlugin("with-panel"))
+            val events = NectoEventsPlugin()
+            runtime.register(events)
             val host = connect()
-            val stamp = host.awaitRegistration("with-panel").panel!!
+            val stamp = host.awaitRegistration("event-log").panel!!
 
-            host.invoke("p", "plugins.assets", input = jsonObject("pluginID" to jsonOf("with-panel")))
+            host.invoke("p", "plugins.assets", input = jsonObject("pluginID" to jsonOf("event-log")))
             val archive = NectoPanelArchive.fromJson(host.result().output!!)
             assertEquals(stamp.contentHash, archive.contentHash)
             assertTrue(archive.files.any { it.path == "manifest.json" })
@@ -268,7 +264,7 @@ class RuntimeTests {
     @Test
     fun panelsAreReadOnceWhenAHostFirstNeedsThem() = runBlocking<Unit> {
         withTimeout(10_000) {
-            val real = testPanel
+            val real = NectoEventsPlugin().panel!!
             val reads = java.util.concurrent.atomic.AtomicInteger()
             val registeringThread = Thread.currentThread()
             var readingThread: Thread? = null
@@ -293,6 +289,44 @@ class RuntimeTests {
             host.invoke("p", "plugins.assets", input = jsonObject("pluginID" to jsonOf("lazy-panel")))
             assertNotNull(host.result().output)
             assertEquals(1, reads.get(), "the panel is read once and then held")
+        }
+    }
+
+    @Test
+    fun eventsAndNetworkPluginsReportToObservers() = runBlocking<Unit> {
+        withTimeout(10_000) {
+            val events = NectoEventsPlugin()
+            val network = NectoNetworkPlugin()
+            runtime.register(events)
+            runtime.register(network)
+            val host = connect()
+
+            host.invoke("o", "events.observe", NectoOperationKind.STREAM)
+            delay(200)
+            events.report(NectoEvent(NectoEvent.Level.WARN, "Cache", "Evicted", mapOf("count" to "240")))
+            val observed = host.result()
+            assertFalse(observed.isFinal)
+            assertEquals(jsonOf("Evicted"), observed.output?.get("event")?.get("message"))
+            val eventID = observed.output!!["event"]!!["id"]!!.stringValue!!
+
+            host.invoke("d", "events.detail", input = jsonObject("eventID" to jsonOf(eventID)))
+            assertEquals(jsonOf("240"), host.result().output?.get("event")?.get("detail")?.get("count"))
+
+            network.report(NectoNetworkRecord("r", "GET", "https://example.com/v1/items?page=2", 1.0, NectoNetworkRecord.State.PENDING))
+            network.report(
+                NectoNetworkRecord(
+                    "r", "GET", "https://example.com/v1/items?page=2", 1.0, NectoNetworkRecord.State.COMPLETED,
+                    statusCode = 200, responseBody = NectoNetworkRecord.Body.of("{}".toByteArray(), "application/json"),
+                ),
+            )
+            host.invoke("l", "network-records.list")
+            val records = host.result().output!!["records"]!!.arrayValue!!
+            assertEquals(1, records.size)
+            assertEquals(jsonOf("items?page=2"), records[0]["name"])
+            assertEquals(jsonOf(200), records[0]["statusCode"])
+
+            host.invoke("rd", "network-records.detail", input = jsonObject("recordID" to jsonOf("r")))
+            assertEquals(jsonOf("{}"), host.result().output!!["record"]!!["responseBody"]!!["text"])
         }
     }
 

@@ -30,6 +30,7 @@ dependencyResolutionManagement {
 rootProject.name = "necto-android"
 
 include(":necto-core")
+include(":necto-okhttp")
 
 // The Android library needs the Android Gradle Plugin from Google's Maven. Pass
 // -Pnecto.skipAndroid=true where that is unreachable to build the JVM modules alone.

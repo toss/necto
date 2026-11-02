@@ -147,9 +147,9 @@ until Ctrl-C. While it runs, from another terminal:
 
 | Script | What it checks |
 | --- | --- |
-| `script/test-android-sample` | The `plugin-sample` panel the app carries, through `necto-cli`: a stream cancelled and resubscribed, invalid input, then a force stop that removes the target and a relaunch that brings it back |
+| `script/test-android-sample` | Every shipped panel's operations through `necto-cli`, a stream cancelled and resubscribed, invalid input, then a force stop that removes the target and a relaunch that brings it back |
 | `script/test-android-security` | Malformed peers on the private socket: a silent handshake, frames outside the limits, deep nesting, a stalled frame, too many requests. Each is dropped and the next connection works |
-| `script/test-android-artifacts` | `necto-android` declares no permission, `necto-core` carries no panels, and only the debug sample is debuggable. Needs a full Gradle build, not a running app |
+| `script/test-android-artifacts` | `necto-android` declares no permission, the packaged panels equal the iOS ones, and only the debug sample is debuggable. Needs a full Gradle build, not a running app |
 
 ## Verifying a plugin
 

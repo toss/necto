@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Verify what the Android build ships: the SDK asks for no permissions, carries
-no panels of its own, and the sample is debuggable in debug builds only."""
+"""Verify what the Android build ships: the SDK asks for no permissions, carries the
+iOS panels unchanged, and the sample is debuggable in debug builds only."""
 import argparse
 import json
 import os
@@ -24,11 +24,23 @@ with zipfile.ZipFile(aar) as archive:
     assert "uses-permission" not in manifest, "necto-android declares a permission"
 results["nectoAndroidAAR"] = dict(bytes=aar.stat().st_size, permissions=0)
 
-# The SDK is a bridge: panels ride with the plugins that bring them, never in the core.
+# The panels are the built iOS ones; only the overridden manifests may differ.
+panels = root / "SDK/iOS/Sources/NectoDefaultPlugins/Panels"
+overrides = android / "necto-core/src/main/panel-manifests"
 jar = next((android / "necto-core/build/libs").glob("necto-core-*[0-9].jar"))
+compared = 0
 with zipfile.ZipFile(jar) as archive:
-    carried = [name for name in archive.namelist() if name.startswith("necto/panels/")]
-    assert not carried, f"necto-core carries panels: {carried[:3]}"
+    for panel in sorted(path for path in panels.iterdir() if path.is_dir()):
+        for file in sorted(path for path in panel.rglob("*") if path.is_file()):
+            relative = file.relative_to(panel).as_posix()
+            expected = file.read_bytes()
+            override = overrides / f"{panel.name}.json"
+            if relative == "manifest.json" and override.exists():
+                expected = override.read_bytes()
+            actual = archive.read(f"necto/panels/{panel.name}/{relative}")
+            assert actual == expected, f"{panel.name}/{relative} differs from its source"
+            compared += 1
+results["panels"] = dict(files=compared)
 
 # Necto starts in debuggable builds only, so a release must not be debuggable.
 for variant, suffix in (("debug", ""), ("release", "-unsigned")):
@@ -41,4 +53,4 @@ for variant, suffix in (("debug", ""), ("release", "-unsigned")):
 output = root / "Build/Android/artifact-results.json"
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_text(json.dumps(results, indent=2))
-print("PASS: no SDK permissions, no panels in the core, debuggable in debug only")
+print(f"PASS: no SDK permissions, {compared} panel files match, debuggable in debug only")

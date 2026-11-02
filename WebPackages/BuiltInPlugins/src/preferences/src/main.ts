@@ -270,9 +270,12 @@ function detailBody(): Node[] {
       return [pairs(), valueTitle(), field, actions([save])];
     }
 
-    case "Array": {
+    case "Array":
+    case "StringSet": {
       // Rows rather than a JSON blob: one element per field, and an element that is
-      // itself structured is one line of JSON in its row.
+      // itself structured is one line of JSON in its row. A string set holds only
+      // strings, so its rows go back as typed: `1.0` stays `1.0` rather than becoming 1.
+      const strings = detail.type === "StringSet";
       let items: string[];
       try {
         items = (JSON.parse(detail.value) as NectoJSONValue[]).map(display);
@@ -321,7 +324,7 @@ function detailBody(): Node[] {
       renderRows();
 
       const save = saveButton(() => {
-        void write(items.map(element)).catch(failed);
+        void write(strings ? items : items.map(element)).catch(failed);
       });
       return [pairs(), valueTitle(), rows, actions([save])];
     }
