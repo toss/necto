@@ -200,6 +200,44 @@ private func makeRegistry() -> NectoPluginRegistry {
     NectoPluginRegistry()
 }
 
+@Test("A mixed device panel keeps device and non-shell desktop operations available")
+func mixedDevicePanelKeepsNonShellOperations() async throws {
+    let registry = makeRegistry()
+    let target = NectoTarget(deviceID: "fixture", appBundleID: "com.example.fixture")
+    let bindings = [makeBinding(name: deviceName), makeBinding(), makeBinding(name: "necto.desktop.shell.execute")]
+    let manifest = NectoPluginManifest(
+        id: "mixed", name: "Mixed", description: "Mixed bridges", version: "1.0.0", author: "Necto",
+        icon: .init(systemName: "testtube.2"), assets: ["index.html"], allowedOrigins: ["self"],
+        operations: bindings.enumerated().map { index, binding in
+            NectoOperation(id: "operation-\(index)", title: "Read", description: "Read", kind: .once,
+                binding: binding, inputSchema: ["type": "object"], outputSchema: ["type": "object"], timeoutMs: 1000)
+        })
+    try await registry.installDevice(manifest: manifest, sourceIdentity: "device:com.example.fixture", for: target)
+    await registry.setDeviceProviders([StubProvider(binding: bindings[0])], for: target, pluginID: manifest.id)
+    await registry.registerHostProvider(StubProvider(binding: bindings[1]))
+    #expect(await registry.context(pluginID: manifest.id, target: target)?.operations.map(\.available) == [true, true, false])
+    for id in ["operation-0", "operation-1"] {
+        #expect(try await registry.invoke(pluginID: manifest.id, operationID: id, target: target) == ["ok": true])
+    }
+    let error = await #expect(throws: NectoBridgeError.self) {
+        try await registry.invoke(pluginID: manifest.id, operationID: "operation-2", target: target)
+    }
+    #expect(error?.code == .permissionDenied)
+}
+
+@Test("A device manifest cannot bypass the shell restriction by declaring a stream")
+func deviceShellSubscriptionsAreDenied() async throws {
+    let registry = makeRegistry()
+    let target = NectoTarget(deviceID: "fixture", appBundleID: "com.example.fixture")
+    let binding = makeBinding(name: "necto.desktop.shell.execute")
+    let manifest = makeManifest(binding: binding, kind: .stream)
+    try await registry.installDevice(manifest: manifest, sourceIdentity: "fixture", for: target)
+    let error = await #expect(throws: NectoBridgeError.self) {
+        try await registry.subscribe(pluginID: manifest.id, operationID: "records.list", target: target)
+    }
+    #expect(error?.code == .permissionDenied)
+}
+
 private struct LiveStreamProvider: NectoOperationProvider {
     let descriptor: NectoBridgeDescriptor
     let stream: AsyncThrowingStream<NectoJSONValue, any Error>

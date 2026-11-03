@@ -2,7 +2,7 @@
 //  Copyright (c) 2026 Viva Republica, Inc.
 //
 
-import NectoDefaultPlugins
+import NectoNetworkPlugin
 import NectoModel
 import Foundation
 import Testing

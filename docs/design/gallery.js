@@ -532,7 +532,7 @@ const pluginsPage = () => `
   </div>`;
 
 const shellCallers = [
-  [sampleIcon, "Plugin Sample", "Protected"],
+  [sampleIcon, "Shell Demo", "Protected"],
   [netIcon, "Web Inspector", "Command approval · 2 commands"],
   [sampleIcon, "Target Notes", "Command approval · 3 commands"],
   [gaugeIcon, "Host Status", "Full access"],
@@ -542,11 +542,11 @@ const shellAccessPage = () => `
   <div class="necto-body" style="padding: var(--necto-space-3)">
     <div class="necto-empty" style="height:auto;align-items:flex-start;padding:0;text-align:left">
       <p class="necto-empty-title">Shell access</p>
-      <p class="necto-caption">Control which plugins may run shell commands on this Mac.</p>
+      <p class="necto-caption">Control which desktop plugins may run shell commands on this Mac.</p>
     </div>
     <h3 class="necto-section-title">Global override</h3>
     <div class="necto-row">
-      <div class="necto-row-label">Full Access<p class="necto-row-hint">Allow every plugin and CLI request without confirmation.</p></div>
+      <div class="necto-row-label">Full Access<p class="necto-row-hint">Allow every desktop plugin and CLI request without confirmation.</p></div>
       <button type="button" class="necto-switch" role="switch" aria-checked="false" aria-label="Full Access"></button>
     </div>
     <h3 class="necto-section-title">Plugin access</h3>

@@ -4,13 +4,13 @@
 
 import { defineConfig } from "vite";
 
-// The build output lands inside NectoDefaultPlugins, which carries it to the Mac
+// The build output lands inside NectoPreferencesPlugin, which carries it to the Mac
 // as the plugin's panel when an app registers the plugin.
 // manifest.json lives in public/ so it is copied alongside the build.
 export default defineConfig({
   base: "./",
   build: {
-    outDir: "../../../../SDK/iOS/Sources/NectoDefaultPlugins/Panels/preferences",
+    outDir: "../../../../SDK/iOS/Sources/NectoPreferencesPlugin/Panels/preferences",
     emptyOutDir: true,
     rollupOptions: {
       output: {

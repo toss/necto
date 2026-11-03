@@ -48,10 +48,14 @@ handlers and manifest bindings, not a feature-specific host adapter or wire mess
 | `NectoCLIService` | Control request, response and socket endpoint shared by the app and CLI | Command parsing or provider execution |
 | `NectoMacService` | Operation routing, host providers, device connections and control server | UI or app-specific features |
 | `NectoSDK` | App-side listening, plugin registration and message routing | Feature implementations, `URLProtocol` or domain types |
-| `NectoDefaultPlugins` | The plugins Necto ships, including UI Control | How an app captures traffic |
-| `NectoTouchInjection` | iOS touch delivery for UI Control, including SwiftUI gesture routing | SDK transport or host-specific behavior |
-| `NectoProcessMetrics` | Optional CPU, memory, FPS and thread sampling | Starting unless the app registers it and a reader subscribes |
-| `NectoURLSessionCapture` | One capture mechanism, for apps using `URLSession` | Capture that an app cannot disable |
+| `NectoNetworkPlugin` | Network records and panel | Automatic traffic capture |
+| `NectoEventsPlugin` | Application events and panel | Automatic event capture |
+| `NectoFilesPlugin` | File browsing and panel | Other plugins |
+| `NectoPreferencesPlugin` | Preferences access and panel | Other plugins |
+| `NectoPerformancePlugin` | Performance readings and panel | Automatic process sampling |
+| `NectoUIControlPlugin` | UI inspection, interaction and iOS touch runtime | Other plugins |
+| `NectoProcessMetricPlugin` | Optional CPU, memory, FPS and thread sampling | Starting unless the app registers it and a reader subscribes |
+| `NectoURLSessionCapturePlugin` | One capture mechanism, for apps using `URLSession` | Capture that an app cannot disable |
 | `Necto/` | Shell UI and the plugin host | Feature screens |
 | `ExampleApp/` | Verifying connection and plugins on a device | Product features |
 
@@ -122,16 +126,16 @@ Libraries are managed as Swift packages, and app targets live in `Necto.xcodepro
 
 The iOS SDK sources and tests live in `SDK/iOS/Sources` and `SDK/iOS/Tests`.
 `Package.swift` stays at the repository root so existing Swift package consumers
-keep the same repository URL, product and module names. The Mac package continues
+keep the same repository URL. The Mac package continues
 to reuse `NectoModel` and `NectoTransport` from that package.
 
-The root package exposes one product, `NectoSDK`, containing the SDK, shared modules
-and built-in plugins. Modules remain separate; apps import and register the plugins
-they use. The local `NectoMac/Package.swift` builds Mac services, `necto-cli` and their
+The root package exposes `NectoSDK` for the bridge and separate products for each plugin.
+Capture products remain separate and are never dependencies of the core SDK. Apps import and register
+the plugins they use. The local `NectoMac/Package.swift` builds Mac services, `necto-cli` and their
 tests. It depends on the root product for shared types and transport; the SDK has no
 dependency on the Mac package or ArgumentParser. Run `script/test swift` to test both
-packages and the single-product consumer fixture.
+packages and the selective-product consumer fixture.
 
 Panels are built by Yarn workspaces into the Swift packages that carry them —
-`SDK/iOS/Sources/NectoDefaultPlugins/Panels/<id>` for the defaults, the example app's bundle
+`SDK/iOS/Sources/<PluginModule>/Panels/<id>` for the defaults, the example app's bundle
 for the sample — and committed so that building the app alone needs no Node.

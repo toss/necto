@@ -107,6 +107,8 @@ assert.ok(!targets().some(identifier("poc.push")), "Detail must no longer offer 
 await act("back", screen);
 assert.ok(targets().some(identifier("poc.push")), "Back must restore the root screen");
 await act("swipe", identifier("poc.scroll"), { direction: "up", distanceRatio: 0.7, durationMs: 500, position: { x: 0.25, y: 0.85 } });
+assert.equal(targets().find(identifier("poc.scroll"))?.value, "Main queue ran during pan",
+  "Main-queue work scheduled by the pan handler must run before the gesture ends");
 await delay(1000);
 assert.ok(!targets().some(identifier("poc.item.1")), "UIKit scroll should move Item 1 offscreen");
 console.log("PASS UIKit: navigation bar, accessible gesture, input, secure value redaction, push/back, swipe");

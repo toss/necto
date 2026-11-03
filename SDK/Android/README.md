@@ -38,9 +38,9 @@ The device appears as `android:<serial>`, labelled `Android <version>`.
 
 | Module | Contents | iOS counterpart |
 | --- | --- | --- |
-| `necto-core` (plain JVM) | Protocol models, JSON and schema validation, framed message transport, coroutine SDK runtime, the shared part of the Events, Network, Performance, Files and UI Control plugins, web panels | `NectoModel`, `NectoTransport`, `NectoSDK`, `NectoDefaultPlugins` |
-| `necto-android` | The ADB listener, app identity from `Context`, DataStore Preferences plugin, process sampler (CPU, PSS, FPS, threads), UI Control for Views and Jetpack Compose, default Files roots | `NectoProcessMetrics`, the UIKit parts |
-| `necto-okhttp` | Network capture with an OkHttp `Interceptor` | `NectoURLSessionCapture` |
+| `necto-core` (plain JVM) | Protocol models, JSON and schema validation, framed message transport, coroutine SDK runtime, the shared part of the Events, Network, Performance, Files and UI Control plugins, web panels | `NectoModel`, `NectoTransport`, `NectoSDK`, the individual plugin modules |
+| `necto-android` | The ADB listener, app identity from `Context`, DataStore Preferences plugin, process sampler (CPU, PSS, FPS, threads), UI Control for Views and Jetpack Compose, default Files roots | `NectoProcessMetricPlugin`, the UIKit parts |
+| `necto-okhttp` | Network capture with an OkHttp `Interceptor` | `NectoURLSessionCapturePlugin` |
 
 The Maven group and package root is `im.toss.necto`.
 
@@ -135,7 +135,7 @@ One session is served at a time.
 - **Panels** are packaged as Java resources: `necto/panels/<id>`, with a `files.txt`
   index.
   - The build generates them from the built iOS panels in
-    `SDK/iOS/Sources/NectoDefaultPlugins/Panels`.
+    `SDK/iOS/Sources/<PluginModule>/Panels`.
   - It overrides only the Control and Preferences manifests, which describe Android
     behaviour. They live in `necto-core/src/main/panel-manifests`, and the build fails
     when their contracts drift from the iOS ones.

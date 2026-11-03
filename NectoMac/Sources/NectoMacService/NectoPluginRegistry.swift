@@ -11,8 +11,15 @@ import Foundation
 /// No surface gets a private bypass.
 public actor NectoPluginRegistry {
     public struct InstalledPlugin: Sendable {
+        fileprivate enum Source: Sendable, Equatable {
+            case desktop
+            case device
+        }
+
         public let manifest: NectoPluginManifest
         public let principal: NectoPluginPrincipal
+        // The host registration path establishes this boundary, not manifest content or IDs.
+        fileprivate let source: Source
     }
 
     public enum InstallError: Sendable, Error, Equatable, CustomStringConvertible {
@@ -26,6 +33,11 @@ public actor NectoPluginRegistry {
             }
         }
     }
+
+    private static let shellBridgeNames: Set<String> = [
+        NectoShellExecuteProvider.key,
+        NectoShellAuthorizationProvider.key,
+    ]
 
     private var installed: [String: InstalledPlugin] = [:]
     /// Device-carried manifests are scoped to their target. Two connected devices can
@@ -98,7 +110,8 @@ public actor NectoPluginRegistry {
 
         let plugin = InstalledPlugin(
             manifest: manifest,
-            principal: NectoPluginPrincipal(pluginID: manifest.id, sourceIdentity: sourceIdentity)
+            principal: NectoPluginPrincipal(pluginID: manifest.id, sourceIdentity: sourceIdentity),
+            source: .desktop
         )
         installed[manifest.id] = plugin
         return plugin
@@ -126,7 +139,8 @@ public actor NectoPluginRegistry {
 
         let plugin = InstalledPlugin(
             manifest: manifest,
-            principal: NectoPluginPrincipal(pluginID: manifest.id, sourceIdentity: sourceIdentity)
+            principal: NectoPluginPrincipal(pluginID: manifest.id, sourceIdentity: sourceIdentity),
+            source: .device
         )
         if let previous = deviceInstalled[target]?[manifest.id] {
             cancelInvocations(principal: previous.principal, target: target)
@@ -424,6 +438,9 @@ public actor NectoPluginRegistry {
         plugin: InstalledPlugin,
         target: NectoTarget?
     ) -> String? {
+        if plugin.source == .device, Self.shellBridgeNames.contains(operation.binding.name) {
+            return "Device plugins cannot access desktop shell bridges"
+        }
         if operation.binding.requiresTarget, target == nil {
             return "Select a connected app to use this operation"
         }
@@ -443,6 +460,9 @@ public actor NectoPluginRegistry {
         plugin: InstalledPlugin,
         target: NectoTarget?
     ) -> NectoBridgeErrorCode {
+        if plugin.source == .device, Self.shellBridgeNames.contains(operation.binding.name) {
+            return .permissionDenied
+        }
         if operation.binding.requiresTarget, target == nil {
             return .targetDisconnected
         }

@@ -5,7 +5,7 @@
 import Foundation
 import NectoModel
 import NectoSDK
-import NectoURLSessionCapture
+import NectoURLSessionCapturePlugin
 import Testing
 
 // Keep this adopter on the old API to catch source compatibility regressions.
@@ -34,7 +34,7 @@ func namingCompatibility() throws {
     #expect(try JSONDecoder().decode(NectoPluginCancel.self, from: encoded) == legacy)
     #expect(NectoEnvelope.Kind.pluginCancel.rawValue == "plugin.cancel")
 
-    // Type-check both entry points without mutating process-wide URLProtocol state.
+    // Type-check both entry points without mutating process-wide capture state.
     let legacyRemove: () -> Void = NectoURLSessionCapture.remove
     let uninstall: () -> Void = NectoURLSessionCapture.uninstall
     _ = (legacyRemove, uninstall)

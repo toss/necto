@@ -2,8 +2,8 @@
 //  Copyright (c) 2026 Viva Republica, Inc.
 //
 
-import NectoDefaultPlugins
-import NectoProcessMetrics
+import NectoEventsPlugin
+import NectoProcessMetricPlugin
 import Foundation
 
 /// Gives the Events and Performance plugins something real to show.

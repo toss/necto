@@ -45,7 +45,7 @@ Mac host  ── runtime ──┬─ host bridge      storage, targets, shell
 새 권한은 별도 모듈에 `NectoPlugin`을 구현해 추가해요. 와이어 메시지 종류나
 `NectoSDKRuntime` 코드를 추가하지 않아요.
 
-**검사** — Swift 패키지의 실제 의존성과 SDK만 추가한 앱의 연결을 확인해요.
+**검사** — Swift 패키지의 실제 의존성과 외부 패키지에서의 SDK 사용을 확인해요.
 기능별 모듈 분리는 코드 리뷰에서 확인하며, 주석이나 식별자 표기를 테스트하지는 않아요.
 
 ```bash
@@ -62,11 +62,11 @@ Necto는 앱이 요청을 만들고 뷰를 배치하고 플래그를 저장하�
 그래서 Necto는 **인터페이스와 선택적인 구현을 별도로 배포해요.**
 
 ```swift
-NectoDefaultPlugins       // the interface: network.report(record)
-NectoURLSessionCapture    // one implementation, its own module, opt-in
+NectoNetworkPlugin          // the interface: network.report(record)
+NectoURLSessionCapturePlugin // one implementation, its own module, opt-in
 ```
 
-두 모듈은 `NectoSDK` product에 함께 들어 있어요. 별도의 네트워크 스택을 쓰는
+두 모듈은 각각 별도 SPM product이고 `NectoSDK`에는 포함되지 않아요. 별도의 네트워크 스택을 쓰는
 앱은 보고용 플러그인을 등록하고 `report(_:)`를 호출해요. URLSession 캡처는 켜지 않아요.
 구현을 인터페이스 모듈에 포함하면 다른 스택을 쓰는 앱에도 특정 구현을 강제하게 돼요.
 

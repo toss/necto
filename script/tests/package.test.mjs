@@ -26,16 +26,39 @@ test("the SDK bridge depends only on model and transport", () => {
   assert.deepEqual(dependencies("NectoSDK").sort(), ["NectoModel", "NectoTransport"]);
 });
 
-test("default plugin interfaces do not pull in capture implementations", () => {
+function closure(name) {
   const visited = new Set();
-  const pending = ["NectoDefaultPlugins"];
+  const pending = [name];
   while (pending.length) {
-    const name = pending.pop();
-    if (visited.has(name)) continue;
-    visited.add(name);
-    pending.push(...dependencies(name));
+    const target = pending.pop();
+    if (visited.has(target)) continue;
+    visited.add(target);
+    pending.push(...dependencies(target));
   }
-  for (const capture of ["NectoURLSessionCapture", "NectoProcessMetrics"]) {
-    assert.ok(!visited.has(capture), `${capture} must remain an opt-in implementation`);
+  return visited;
+}
+
+const plugins = ["NectoNetworkPlugin", "NectoEventsPlugin", "NectoFilesPlugin",
+  "NectoPreferencesPlugin", "NectoPerformancePlugin", "NectoUIControlPlugin"];
+
+test("every plugin is independently selectable without sibling plugins", () => {
+  for (const name of plugins) {
+    assert.deepEqual(manifest.products.find(product => product.name === name)?.targets, [name]);
+    const included = closure(name);
+    for (const other of plugins.filter(other => other !== name)) assert.ok(!included.has(other));
+    assert.ok(!included.has("NectoURLSessionCapturePlugin"));
+    assert.ok(!included.has("NectoProcessMetricPlugin"));
   }
+});
+
+test("the core SDK and public reporting products exclude private runtime modules", () => {
+  assert.deepEqual(manifest.products.find(product => product.name === "NectoSDK").targets, ["NectoSDK"]);
+  for (const name of ["NectoSDK", "NectoNetworkPlugin"]) {
+    const included = closure(name);
+    for (const excluded of ["NectoURLSessionCapturePlugin", "NectoUIControlPlugin"]) {
+      assert.ok(!included.has(excluded), `${name} must not link ${excluded}`);
+    }
+  }
+  assert.deepEqual(dependencies("NectoURLSessionCapturePlugin").sort(), ["NectoModel", "NectoNetworkPlugin", "NectoSDK"]);
+  assert.deepEqual(dependencies("NectoProcessMetricPlugin").sort(), ["NectoModel", "NectoPerformancePlugin", "NectoSDK"]);
 });

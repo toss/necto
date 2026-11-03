@@ -6,7 +6,7 @@ import NectoModel
 import Foundation
 import Testing
 
-@testable import NectoDefaultPlugins
+@testable import NectoFilesPlugin
 @testable import NectoSDK
 
 /// Runs a plugin's registration the way the runtime does.
@@ -85,6 +85,51 @@ struct NectoFilesPluginTests {
         let binary = try await call(subject, "files.preview", ["root": "test", "path": "blob.bin"])
         #expect(binary["file"]?["kind"] == .string("binary"))
         #expect(binary["file"]?["text"] == nil)
+    }
+
+    /// The preview reads a fixed number of bytes, and a character of two to four bytes
+    /// can straddle that. The bytes left over must not make a text file look binary.
+    @Test("previews a long text whose cut lands inside a character", arguments: ["é", "한", "🙂"])
+    func previewsTextCutInsideACharacter(character: String) async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let subject = plugin(at: root)
+
+        // One leading ASCII byte per case moves the cut to every place inside a character.
+        for padding in 0..<character.utf8.count {
+            let content = String(repeating: "a", count: padding)
+                + String(repeating: character, count: NectoFilesPlugin.previewLimit)
+            try Data(content.utf8).write(to: root.appending(path: "log.txt"))
+
+            let file = try #require(
+                try await call(subject, "files.preview", ["root": "test", "path": "log.txt"])["file"]
+            )
+            #expect(file["kind"] == .string("text"))
+            #expect(file["isTruncated"] == .bool(true))
+            let text = try #require(file["text"]?.stringValue)
+            #expect(content.hasPrefix(text))
+            #expect(text.utf8.count > NectoFilesPlugin.previewLimit - 4)
+        }
+    }
+
+    @Test("still calls a long binary file binary")
+    func previewsLongBinaryAsBinary() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        // Valid text up to the cut, then a byte that starts nothing.
+        var bytes = Data(repeating: UInt8(ascii: "a"), count: NectoFilesPlugin.previewLimit - 1)
+        bytes.append(contentsOf: [0xFF, 0x00, 0x01])
+        try bytes.write(to: root.appending(path: "blob.bin"))
+        // A lone continuation byte where a character should have started.
+        var stray = Data(repeating: UInt8(ascii: "a"), count: NectoFilesPlugin.previewLimit - 2)
+        stray.append(contentsOf: [0x80, 0xED, 0x95, 0x9C])
+        try stray.write(to: root.appending(path: "stray.bin"))
+
+        let subject = plugin(at: root)
+        for name in ["blob.bin", "stray.bin"] {
+            let file = try await call(subject, "files.preview", ["root": "test", "path": .string(name)])["file"]
+            #expect(file?["kind"] == .string("binary"))
+        }
     }
 
     /// A 1x1 PNG. Real bytes rather than a stub, so the round trip proves the panel

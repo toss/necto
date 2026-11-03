@@ -385,8 +385,12 @@ async function select(id: string): Promise<void> {
   try {
     // Bodies live behind their own operation, so scrolling a long list does not drag
     // every response body along with it.
-    detail = await loadDetail(id);
+    const loaded = await loadDetail(id);
+    // Details overlap, and the one for a row already left can come back last.
+    if (selectedID !== id) return;
+    detail = loaded;
   } catch (error) {
+    if (selectedID !== id) return;
     message = String(error);
   }
   renderDetail();

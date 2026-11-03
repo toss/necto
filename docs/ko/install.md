@@ -54,7 +54,7 @@ open Build/Products/Debug/Necto.app
 ```bash
 xcrun simctl list devices available          # 디바이스 id를 하나 골라요
 xcrun simctl boot <device-id>
-xcodebuild -project Necto.xcodeproj -scheme ExampleApp -derivedDataPath Build -destination "id=<device-id>" build
+xcodebuild -project Necto.xcodeproj -scheme ExampleApp -destination "id=<device-id>" SYMROOT="$PWD/Build/Products" build
 xcrun simctl install <device-id> Build/Products/Debug-iphonesimulator/ExampleApp.app
 xcrun simctl launch <device-id> im.toss.necto.example
 ```

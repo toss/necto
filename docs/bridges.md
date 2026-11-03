@@ -160,6 +160,10 @@ and a reproducible cURL command.
 
 ### Shell — `necto.desktop.shell.*`
 
+Only desktop plugins and the CLI can use shell bridges. Device plugins receive
+`PERMISSION_DENIED` for execution and authorization requests, even with Global Full
+Access enabled. Other desktop bridges retain their existing access rules.
+
 Each caller starts in Protected mode. Users can change access in **Settings → Shell
 Access**, or approve a plugin's authorization request in Necto's native dialog.
 Installing a plugin grants access to these bridge contracts; it does not approve a
@@ -212,8 +216,7 @@ Command approval is a policy gate, not a sandbox. An approved command can invoke
 programs or mutable scripts, and Full access deliberately treats the caller like a
 local native app. Settings explains this limitation.
 
-Approvals belong to a principal, not a content hash. Device updates keep permissions
-for the same app bundle ID and plugin ID. A local folder/ZIP update keeps its
+Approvals belong to a principal, not a content hash. A local folder/ZIP update keeps its
 installation UUID and permissions only after the user confirms its source. Changed
 local bytes stay unloaded until reviewed; removal followed by reinstallation gets a
 new UUID. See [identity and trust](plugin-manifest.md#identity-and-trust).

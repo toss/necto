@@ -37,7 +37,7 @@ kotlin {
 
 // Built from WebPackages/BuiltInPlugins: the same plugin-sample panel ExampleApp carries.
 val generatePanelResources by tasks.registering(NectoPanelResources::class) {
-    panels.set(rootProject.layout.projectDirectory.dir("../../WebPackages/BuiltInPlugins/Plugins"))
+    panels.from(rootProject.layout.projectDirectory.dir("../../WebPackages/BuiltInPlugins/Plugins/plugin-sample"))
     ids.set(listOf("plugin-sample"))
     root.set("panels")
     output.set(layout.buildDirectory.dir("generated/panelResources"))

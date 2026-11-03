@@ -298,11 +298,16 @@ function detailBody(): Node[] {
 // -- actions -----------------------------------------------------------------
 
 async function loadDirectory(path: string): Promise<void> {
+  const root = rootID;
   try {
-    const output = await necto.device.send<{ entries: Entry[] }>("files.list", { root: rootID, path });
+    const output = await necto.device.send<{ entries: Entry[] }>("files.list", { root, path });
+    // Listings are kept by path alone, so one that comes back after the root was
+    // switched would show the old root's files as the new one's.
+    if (rootID !== root) return;
     loaded.set(path, output.entries);
     message = null;
   } catch (error) {
+    if (rootID !== root) return;
     loaded.set(path, []);
     message = messageOf(error);
   }
@@ -323,6 +328,7 @@ async function select(path: string): Promise<void> {
     closeDetail();
     return;
   }
+  const root = rootID;
   selectedPath = path;
   preview = null;
   info = null;
@@ -333,15 +339,24 @@ async function select(path: string): Promise<void> {
 
   try {
     const [previewOutput, infoOutput] = await Promise.all([
-      necto.device.send<{ file: Preview }>("files.preview", { root: rootID, path }),
-      necto.device.send<{ item: Entry }>("files.info", { root: rootID, path }),
+      necto.device.send<{ file: Preview }>("files.preview", { root, path }),
+      necto.device.send<{ item: Entry }>("files.info", { root, path }),
     ]);
+    if (!isShowing(root, path)) return;
     preview = previewOutput.file;
     info = infoOutput.item;
   } catch (error) {
+    if (!isShowing(root, path)) return;
     message = messageOf(error);
   }
   renderDetail();
+}
+
+/// Whether an answer still belongs to the file on screen. Requests overlap, and the
+/// one for a file already left behind can be the last to come back: shown under the
+/// file selected since, its text would be what Save writes there.
+function isShowing(root: string, path: string): boolean {
+  return rootID === root && selectedPath === path;
 }
 
 function closeDetail(): void {
@@ -357,22 +372,26 @@ function closeDetail(): void {
 
 async function saveText(): Promise<void> {
   if (!selectedPath || !preview || preview.kind !== "text" || preview.isTruncated) return;
+  const root = rootID;
   const path = selectedPath;
   const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
   try {
-    await necto.device.send("files.write", { root: rootID, path, content: draft });
+    await necto.device.send("files.write", { root, path, content: draft });
     const [previewOutput, infoOutput] = await Promise.all([
-      necto.device.send<{ file: Preview }>("files.preview", { root: rootID, path }),
-      necto.device.send<{ item: Entry }>("files.info", { root: rootID, path }),
+      necto.device.send<{ file: Preview }>("files.preview", { root, path }),
+      necto.device.send<{ item: Entry }>("files.info", { root, path }),
     ]);
-    preview = previewOutput.file;
-    info = infoOutput.item;
-    editing = false;
-    detailMessage = t("Saved");
-    await loadDirectory(parent);
+    if (isShowing(root, path)) {
+      preview = previewOutput.file;
+      info = infoOutput.item;
+      editing = false;
+      detailMessage = t("Saved");
+    }
+    if (rootID === root) await loadDirectory(parent);
     renderTree();
     renderDetail();
   } catch (error) {
+    if (!isShowing(root, path)) return;
     detailMessage = messageOf(error);
     renderDetail();
   }
@@ -380,11 +399,13 @@ async function saveText(): Promise<void> {
 
 async function erase(): Promise<void> {
   if (!selectedPath) return;
-  const parent = selectedPath.includes("/") ? selectedPath.slice(0, selectedPath.lastIndexOf("/")) : "";
+  const root = rootID;
+  const path = selectedPath;
+  const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
   try {
-    await necto.device.send("files.delete", { root: rootID, path: selectedPath });
-    closeDetail();
-    await loadDirectory(parent);
+    await necto.device.send("files.delete", { root, path });
+    if (isShowing(root, path)) closeDetail();
+    if (rootID === root) await loadDirectory(parent);
     renderTree();
   } catch (error) {
     message = messageOf(error);

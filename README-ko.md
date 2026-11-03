@@ -25,6 +25,10 @@ Necto는 어떤 환경에서든 바로 연결되는 iOS 디버깅 플랫폼이�
 
 ## 시작하기
 
+Necto는 신뢰할 수 있는 앱과 실행 환경(개발 기기·네트워크 등)에서만 사용하세요.
+사용자에게 배포하는 빌드에서는 SDK를 비활성화하세요.
+자세한 내용은 [설정 가이드](docs/ko/setup.md)를 참고하세요.
+
 [Releases](https://github.com/toss/necto/releases)에서 DMG를 내려받아
 Necto를 응용 프로그램 폴더로 옮기세요. 체크섬 확인과 ad-hoc 서명 정책은
 [설치 안내](docs/ko/install.md)에 있어요.

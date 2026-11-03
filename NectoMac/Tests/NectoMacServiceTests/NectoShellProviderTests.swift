@@ -42,6 +42,68 @@ private actor ApprovalRequester: NectoShellApprovalRequesting {
 
 @Suite("Shell providers")
 struct NectoShellProviderTests {
+    @Test("Device plugins cannot execute or request shell access even with saved grants or global Full Access", arguments: [false, true])
+    func devicePluginsCannotUseShell(globalFullAccess: Bool) async throws {
+        let registry = NectoPluginRegistry()
+        let policy = NectoShellPolicy(snapshot: .init(isFullAccessEnabled: globalFullAccess))
+        let executor = RecordingExecutor()
+        let requester = ApprovalRequester(approved: ["echo fixture"])
+        let execute = NectoShellExecuteProvider(policy: policy, executor: executor)
+        let providers: [(String, any NectoOperationProvider)] = [
+            ("execute", execute), ("execute-v2", execute.supportingStandardInput()),
+            ("request", NectoShellAuthorizationProvider(requester: requester)),
+        ]
+        let manifest = NectoPluginManifest(
+            id: "shell-fixture", name: "Shell fixture", description: "Shell access boundary",
+            version: "1.0.0", author: "Necto", icon: .init(systemName: "terminal"),
+            assets: ["index.html"], allowedOrigins: ["self"],
+            operations: providers.map { id, provider in
+                NectoOperation(id: id, title: id, description: id, kind: provider.descriptor.kind,
+                    binding: provider.descriptor.binding, inputSchema: provider.descriptor.inputSchema,
+                    outputSchema: provider.descriptor.outputSchema, timeoutMs: 1000)
+            }
+        )
+        let target = NectoTarget(deviceID: "fixture", appBundleID: "com.example.fixture")
+        // An apparent local identity cannot change the host's device registration boundary.
+        let plugin = try await registry.installDevice(manifest: manifest, sourceIdentity: "local:claimed", for: target)
+        await policy.setAccessLevel(.fullAccess, for: plugin.principal)
+        for (_, provider) in providers { await registry.registerHostProvider(provider) }
+        let bridge = NectoControlBridge(registry: registry, connectedApps: {
+            [.init(target: target, deviceName: "Fixture", appName: "Fixture", sdkVersion: "1", connection: .simulator)]
+        })
+        let context = try #require(await registry.context(pluginID: manifest.id, target: target))
+        #expect(context.operations.allSatisfy { !$0.available && $0.unavailableReason?.contains("shell") == true })
+
+        for (id, _) in providers {
+            let input: NectoJSONValue = id == "request" ? ["commands": ["echo fixture"]] : ["command": "echo fixture"]
+            let directError = await #expect(throws: NectoBridgeError.self) {
+                try await registry.invoke(pluginID: manifest.id, operationID: id, input: input,
+                    target: target, expectedPrincipal: plugin.principal)
+            }
+            #expect(directError?.code == .permissionDenied)
+            let cliError = await #expect(throws: NectoBridgeError.self) {
+                try await bridge.invoke(pluginID: manifest.id, operationID: id, input: input,
+                    app: target.appBundleID, device: target.deviceID, desktop: false)
+            }
+            #expect(cliError?.code == .permissionDenied)
+            let help = try await bridge.plugins(app: target.appBundleID, device: target.deviceID,
+                desktop: false, pluginID: manifest.id, operationID: id)
+            #expect(help["operation"]?["available"] == false)
+        }
+        #expect(await executor.commands.isEmpty)
+        #expect(await requester.request == nil)
+
+        let desktop = try await registry.install(manifest: manifest, sourceIdentity: "local:approved")
+        await policy.setAccessLevel(.fullAccess, for: desktop.principal)
+        for (id, _) in providers {
+            let input: NectoJSONValue = id == "request" ? ["commands": ["echo fixture"]] : ["command": "echo fixture"]
+            _ = try await bridge.invoke(pluginID: manifest.id, operationID: id, input: input,
+                app: nil, device: nil, desktop: true)
+        }
+        #expect(await executor.commands == ["echo fixture", "echo fixture"])
+        #expect(await requester.request?.principal == desktop.principal)
+    }
+
     @Test("standard input reaches Bash without becoming part of its approved command")
     func passesStandardInputSeparately() async throws {
         let policy = NectoShellPolicy()

@@ -16,7 +16,7 @@ throughout the repository.
 | Run the app | `open Build/Products/Debug/Necto.app` |
 
 Panels must be built before the Swift packages, because their output rides inside
-`NectoDefaultPlugins` (and the sample panel inside the example app). `script/build`
+the individual plugin modules (and the sample panel inside the example app). `script/build`
 does that in order.
 
 ## Layout

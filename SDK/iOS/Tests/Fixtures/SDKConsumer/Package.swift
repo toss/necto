@@ -11,7 +11,12 @@ let package = Package(
     targets: [
         .testTarget(
             name: "SDKConsumerTests",
-            dependencies: [.product(name: "NectoSDK", package: "Necto")]
+            dependencies: [
+                .product(name: "NectoSDK", package: "Necto"),
+                .product(name: "NectoEventsPlugin", package: "Necto"),
+                .product(name: "NectoProcessMetricPlugin", package: "Necto"),
+                .product(name: "NectoURLSessionCapturePlugin", package: "Necto"),
+            ]
         ),
     ]
 )

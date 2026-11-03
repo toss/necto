@@ -74,58 +74,63 @@ private final class SocketConnectAttempt: @unchecked Sendable {
 
     func connect(address: Data) async throws -> NectoSocketStream {
         try await withCheckedThrowingContinuation { continuation in
-            lock.withLock {
+            let resume = lock.withLock { () -> (() -> Void)? in
                 guard !finished else {
-                    continuation.resume(throwing: CancellationError())
-                    return
+                    return { continuation.resume(throwing: CancellationError()) }
                 }
                 self.continuation = continuation
                 let result = address.withUnsafeBytes { bytes in
                     Darwin.connect(descriptor, bytes.baseAddress!.assumingMemoryBound(to: sockaddr.self), socklen_t(bytes.count))
                 }
                 if result == 0 {
-                    finishLocked(error: nil)
-                    return
+                    return finishLocked(error: nil)
                 }
                 guard errno == EINPROGRESS else {
-                    finishLocked(error: POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO))
-                    return
+                    return finishLocked(error: POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO))
                 }
                 source.setEventHandler { [weak self] in self?.ready() }
                 source.resume()
+                return nil
             }
+            resume?()
         }
     }
 
     func cancel() {
-        lock.withLock {
-            guard !finished else { return }
-            finishLocked(error: CancellationError())
+        let resume = lock.withLock { () -> (() -> Void)? in
+            guard !finished else { return nil }
+            return finishLocked(error: CancellationError())
         }
+        resume?()
     }
 
     private func ready() {
-        lock.withLock {
-            guard !finished else { return }
+        let resume = lock.withLock { () -> (() -> Void)? in
+            guard !finished else { return nil }
             var error: Int32 = 0
             var length = socklen_t(MemoryLayout<Int32>.size)
             if getsockopt(descriptor, SOL_SOCKET, SO_ERROR, &error, &length) != 0 { error = errno }
-            finishLocked(error: error == 0 ? nil : POSIXError(POSIXErrorCode(rawValue: error) ?? .EIO))
+            return finishLocked(error: error == 0 ? nil : POSIXError(POSIXErrorCode(rawValue: error) ?? .EIO))
         }
+        resume?()
     }
 
-    private func finishLocked(error: (any Error)?) {
+    private func finishLocked(error: (any Error)?) -> () -> Void {
         finished = true
+        let continuation = continuation
+        self.continuation = nil
+        let result: Result<NectoSocketStream, any Error>
         if let error {
-            continuation?.resume(throwing: error)
+            result = .failure(error)
         } else {
             ownership.lock.withLock { ownership.transferred = true }
-            continuation?.resume(returning: NectoSocketStream(descriptor: descriptor))
+            result = .success(NectoSocketStream(descriptor: descriptor))
         }
-        continuation = nil
         source.cancel()
         // activate is idempotent, including cancellation before connect starts.
         source.activate()
+        // Cancellation holds the task's lock while entering cancel(); resume must run after unlocking ours.
+        return { continuation?.resume(with: result) }
     }
 
     private final class Ownership: @unchecked Sendable {

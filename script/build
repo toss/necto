@@ -27,6 +27,10 @@ echo "==> swift packages"
 swift build
 swift build --package-path NectoMac
 
+# Where Xcode puts products is a preference of the machine unless it is said here, and
+# the path printed at the end is the one the documentation tells people to open.
+products=(SYMROOT="$PWD/Build/Products")
+
 echo
 echo "==> app"
 run_xcodebuild "error:|warning:|BUILD" xcodebuild \
@@ -34,6 +38,7 @@ run_xcodebuild "error:|warning:|BUILD" xcodebuild \
   -scheme Necto \
   -configuration Debug \
   -destination 'platform=macOS' \
+  "${products[@]}" \
   build
 
 # ExampleApp is the only thing that compiles against the SDK the way an app would, so
@@ -49,6 +54,7 @@ if [ -n "$SIM_ID" ]; then
     -configuration Debug \
     -destination "id=$SIM_ID" \
     -derivedDataPath Build \
+    "${products[@]}" \
     build
 else
   echo "SKIP: no booted simulator, so the SDK was not compiled against an app."

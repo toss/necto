@@ -26,6 +26,10 @@ Build the tools you need as plugins. A modern alternative to Flipper.
 
 ## Getting started
 
+Use Necto only with trusted apps and runtime environments, including development
+devices and networks. Keep the SDK disabled in builds distributed to users;
+see the [setup guide](docs/setup.md).
+
 Download the DMG from [Releases](https://github.com/toss/necto/releases) and
 drag Necto into Applications. See the [installation guide](docs/install.md) for
 checksum verification and the app's ad-hoc signing policy.
