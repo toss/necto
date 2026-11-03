@@ -21,21 +21,21 @@
 "Log" = "Log";
 "Appearance" = "Appearance";
 "Language" = "Language";
-"Changes Necto's native interface. Plugins manage their own language." = "Changes Necto's native interface. Plugins manage their own language.";
+"Necto's display language. Plugins use their own language settings." = "Necto's display language. Plugins use their own language settings.";
 "System" = "System";
 "Text size" = "Text size";
-"Applies to the app and to every plugin. ⌘+ and ⌘- also move it." = "Applies to the app and to every plugin. ⌘+ and ⌘- also move it.";
+"Text size in the app and plugins. Shortcuts: ⌘+ and ⌘-." = "Text size in the app and plugins. Shortcuts: ⌘+ and ⌘-.";
 "UI font" = "UI font";
-"A font family or CSS fallback stack." = "A font family or CSS fallback stack.";
+"Font for the app and plugin interface." = "Font for the app and plugin interface.";
 "Code font" = "Code font";
-"Used for code, values and plugin data." = "Used for code, values and plugin data.";
+"Font for code, values and plugin data." = "Font for code, values and plugin data.";
 "About" = "About";
 "Protocol" = "Protocol";
-"The wire version this build speaks." = "The wire version this build speaks.";
+"Version used to communicate with connected apps." = "Version used to communicate with connected apps.";
 "Checking for updates…" = "Checking for updates…";
 "Up to date." = "Up to date.";
-"%@ is out — one click installs and relaunches." = "%@ is out — one click installs and relaunches.";
-"%@ is out, but Necto is not running from /Applications." = "%@ is out, but Necto is not running from /Applications.";
+"Version %@ is available. Necto restarts after updating." = "Version %@ is available. Necto restarts after updating.";
+"Version %@ is available. Move Necto to Applications to update." = "Version %@ is available. Move Necto to Applications to update.";
 "Show releases" = "Show releases";
 "Retry" = "Retry";
 "Check for updates" = "Check for updates";
@@ -46,7 +46,7 @@
 "Connections, plugins and refused calls appear here." = "Connections, plugins and refused calls appear here.";
 "%ld earlier lines dropped." = "%ld earlier lines dropped.";
 "Installed" = "Installed";
-"Add and edit" = "Add and edit";
+"Install and manage" = "Install and manage";
 "Install" = "Install";
 "Choose…" = "Choose…";
 "Plugins folder" = "Plugins folder";
@@ -55,6 +55,8 @@
 "Reload" = "Reload";
 "Could not install" = "Could not install";
 "Not loaded" = "Not loaded";
+
+"Installed plugins" = "Installed plugins";
 
 /* Plugin management */
 "On" = "On";
@@ -70,10 +72,10 @@
 "Update from file…" = "Update from file…";
 "The ID matches, but Necto cannot verify the author of local files. Only update if you trust their source. This keeps existing permissions and settings, including Shell Access." = "The ID matches, but Necto cannot verify the author of local files. Only update if you trust their source. This keeps existing permissions and settings, including Shell Access.";
 "This folder has no installation identity yet. Confirm its source to register it as a new installation. Previous permissions are not inherited." = "This folder has no installation identity yet. Confirm its source to register it as a new installation. Previous permissions are not inherited.";
-"After adding or changing a plugin folder, reload and approve the plugin. Deleting its folder also removes its permissions." = "After adding or changing a plugin folder, reload and approve the plugin. Deleting its folder also removes its permissions.";
+"Reload after adding or changing a plugin folder." = "Reload after adding or changing a plugin folder.";
 "Review required" = "Review required";
 "Review" = "Review";
-"These files are new or have changed. They will not run until you approve their source." = "These files are new or have changed. They will not run until you approve their source.";
+"Review the source before running new or changed files." = "Review the source before running new or changed files.";
 "Expected plugin id '%@', but the selected files use '%@'." = "Expected plugin id '%@', but the selected files use '%@'.";
 "%@ by %@ · web assets only, no native code" = "%@ by %@ · web assets only, no native code";
 "Replaces %@" = "Replaces %@";
@@ -119,8 +121,6 @@
 "Which apps and devices are connected." = "Which apps and devices are connected.";
 "Saves files it produces into your Downloads folder. Never overwrites." = "Saves files it produces into your Downloads folder. Never overwrites.";
 "Opens Finder on a file it saved. Cannot point anywhere else." = "Opens Finder on a file it saved. Cannot point anywhere else.";
-"Runs Bash commands on this Mac, subject to the Shell Access policy in Settings." = "Runs Bash commands on this Mac, subject to the Shell Access policy in Settings.";
-"Asks you to add exact Bash commands to this plugin's approved list." = "Asks you to add exact Bash commands to this plugin's approved list.";
 "Every request the connected app makes, including headers and bodies." = "Every request the connected app makes, including headers and bodies.";
 "Empties the request log kept by the app." = "Empties the request log kept by the app.";
 "Everything the connected app has logged." = "Everything the connected app has logged.";
@@ -183,7 +183,7 @@
 "Command line tool" = "Command line tool";
 "Install CLI" = "Install CLI";
 "Use necto or necto-cli in your terminal." = "Use necto or necto-cli in your terminal.";
-"Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval." = "Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval.";
+"Use necto or necto-cli in your terminal. Installation requires administrator approval." = "Use necto or necto-cli in your terminal. Installation requires administrator approval.";
 "Could not install the CLI. %@" = "Could not install the CLI. %@";
 "This app does not contain the CLI." = "This app does not contain the CLI.";
 "Another item exists at %@. Move it before installing the CLI." = "Another item exists at %@. Move it before installing the CLI.";
@@ -191,7 +191,7 @@
 "Install from GitHub" = "Install from GitHub";
 "Reading…" = "Reading…";
 "Install from a file" = "Install from a file";
-"Install a built desktop plugin from a folder or zip file. Necto does not verify the source or check for updates for file installs. Device plugins must be included in the app's Swift package." = "Install a built desktop plugin from a folder or zip file. Necto does not verify the source or check for updates for file installs. Device plugins must be included in the app's Swift package.";
+"Install from a folder or ZIP file. Source verification and update checks are not available." = "Install from a folder or ZIP file. Source verification and update checks are not available.";
 "Install from %@" = "Install from %@";
 "The release says nothing about this one. What it binds is on the next screen." = "The release says nothing about this one. What it binds is on the next screen.";
 "'%@' is not a GitHub repository address." = "'%@' is not a GitHub repository address.";
@@ -202,11 +202,12 @@
 "GitHub answered %@ and would not say more." = "GitHub answered %@ and would not say more.";
 "This holds several plugins (%@). Install them one at a time, or give Necto the repository they were published from." = "This holds several plugins (%@). Install them one at a time, or give Necto the repository they were published from.";
 "Updates" = "Updates";
-"Checks for newer versions of plugins installed from a repository when you open this page. To check without downloading the archive, the release must include a separate manifest file." = "Checks for newer versions of plugins installed from a repository when you open this page. To check without downloading the archive, the release must include a separate manifest file.";
+"Update available" = "Update available";
+"Check for updates to plugins installed from GitHub." = "Check for updates to plugins installed from GitHub.";
 "Checking…" = "Checking…";
 "Check again" = "Check again";
-"Newer releases" = "Newer releases";
-"%@ is published at %@. Installing it asks again, because a new version can bind to something the last one did not." = "%@ is published at %@. Installing it asks again, because a new version can bind to something the last one did not.";
+"Available updates" = "Available updates";
+"Version %@ is available." = "Version %@ is available.";
 "Install %@" = "Install %@";
 "%@ has no release tagged %@." = "%@ has no release tagged %@.";
 "Nothing at %@ answered. Either the address is wrong, or the repository is private and needs a GitHub login through gh." = "Nothing at %@ answered. Either the address is wrong, or the repository is private and needs a GitHub login through gh.";
@@ -218,7 +219,7 @@
 "That release." = "That release.";
 "A release page, pasted as it is." = "A release page, pasted as it is.";
 "Could not read that" = "Could not read that";
-"Install the latest release from a repository, or choose a specific release." = "Install the latest release from a repository, or choose a specific release.";
+"Install using a repository or release URL." = "Install using a repository or release URL.";
 "Add…" = "Add…";
 
 "Keeps running while other panels are visible. Disabling the plugin stops it." = "Keeps running while other panels are visible. Disabling the plugin stops it.";

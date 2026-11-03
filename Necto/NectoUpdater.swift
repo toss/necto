@@ -22,15 +22,18 @@ final class NectoUpdater {
         /// or a stray copy. It should not overwrite whatever it is running from.
         case outside(NectoSemanticVersion)
         /// One human-readable step: Downloading…, Verifying…, Installing…
-        case working(String)
+        case working(String, progress: Double? = nil)
         case failed(String)
     }
 
     private(set) var phase: Phase = .idle
 
+    var hasUpdate: Bool { availableRelease.map { $0.version > current } ?? false }
+
     private let current: NectoSemanticVersion
     private var availableRelease: NectoAppRelease?
     private var isChecking = false
+    private var lastCheck: Date?
 
     init(current: NectoSemanticVersion) {
         self.current = current
@@ -41,8 +44,9 @@ final class NectoUpdater {
     func check(quietly: Bool = false) async {
         if case .working = phase { return }
         guard !isChecking else { return }
+        if quietly, let lastCheck, Date().timeIntervalSince(lastCheck) < 15 * 60 { return }
         isChecking = true
-        defer { isChecking = false }
+        defer { isChecking = false; lastCheck = Date() }
         await performCheck(quietly: quietly)
     }
 
@@ -60,7 +64,7 @@ final class NectoUpdater {
             }
         } catch {
             if case .working = phase { return }
-            phase = quietly ? .idle : .failed(Self.message(of: error))
+            if !quietly { phase = .failed(Self.message(of: error)) }
         }
     }
 
@@ -89,8 +93,14 @@ final class NectoUpdater {
             let handoffExecutable = workspace.appending(path: "finish-update")
             try FileManager.default.copyItem(at: helper, to: handoffExecutable)
 
-            phase = .working(NectoL10n.text("Downloading…"))
-            let image = try await release.downloadImage(into: workspace)
+            let downloadStep = NectoL10n.text("Downloading…")
+            phase = .working(downloadStep)
+            let image = try await release.downloadImage(into: workspace) { [weak self] progress in
+                Task { @MainActor in
+                    guard let self, case let .working(step, _) = self.phase, step == downloadStep else { return }
+                    self.phase = .working(downloadStep, progress: progress)
+                }
+            }
 
             phase = .working(NectoL10n.text("Verifying…"))
             try await release.verifyImageChecksum(at: image)

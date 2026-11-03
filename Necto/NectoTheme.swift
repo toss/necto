@@ -43,6 +43,7 @@ enum NectoTheme {
     static let rowHeight: CGFloat = 26
     static let buttonHeight: CGFloat = 24
     static let toolbarHeight: CGFloat = 38
+    static let statusDotSize: CGFloat = 6
 
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in

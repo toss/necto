@@ -48,6 +48,13 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .nectoShowSettings)) { _ in
             if window.isMain { window.isShowingSettings = true }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await model.updater.check(quietly: true) }
+            Task {
+                await model.load()
+                await model.checkPluginUpdates()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .nectoFindInPanel)) { _ in
             if window.isMain { find.open() }
         }
@@ -121,131 +128,135 @@ struct ContentView: View {
         .background(NectoTheme.sidebar)
     }
 
-    /// A `List` for its selection, its keyboard, its accessibility and its reordering.
-    ///
-    /// Hand-drawing these rows cost the sidebar all four — all to avoid one selection
-    /// highlight. The platform does the list; the highlight is suppressed in
-    /// `ListChromeOff` instead.
+    private enum SidebarAnchor: Hashable {
+        case app(String)
+    }
+
+    /// A `List` for its selection, keyboard, accessibility and reordering.
     private var sidebarList: some View {
-        List(selection: sidebarSelection) {
-            if model.apps.isEmpty {
-                HStack(spacing: 6) {
-                    Image(systemName: "cable.connector.slash")
-                    Text("No app connected")
-                }
-                .font(.necto(.caption, scale: scale))
-                .foregroundStyle(NectoTheme.textTertiary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .plainRow()
-            }
-
-            ForEach(model.apps) { app in
-                AppHeader(
-                    name: app.name,
-                    bundleID: app.bundleID,
-                    iconData: app.devices.first?.appIcon,
-                    scale: scale
-                )
-                .plainRow()
-
-                ForEach(app.devices) { device in
-                    DeviceRow(
-                        device: device,
-                        isSelected: window.selectedAppID == device.id,
-                        scale: scale
-                    ) {
-                        window.selectedAppID = device.id
+        ScrollViewReader { proxy in
+            List(selection: sidebarSelection) {
+                if model.apps.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "cable.connector.slash")
+                        Text("No app connected")
                     }
+                    .font(.necto(.caption, scale: scale))
+                    .foregroundStyle(NectoTheme.textTertiary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                     .plainRow()
                 }
-            }
 
-            if !window.activeDevicePlugins.isEmpty || !window.disabledDevicePlugins.isEmpty {
-                Section {
-                    ForEach(window.activeDevicePlugins) { plugin in
-                        SidebarItem(
-                            title: plugin.manifest.name,
-                            systemImage: plugin.manifest.icon.systemName,
-                            trailing: plugin.manifest.version,
-                            isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
+                ForEach(model.apps) { app in
+                    AppHeader(
+                        name: app.name,
+                        bundleID: app.bundleID,
+                        iconData: app.devices.first?.appIcon,
+                        scale: scale
+                    )
+                    .plainRow()
+                    .id(SidebarAnchor.app(app.id))
+
+                    ForEach(app.devices) { device in
+                        DeviceRow(
+                            device: device,
+                            isSelected: window.selectedAppID == device.id,
                             scale: scale
-                        )
-                        .contextMenu {
-                            Button(NectoL10n.text("Disable")) { model.setPlugin(plugin.id, enabled: false) }
+                        ) {
+                            window.selectedAppID = device.id
                         }
-                        .plainRow(isSelected: window.selectedPluginID == plugin.id)
-                        .tag(plugin.id)
-                    }
-                    .onMove { from, to in
-                        model.moveDevicePlugins(from: from, to: to, target: window.selectedTarget)
-                    }
-
-                    // The disabled sink to the bottom, in gray. Clicking one is not a
-                    // dead end: its pane says what happened and offers the way back.
-                    ForEach(window.disabledDevicePlugins) { plugin in
-                        SidebarItem(
-                            title: plugin.manifest.name,
-                            systemImage: plugin.manifest.icon.systemName,
-                            trailing: NectoL10n.text("off"),
-                            isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
-                            scale: scale,
-                            isDimmed: true
-                        )
-                        .contextMenu {
-                            Button(NectoL10n.text("Enable")) { model.setPlugin(plugin.id, enabled: true) }
-                        }
-                        .plainRow(isSelected: window.selectedPluginID == plugin.id)
-                        .tag(plugin.id)
-                    }
-                } header: {
-                    // The category words, straight from the architecture: what the
-                    // selected device's app carries, then what this Mac installed.
-                    pluginGroup("Device Plugins", showsSearch: true)
                         .plainRow()
-                        .listRowBackground(NectoTheme.sidebar)
+                    }
+                }
+
+                if !window.activeDevicePlugins.isEmpty || !window.disabledDevicePlugins.isEmpty {
+                    Section {
+                        pluginGroup("Device Plugins", showsSearch: true)
+                            .plainRow()
+
+                        ForEach(window.activeDevicePlugins) { plugin in
+                            SidebarItem(
+                                title: plugin.manifest.name,
+                                systemImage: plugin.manifest.icon.systemName,
+                                trailing: plugin.manifest.version,
+                                isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
+                                scale: scale
+                            )
+                            .contextMenu {
+                                Button(NectoL10n.text("Disable")) { model.setPlugin(plugin.id, enabled: false) }
+                            }
+                            .plainRow(isSelected: window.selectedPluginID == plugin.id)
+                            .tag(plugin.id)
+                        }
+                        .onMove { from, to in
+                            model.moveDevicePlugins(from: from, to: to, target: window.selectedTarget)
+                        }
+
+                        // The disabled sink to the bottom, in gray. Clicking one is not a
+                        // dead end: its pane says what happened and offers the way back.
+                        ForEach(window.disabledDevicePlugins) { plugin in
+                            SidebarItem(
+                                title: plugin.manifest.name,
+                                systemImage: plugin.manifest.icon.systemName,
+                                trailing: NectoL10n.text("off"),
+                                isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
+                                scale: scale,
+                                isDimmed: true
+                            )
+                            .contextMenu {
+                                Button(NectoL10n.text("Enable")) { model.setPlugin(plugin.id, enabled: true) }
+                            }
+                            .plainRow(isSelected: window.selectedPluginID == plugin.id)
+                            .tag(plugin.id)
+                        }
+                    }
+                }
+
+                if !model.enabledPlugins.isEmpty {
+                    Section {
+                        pluginGroup(
+                            "Desktop Plugins",
+                            showsSearch: window.activeDevicePlugins.isEmpty && window.disabledDevicePlugins.isEmpty
+                        )
+                        .plainRow()
+
+                        // `editActions: .move` rather than a drag of our own: `ForEach`
+                        // writes the rearranged list straight back through the binding, and
+                        // the drag, its animation and the keyboard all stay the platform's.
+                        ForEach(model.enabledPlugins) { plugin in
+                            SidebarItem(
+                                title: plugin.manifest.name,
+                                systemImage: plugin.manifest.icon.systemName,
+                                trailing: plugin.manifest.version,
+                                isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
+                                scale: scale
+                            )
+                            .plainRow(isSelected: window.selectedPluginID == plugin.id)
+                            .tag(plugin.id)
+                        }
+                        .onMove { from, to in
+                            model.movePlugins(from: from, to: to)
+                        }
+                    }
                 }
             }
-
-            if !model.enabledPlugins.isEmpty {
-                Section {
-                    // `editActions: .move` rather than a drag of our own: `ForEach`
-                    // writes the rearranged list straight back through the binding, and
-                    // the drag, its animation and the keyboard all stay the platform's.
-                    ForEach(model.enabledPlugins) { plugin in
-                        SidebarItem(
-                            title: plugin.manifest.name,
-                            systemImage: plugin.manifest.icon.systemName,
-                            trailing: plugin.manifest.version,
-                            isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
-                            scale: scale
-                        )
-                        .plainRow(isSelected: window.selectedPluginID == plugin.id)
-                        .tag(plugin.id)
-                    }
-                    .onMove { from, to in
-                        model.movePlugins(from: from, to: to)
-                    }
-                } header: {
-                    pluginGroup(
-                        "Desktop Plugins",
-                        showsSearch: window.activeDevicePlugins.isEmpty && window.disabledDevicePlugins.isEmpty
-                    )
-                        .plainRow()
-                        // A section header is sticky and gets a material behind it
-                        // unless it is told otherwise.
-                        .listRowBackground(NectoTheme.sidebar)
+            .listStyle(.plain)
+            .focusEffectDisabled()
+            .listSectionSeparator(.hidden)
+            .contentMargins(.all, 0, for: .scrollContent)
+            .scrollContentBackground(.hidden)
+            // AppKit rejects a zero minimum; use the same height as the rows themselves.
+            .environment(\.defaultMinListRowHeight, NectoTheme.rowHeight * scale)
+            .clipped()
+            .onChange(of: Set(model.connectedApps.map(\.id))) { previous, current in
+                guard !current.subtracting(previous).isEmpty, let first = model.apps.first else { return }
+                // Wait for List to apply the inserted rows before resolving their positions.
+                DispatchQueue.main.async {
+                    proxy.scrollTo(SidebarAnchor.app(first.id), anchor: .top)
                 }
             }
         }
-        .listStyle(.plain)
-        .focusEffectDisabled()
-        .listSectionSeparator(.hidden)
-        .contentMargins(.all, 0, for: .scrollContent)
-        .scrollContentBackground(.hidden)
-        // AppKit rejects a zero minimum; use the same height as the rows themselves.
-        .environment(\.defaultMinListRowHeight, NectoTheme.rowHeight * scale)
-        .clipped()
     }
 
     @ViewBuilder
@@ -260,7 +271,7 @@ struct ContentView: View {
                     disabledPluginIDs: Set(window.disabledDevicePlugins.map(\.id)),
                     scale: scale, selection: sidebarSelection, isSearching: $isSearchingPlugins
                 )
-                .padding(.trailing, 2)
+                .padding(.trailing, 12)
                 .padding(.top, 8)
             }
         }
@@ -285,41 +296,15 @@ struct ContentView: View {
                 systemImage: "slider.horizontal.3",
                 // The count rather than a bare dot: one plugin that would not load and
                 // eleven refused calls are different situations.
-                trailing: updaterIsQuiet && model.unreadIssueCount > 0 ? String(model.unreadIssueCount) : "",
+                trailing: model.unreadIssueCount > 0 ? String(model.unreadIssueCount) : "",
                 trailingIsIssue: model.unreadIssueCount > 0,
                 isSelected: window.isShowingSettings,
-                scale: scale
+                scale: scale,
+                hasUpdate: model.updater.hasUpdate || !model.pluginUpdates.isEmpty
             ) {
                 window.isShowingSettings = true
             }
-            .overlay(alignment: .trailing) {
-                sidebarUpdateControl.padding(.trailing, 16)
-            }
             .padding(.vertical, 8)
-        }
-    }
-
-    private var updaterIsQuiet: Bool {
-        switch model.updater.phase {
-        case .available, .working: false
-        default: true
-        }
-    }
-
-    /// The one place an update announces itself: a button beside Settings, and the
-    /// step it is on while it runs. Everything quieter stays in the About row.
-    @ViewBuilder
-    private var sidebarUpdateControl: some View {
-        switch model.updater.phase {
-        case .available:
-            Button(NectoL10n.text("Update")) { Task { await model.updater.update() } }
-                .buttonStyle(NectoButtonStyle(scale: scale, primary: true))
-        case let .working(step):
-            Text(step)
-                .font(.necto(.caption, scale: scale))
-                .foregroundStyle(NectoTheme.textTertiary)
-        default:
-            EmptyView()
         }
     }
 
