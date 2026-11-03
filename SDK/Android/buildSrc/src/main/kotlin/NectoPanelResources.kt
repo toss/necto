@@ -3,11 +3,13 @@
 import groovy.json.JsonSlurper
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
@@ -26,9 +28,9 @@ import java.io.File
  * cannot drift from the panel it rides with.
  */
 abstract class NectoPanelResources : DefaultTask() {
-    @get:InputDirectory
+    @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val panels: DirectoryProperty
+    abstract val panels: ConfigurableFileCollection
 
     @get:Input
     abstract val ids: ListProperty<String>
@@ -49,7 +51,8 @@ abstract class NectoPanelResources : DefaultTask() {
         val destinationRoot = output.get().asFile.resolve(root.get())
         output.get().asFile.deleteRecursively()
         for (id in ids.get()) {
-            val panel = panels.get().asFile.resolve(id)
+            val panel = panels.files.singleOrNull { it.name == id }
+                ?: throw GradleException("Expected one built panel for $id")
             if (!panel.resolve("manifest.json").isFile) throw GradleException("No built panel at $panel")
             val destination = destinationRoot.resolve(id)
             val paths = panel.walkTopDown()

@@ -22,4 +22,6 @@ node script/tests/control-e2e.mjs <device-id> im.toss.necto.example.interaction-
 ```
 
 The checks cover taps, text input, scrolling, navigation, and target validity.
+The UIKit scroll fixture also checks that main-queue work scheduled by its pan
+handler runs before the gesture ends, rather than only checking the final scroll position.
 Set `NECTO_CLI` to use a development CLI executable.

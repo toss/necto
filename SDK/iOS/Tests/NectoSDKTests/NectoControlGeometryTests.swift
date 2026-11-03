@@ -7,7 +7,7 @@ import Foundation
 import NectoModel
 import NectoSDK
 import Testing
-@testable import NectoDefaultPlugins
+@testable import NectoUIControlPlugin
 
 @Suite("Control positions")
 struct NectoControlGeometryTests {

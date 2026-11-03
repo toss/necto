@@ -10,7 +10,6 @@
     <div class="necto-app">
       <div class="necto-tabs" role="tablist">
         <button type="button" class="necto-tab" role="tab" data-tab="bridge" aria-selected="true" data-i18n="Bridge">Bridge</button>
-        <button type="button" class="necto-tab" role="tab" data-tab="shell" aria-selected="false" data-i18n="Shell">Shell</button>
         <button type="button" class="necto-tab" role="tab" data-tab="states" data-i18n="States">States</button>
       </div>
 
@@ -34,26 +33,6 @@
         <dl class="necto-pairs" id="ticks"><div><dt data-i18n="Not started">Not started</dt><dd></dd></div></dl>
       </div>
 
-      <div class="necto-body" data-panel="shell" hidden>
-        <h2 class="necto-section-title" data-i18n="Exact command">Exact command</h2>
-        <p class="necto-caption" data-i18n="Command approval compares this exact string. Change one character to make it a different command.">
-          Command approval compares this exact string. Change one character to make it
-          a different command.
-        </p>
-        <div class="necto-toolbar-group">
-          <input class="necto-field" id="shell-command" aria-label="Shell command" />
-        </div>
-        <div class="necto-toolbar-group">
-          <button type="button" class="necto-button" id="request-shell-access" data-i18n="Request approval">Request approval</button>
-          <button type="button" class="necto-button necto-button-danger" id="request-shell-full-access" data-i18n="Request Full Access">Request Full Access</button>
-          <button type="button" class="necto-button necto-button-primary" id="run-shell-command" data-i18n="Run command">Run command</button>
-          <button type="button" class="necto-button necto-button-quiet" id="run-unapproved-shell-command" data-i18n="Try unapproved command">Try unapproved command</button>
-        </div>
-
-        <h2 class="necto-section-title" data-i18n="Last result">Last result</h2>
-        <dl class="necto-pairs" id="shell-result"><div><dt data-i18n="Not run yet">Not run yet</dt><dd></dd></div></dl>
-      </div>
-
       <div class="necto-body" data-panel="states" hidden>
         <h2 class="necto-section-title" data-i18n="Make it fail">Make it fail</h2>
         <p class="necto-caption" data-i18n="Every refusal below is real: the call is made and Necto turns it down. This is what a plugin's error handling has to survive.">
@@ -65,13 +44,6 @@
           <button type="button" class="necto-button" data-fail="missing" data-i18n="Unknown operation">Unknown operation</button>
           <button type="button" class="necto-button" data-fail="input" data-i18n="Bad input">Bad input</button>
         </div>
-
-        <p class="necto-caption" data-i18n="PERMISSION_DENIED is not here because it cannot be reached from a plugin: a manifest that asks for an operation whose permission it does not declare is refused before it loads. The code arrives when a user installs a plugin and declines part of what it asked for.">
-          <code>PERMISSION_DENIED</code> is not here because it cannot be reached from a
-          plugin: a manifest that asks for an operation whose permission it does not
-          declare is refused before it loads. The code arrives when a user installs a
-          plugin and declines part of what it asked for.
-        </p>
 
         <div id="failures"></div>
 

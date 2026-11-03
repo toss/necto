@@ -48,9 +48,14 @@ NectoPluginRegistry
 | `NectoCLIService` | 앱과 CLI가 공유하는 control request, response, socket endpoint | 명령어 파싱, provider 실행 |
 | `NectoMacService` | 오퍼레이션 라우팅, host provider, device 연결, control server | UI, 앱 특유의 기능 |
 | `NectoSDK` | 앱 쪽 리스닝, 플러그인 등록, 메시지 라우팅 | 기능 구현, `URLProtocol`, 도메인 타입 |
-| `NectoDefaultPlugins` | Necto가 배포하는 플러그인: 네트워크, 이벤트, 성능 | 앱이 트래픽을 캡처하는 방법 |
-| `NectoProcessMetrics` | 선택적인 CPU, 메모리, FPS, 스레드 샘플링 | 앱에 등록되거나 리더가 구독하기 전의 샘플링 |
-| `NectoURLSessionCapture` | `URLSession`을 쓰는 앱을 위한 하나의 캡처 메커니즘 | 앱에서 끌 수 없는 캡처 기능 |
+| `NectoNetworkPlugin` | 네트워크 기록과 패널 | 자동 트래픽 캡처 |
+| `NectoEventsPlugin` | 앱 이벤트와 패널 | 자동 이벤트 캡처 |
+| `NectoFilesPlugin` | 파일 탐색과 패널 | 다른 플러그인 |
+| `NectoPreferencesPlugin` | 환경설정 접근과 패널 | 다른 플러그인 |
+| `NectoPerformancePlugin` | 성능 기록과 패널 | 자동 프로세스 샘플링 |
+| `NectoUIControlPlugin` | UI 조회·조작과 iOS 터치 런타임 | 다른 플러그인 |
+| `NectoProcessMetricPlugin` | 선택적인 CPU, 메모리, FPS, 스레드 샘플링 | 앱에 등록되거나 리더가 구독하기 전의 샘플링 |
+| `NectoURLSessionCapturePlugin` | `URLSession`을 쓰는 앱을 위한 하나의 캡처 메커니즘 | 앱에서 끌 수 없는 캡처 기능 |
 | `Necto/` | 셸 UI와 플러그인 호스트 | 기능 화면 |
 | `ExampleApp/` | 디바이스에서 연결과 플러그인 검증 | 제품 기능 |
 
@@ -116,16 +121,17 @@ hello의 프로토콜 버전이 다르면 협상 없이 연결을 거부해요.
 
 iOS SDK 소스와 테스트는 `SDK/iOS/Sources`와 `SDK/iOS/Tests`에 있어요.
 `Package.swift`는 저장소 루트에 유지하므로 기존 Swift 패키지 사용자는 같은
-저장소 URL과 product, 모듈 이름을 사용할 수 있어요. Mac 패키지도 이 패키지의
+저장소 URL을 사용할 수 있어요. Mac 패키지도 이 패키지의
 `NectoModel`과 `NectoTransport`를 계속 재사용해요.
 
-루트 패키지는 SDK, 공용 모듈, 기본 플러그인을 담은 `NectoSDK` product 하나만
-제공해요. 모듈은 분리된 상태로 유지하며 앱에서 사용할 플러그인을 `import`하고
+루트 패키지는 기본 SDK인 `NectoSDK`와 플러그인별 product를 제공해요.
+자동 캡처는 별도 product이며 기본 SDK의 의존성에 포함되지 않아요.
+앱에서 사용할 플러그인을 `import`하고
 등록해요. 로컬 `NectoMac/Package.swift`는 Mac 서비스와 `necto-cli`, 해당 테스트를
 빌드해요. 공용 타입과 전송 모듈은 루트 product를 통해 사용해요. 반대로 SDK는
 Mac 패키지나 ArgumentParser에 의존하지 않아요. `script/test swift`는 두 패키지와
-단일 product를 사용하는 외부 패키지 예제를 테스트해요.
+개별 product를 사용하는 외부 패키지 예제를 테스트해요.
 
 패널은 Yarn workspaces로 빌드해 Swift 패키지에 포함해요. 기본 플러그인은
-`SDK/iOS/Sources/NectoDefaultPlugins/Panels/<id>`에, 샘플은 예제 앱 번들에 들어가요.
+`SDK/iOS/Sources/<PluginModule>/Panels/<id>`에, 샘플은 예제 앱 번들에 들어가요.
 빌드 결과를 커밋하므로 앱만 빌드할 때는 Node가 필요 없어요.

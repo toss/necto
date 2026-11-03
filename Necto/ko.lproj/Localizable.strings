@@ -155,7 +155,7 @@
 "Shell access" = "셸 권한";
 "Global override" = "전체 허용";
 "Full Access" = "전체 허용";
-"Allow every plugin and CLI request without confirmation." = "모든 플러그인과 CLI 요청이 확인 없이 실행되도록 허용합니다.";
+"Allow every desktop plugin and CLI request without confirmation." = "모든 데스크톱 플러그인과 CLI 요청이 확인 없이 실행되도록 허용합니다.";
 "Plugin-level settings are ignored" = "플러그인별 설정이 무시됩니다";
 "Turning Full Access off restores every saved plugin setting." = "전체 허용을 끄면 저장된 플러그인별 설정이 다시 적용됩니다.";
 "Plugin access" = "플러그인별 권한";
@@ -163,7 +163,7 @@
 "CLI access" = "CLI 권한";
 "Plugins without the shell bridge do not appear here." = "셸 브릿지를 사용하지 않는 플러그인은 표시되지 않습니다.";
 "Enable Full Access?" = "전체 허용을 켤까요?";
-"Every plugin and necto-cli command will run without confirmation." = "모든 플러그인과 necto-cli 명령어가 확인 없이 실행됩니다.";
+"Every desktop plugin and necto-cli command will run without confirmation." = "모든 데스크톱 플러그인과 necto-cli 명령어가 확인 없이 실행됩니다.";
 "No plugin-level protection" = "플러그인별 보호 없음";
 "This mode gives every caller the same shell access as a local native app." = "이 모드에서는 모든 호출자가 로컬 네이티브 앱과 동일한 셸 권한을 가집니다.";
 "Protected" = "보호됨";
@@ -187,7 +187,7 @@
 "Add" = "추가";
 "Agent skills" = "에이전트 스킬";
 "Could not install the skill." = "스킬을 설치하지 못했어요.";
-"Use Necto from %@." = "%@에서 Necto를 사용할 수 있어요.";
+"Use Necto from %@." = "%@에서 Necto를 사용할 수 있습니다.";
 "Command line tool" = "명령줄 도구";
 "Install CLI" = "CLI 설치";
 "Use necto or necto-cli in your terminal." = "터미널에서 necto 또는 necto-cli를 사용할 수 있습니다.";

@@ -22,6 +22,12 @@
 		57EB49C5BAFE73556A9FB40B /* plugin-sample in Resources */ = {isa = PBXBuildFile; fileRef = 241B0E997FF1D2C6822B6F17 /* plugin-sample */; };
 		AC106E99947CE6FD2AF9A3EC /* NectoMacService in Frameworks */ = {isa = PBXBuildFile; productRef = 99A1DE268E90C14804203FA5 /* NectoMacService */; };
 		D3A727D7D791EC4BF78B7682 /* NectoSDK in Frameworks */ = {isa = PBXBuildFile; productRef = E77192F3064432B7A9B11DE0 /* NectoSDK */; };
+		BA00000000000000000000001 /* NectoEventsPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000001 /* NectoEventsPlugin */; };
+		BA00000000000000000000002 /* NectoProcessMetricPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000002 /* NectoProcessMetricPlugin */; };
+		BA00000000000000000000003 /* NectoURLSessionCapturePlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000003 /* NectoURLSessionCapturePlugin */; };
+		BA00000000000000000000004 /* NectoFilesPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000004 /* NectoFilesPlugin */; };
+		BA00000000000000000000005 /* NectoPreferencesPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000005 /* NectoPreferencesPlugin */; };
+		BA00000000000000000000006 /* NectoUIControlPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000006 /* NectoUIControlPlugin */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -63,6 +69,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				D3A727D7D791EC4BF78B7682 /* NectoSDK in Frameworks */,
+				BA00000000000000000000003 /* NectoURLSessionCapturePlugin in Frameworks */,
+				BA00000000000000000000002 /* NectoProcessMetricPlugin in Frameworks */,
+				BA00000000000000000000001 /* NectoEventsPlugin in Frameworks */,
+				BA00000000000000000000006 /* NectoUIControlPlugin in Frameworks */,
+				BA00000000000000000000005 /* NectoPreferencesPlugin in Frameworks */,
+				BA00000000000000000000004 /* NectoFilesPlugin in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -166,6 +178,12 @@
 			name = ExampleApp;
 			packageProductDependencies = (
 				E77192F3064432B7A9B11DE0 /* NectoSDK */,
+				BB00000000000000000000003 /* NectoURLSessionCapturePlugin */,
+				BB00000000000000000000002 /* NectoProcessMetricPlugin */,
+				BB00000000000000000000001 /* NectoEventsPlugin */,
+				BB00000000000000000000006 /* NectoUIControlPlugin */,
+				BB00000000000000000000005 /* NectoPreferencesPlugin */,
+				BB00000000000000000000004 /* NectoFilesPlugin */,
 			);
 			productName = ExampleApp;
 			productReference = 25CF17BF6F214F22D88B9758 /* ExampleApp.app */;
@@ -620,6 +638,36 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 37EF990C8C6DA27A6208E5CB /* XCLocalSwiftPackageReference "." */;
 			productName = NectoSDK;
+		};
+		BB00000000000000000000001 /* NectoEventsPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 37EF990C8C6DA27A6208E5CB /* XCLocalSwiftPackageReference "." */;
+			productName = NectoEventsPlugin;
+		};
+		BB00000000000000000000002 /* NectoProcessMetricPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 37EF990C8C6DA27A6208E5CB /* XCLocalSwiftPackageReference "." */;
+			productName = NectoProcessMetricPlugin;
+		};
+		BB00000000000000000000003 /* NectoURLSessionCapturePlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 37EF990C8C6DA27A6208E5CB /* XCLocalSwiftPackageReference "." */;
+			productName = NectoURLSessionCapturePlugin;
+		};
+		BB00000000000000000000004 /* NectoFilesPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 37EF990C8C6DA27A6208E5CB /* XCLocalSwiftPackageReference "." */;
+			productName = NectoFilesPlugin;
+		};
+		BB00000000000000000000005 /* NectoPreferencesPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 37EF990C8C6DA27A6208E5CB /* XCLocalSwiftPackageReference "." */;
+			productName = NectoPreferencesPlugin;
+		};
+		BB00000000000000000000006 /* NectoUIControlPlugin */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 37EF990C8C6DA27A6208E5CB /* XCLocalSwiftPackageReference "." */;
+			productName = NectoUIControlPlugin;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

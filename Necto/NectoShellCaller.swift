@@ -8,7 +8,6 @@ import Foundation
 
 struct NectoShellCaller: Identifiable, Hashable {
     enum Kind: Hashable {
-        case device
         case desktop
         case cli
     }
@@ -26,24 +25,6 @@ struct NectoShellCaller: Identifiable, Hashable {
 extension NectoAppModel {
     var shellCallers: [NectoShellCaller] {
         var seen: Set<NectoPluginPrincipal> = []
-
-        let device = devicePlugins.compactMap { discovered -> NectoShellCaller? in
-            let plugin = discovered.plugin
-            guard plugin.manifest.usesShellBridge else { return nil }
-            let principal = NectoPluginPrincipal(
-                pluginID: plugin.id,
-                sourceIdentity: "device:\(discovered.target.appBundleID)"
-            )
-            guard seen.insert(principal).inserted else { return nil }
-            return NectoShellCaller(
-                principal: principal,
-                name: plugin.manifest.name,
-                version: plugin.manifest.version,
-                author: plugin.manifest.author,
-                systemImage: plugin.manifest.icon.systemName,
-                kind: .device
-            )
-        }
 
         let desktop = plugins.compactMap { plugin -> NectoShellCaller? in
             guard plugin.manifest.usesShellBridge else { return nil }
@@ -67,8 +48,7 @@ extension NectoAppModel {
             systemImage: "terminal",
             kind: .cli
         )
-        return device.sorted { $0.name < $1.name }
-            + desktop.sorted { $0.name < $1.name }
+        return desktop.sorted { $0.name < $1.name }
             + [cli]
     }
 

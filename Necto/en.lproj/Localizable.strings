@@ -155,7 +155,7 @@
 "Shell access" = "Shell access";
 "Global override" = "Global override";
 "Full Access" = "Full Access";
-"Allow every plugin and CLI request without confirmation." = "Allow every plugin and CLI request without confirmation.";
+"Allow every desktop plugin and CLI request without confirmation." = "Allow every desktop plugin and CLI request without confirmation.";
 "Plugin-level settings are ignored" = "Plugin-level settings are ignored";
 "Turning Full Access off restores every saved plugin setting." = "Turning Full Access off restores every saved plugin setting.";
 "Plugin access" = "Plugin access";
@@ -163,7 +163,7 @@
 "CLI access" = "CLI access";
 "Plugins without the shell bridge do not appear here." = "Plugins without the shell bridge do not appear here.";
 "Enable Full Access?" = "Enable Full Access?";
-"Every plugin and necto-cli command will run without confirmation." = "Every plugin and necto-cli command will run without confirmation.";
+"Every desktop plugin and necto-cli command will run without confirmation." = "Every desktop plugin and necto-cli command will run without confirmation.";
 "No plugin-level protection" = "No plugin-level protection";
 "This mode gives every caller the same shell access as a local native app." = "This mode gives every caller the same shell access as a local native app.";
 "Protected" = "Protected";

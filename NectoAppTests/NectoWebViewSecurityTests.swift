@@ -9,6 +9,20 @@ import Testing
 
 private struct SecurityCheckFailed: Error { let message: String }
 
+private actor SecurityProbeProvider: NectoOperationProvider {
+    nonisolated let descriptor: NectoBridgeDescriptor
+    private(set) var calls = 0
+
+    init(name: String) {
+        descriptor = .init(binding: .init(name: name, version: 1), kind: .once)
+    }
+
+    func invoke(input: NectoJSONValue, context: NectoInvocationContext) async throws -> NectoJSONValue {
+        calls += 1
+        return ["ok": true]
+    }
+}
+
 private struct ErrorTicksProvider: NectoOperationProvider {
     static let message = "<img src=missing onerror=window.injected=true> & <script>window.injected=true</script>"
     let descriptor = NectoBridgeDescriptor(binding: .init(name: "necto.desktop.ticks", version: 1), kind: .stream)
@@ -38,10 +52,11 @@ struct NectoWebViewSecurityTests {
     }
 
     static func fixture(id: String, source: NectoInstalledPlugin.Source,
-                        installation: NectoLocalPluginInstallation? = nil, version: String = "1.0.0") -> NectoInstalledPlugin {
+                        installation: NectoLocalPluginInstallation? = nil, version: String = "1.0.0",
+                        operations: [NectoOperation] = []) -> NectoInstalledPlugin {
         let manifest = NectoPluginManifest(id: id, name: "Storage fixture", description: "Synthetic fixture",
             version: version, author: "Example", icon: .init(systemName: "testtube.2"),
-            assets: ["index.html", "frame.html"], allowedOrigins: ["self"], operations: [])
+            assets: ["index.html", "frame.html"], allowedOrigins: ["self"], operations: operations)
         let archive = NectoPanelArchive(files: [
             .init(path: "index.html", data: Data("<html><body>\(version)<script>window.loaded=true</script></body></html>".utf8)),
             .init(path: "frame.html", data: Data("<script>window.webkit.messageHandlers.necto.postMessage({type:'context'}).then(()=>parent.frameResult='allowed').catch(()=>parent.frameResult='denied')</script>".utf8)),
@@ -134,6 +149,42 @@ struct NectoWebViewSecurityTests {
         try await Self.wait(page, for: "window.mainResult === true")
         _ = try await page.webView.evaluateJavaScript("const frame=document.createElement('iframe'); frame.src='frame.html'; document.body.append(frame)")
         try await Self.wait(page, for: "window.frameResult === 'denied'")
+    }
+
+    @Test("A device WebView cannot invoke shell bridges through raw native messages")
+    func deviceShellBridgeIsolation() async throws {
+        let registry = NectoPluginRegistry()
+        let target = NectoTarget(deviceID: "fixture", appBundleID: "com.example.bridge")
+        let providers = [SecurityProbeProvider(name: NectoShellExecuteProvider.key),
+                         SecurityProbeProvider(name: NectoShellAuthorizationProvider.key),
+                         SecurityProbeProvider(name: NectoHostInfoProvider.key)]
+        let operations = providers.enumerated().map { index, provider in
+            NectoOperation(id: "operation-\(index)", title: "Probe", description: "Probe", kind: .once,
+                binding: provider.descriptor.binding, inputSchema: ["type": "object"],
+                outputSchema: ["type": "object"], timeoutMs: 1000)
+        }
+        let plugin = Self.fixture(id: "com.example.shell-boundary",
+            source: .device(appName: "Fixture", appBundleID: target.appBundleID), operations: operations)
+        try await registry.installDevice(manifest: plugin.manifest,
+            sourceIdentity: "device:\(target.appBundleID)", for: target)
+        try await registry.install(manifest: plugin.manifest, sourceIdentity: "local:approved")
+        for provider in providers { await registry.registerHostProvider(provider) }
+        let page = NectoPluginPage(plugin: plugin, registry: registry, target: target, websiteDataStore: .nonPersistent())
+        defer { page.invalidate() }
+        try await Self.wait(page, for: "window.loaded === true")
+        for index in providers.indices {
+            _ = try await page.webView.evaluateJavaScript("""
+                window.webkit.messageHandlers.necto.postMessage({type:'invoke', operationID:'operation-\(index)',
+                    input:{}, pluginID:'com.example.shell-boundary', sourceIdentity:'local:approved', target:null})
+                    .then(r=>window.result\(index)=r); void 0
+                """)
+            try await Self.wait(page, for: "window.result\(index) !== undefined")
+            let valid = try await page.webView.evaluateJavaScript(index < 2
+                ? "window.result\(index).ok === false && window.result\(index).error.code === 'PERMISSION_DENIED'"
+                : "window.result\(index).ok === true") as? Bool
+            #expect(valid == true)
+            #expect(await providers[index].calls == (index < 2 ? 0 : 1))
+        }
     }
 
     @Test("Provider errors render as text without executing HTML")

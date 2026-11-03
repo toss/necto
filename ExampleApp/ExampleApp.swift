@@ -2,9 +2,11 @@
 //  Copyright (c) 2026 Viva Republica, Inc.
 //
 
-import NectoDefaultPlugins
+import NectoFilesPlugin
+import NectoPreferencesPlugin
 import NectoSDK
-import NectoURLSessionCapture
+import NectoUIControlPlugin
+import NectoURLSessionCapturePlugin
 import SwiftUI
 
 /// Verifies SDK connection and plugin behaviour on a device or a simulator.

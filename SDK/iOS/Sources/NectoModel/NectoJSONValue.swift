@@ -25,10 +25,19 @@ public extension NectoJSONValue {
         switch value {
         case nil, is NSNull:
             self = .null
-        case let value as Bool:
-            self = .bool(value)
+        // `NSNumber` casts to `Bool` whenever it holds 0 or 1, so only a number that
+        // really is a Boolean may become one.
         case let value as NSNumber:
-            self = .number(value.doubleValue)
+            if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                self = .bool(value.boolValue)
+                return
+            }
+            // Numbers are stored as `Double`, which holds every integer only below
+            // 2^53. A larger one would come back as a different number, which is not
+            // representing it.
+            let number = value.doubleValue
+            guard CFNumberIsFloatType(value) || abs(number) < 9_007_199_254_740_992 else { return nil }
+            self = .number(number)
         case let value as String:
             self = .string(value)
         case let value as [Any]:

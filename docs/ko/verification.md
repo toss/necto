@@ -81,7 +81,7 @@ E2E가 실패하면 로그와 테스트 결과를 첨부해요.
 
 ```bash
 xcrun simctl boot <device-id>
-xcodebuild -project Necto.xcodeproj -scheme ExampleApp -destination "id=<device-id>" build
+xcodebuild -project Necto.xcodeproj -scheme ExampleApp -destination "id=<device-id>" SYMROOT="$PWD/Build/Products" build
 xcrun simctl install <device-id> Build/Products/Debug-iphonesimulator/ExampleApp.app
 xcrun simctl launch <device-id> im.toss.necto.example
 ```
@@ -128,7 +128,8 @@ CLI 설치·삭제 변경은 Settings → About의 명령을 실행한 뒤 `nect
 3. 같은 ID를 삭제한 뒤 재설치해요. 설치 UUID가 바뀌고 이전 명령 승인이 사라져야 해요.
    중복 폴더와 다른 ID로의 대상 지정 업데이트도 거부되어야 해요.
 4. 같은 앱 번들 ID와 플러그인 ID로 디바이스 플러그인을 업데이트하고 재연결해요.
-   셸 권한은 유지되고 다른 앱의 같은 ID는 권한을 이어받지 않아야 해요.
+   Global Full Access의 켜짐·꺼짐과 관계없이 셸 실행·권한 요청은 거부되어야 해요.
+   그 외 오퍼레이션은 기존대로 동작해야 해요.
    assertion을 꺼도 SDK는 중복 등록을 거부하며 등록 해제 후 재등록은 가능해야 해요.
 
 삭제·재설치 테스트는 플러그인 파일용 임시 `CFFIXED_USER_HOME`과 UserDefaults용

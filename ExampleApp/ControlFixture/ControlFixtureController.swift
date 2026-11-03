@@ -14,6 +14,7 @@ final class ControlFixtureController: UIViewController {
     private var navigationTaps = 0
     private var trapTaps = 0
     private var gestureTaps = 0
+    private var mainQueueRanDuringPan = false
 
     init(isDetail: Bool = false) {
         self.isDetail = isDetail
@@ -52,6 +53,7 @@ final class ControlFixtureController: UIViewController {
         statusLabel.accessibilityIdentifier = "poc.status"
         scrollView.accessibilityLabel = "Fixture scroll area"
         scrollView.accessibilityIdentifier = "poc.scroll"
+        scrollView.panGestureRecognizer.addTarget(self, action: #selector(observePan(_:)))
         contentStack.axis = .vertical
         contentStack.spacing = UIStackView.spacingUseSystem
 
@@ -186,6 +188,24 @@ final class ControlFixtureController: UIViewController {
         button.accessibilityIdentifier = identifier
         button.addAction(UIAction { _ in action() }, for: .touchUpInside)
         contentStack.addArrangedSubview(button)
+    }
+
+    @objc private func observePan(_ recognizer: UIPanGestureRecognizer) {
+        switch recognizer.state {
+        case .began:
+            mainQueueRanDuringPan = false
+            scrollView.accessibilityValue = "Pan in progress"
+            // Capture progress before the gesture ends; a final-state check would miss queue starvation.
+            DispatchQueue.main.async { [weak self, weak recognizer] in
+                guard let self, let recognizer else { return }
+                self.mainQueueRanDuringPan = recognizer.state == .began || recognizer.state == .changed
+            }
+        case .ended, .cancelled:
+            scrollView.accessibilityValue = mainQueueRanDuringPan
+                ? "Main queue ran during pan" : "Main queue stalled during pan"
+        default:
+            break
+        }
     }
 
     private func recordTap() {

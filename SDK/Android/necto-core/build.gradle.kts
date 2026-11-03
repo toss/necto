@@ -31,7 +31,9 @@ tasks.test {
 // The iOS SDK's built panels, carried unchanged apart from the manifests in
 // src/main/panel-manifests. `yarn build` in WebPackages writes them.
 val generatePanelResources by tasks.registering(NectoPanelResources::class) {
-    panels.set(rootProject.layout.projectDirectory.dir("../iOS/Sources/NectoDefaultPlugins/Panels"))
+    panels.from(rootProject.fileTree("../iOS/Sources") {
+        include("*/Panels/*/manifest.json")
+    }.files.map { it.parentFile })
     ids.set(listOf("control", "event-log", "files", "network-logger", "performance-monitor", "preferences"))
     manifests.set(layout.projectDirectory.dir("src/main/panel-manifests"))
     root.set("necto/panels")

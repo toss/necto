@@ -6,10 +6,15 @@ import { access, readFile, readdir, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const defaultPanelRoot = resolve(root, "SDK/iOS/Sources/NectoDefaultPlugins/Panels");
-const panelRoots = (await readdir(defaultPanelRoot, { withFileTypes: true }))
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => resolve(defaultPanelRoot, entry.name));
+const panelRoots = [];
+for (const entry of await readdir(resolve(root, "SDK/iOS/Sources"), { withFileTypes: true })) {
+  if (!entry.isDirectory()) continue;
+  const panelRoot = resolve(root, "SDK/iOS/Sources", entry.name, "Panels");
+  let panels;
+  try { panels = await readdir(panelRoot, { withFileTypes: true }); }
+  catch (error) { if (error.code === "ENOENT") continue; throw error; }
+  panelRoots.push(...panels.filter(entry => entry.isDirectory()).map(entry => resolve(panelRoot, entry.name)));
+}
 panelRoots.push(resolve(root, "WebPackages/BuiltInPlugins/Plugins/plugin-sample"));
 panelRoots.push(resolve(root, "WebPackages/BuiltInPlugins/Plugins/shell-demo"));
 

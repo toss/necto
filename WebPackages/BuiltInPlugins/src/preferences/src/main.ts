@@ -6,6 +6,7 @@ import "./style.css";
 
 import { createDetailPane, necto, isNectoBridgeError, type NectoJSONValue } from "@necto/bridge";
 import { t } from "./localization";
+import { arrayItems, dictionaryFields, display, element, numberValue } from "./model";
 
 interface Entry {
   key: string;
@@ -244,8 +245,8 @@ function detailBody(): Node[] {
     case "Double": {
       const field = numberField(detail.value);
       const save = saveButton(() => {
-        const number = Number(field.value.trim());
-        if (!Number.isFinite(number) || (detail?.type === "Int" && !Number.isInteger(number))) {
+        const number = numberValue(field.value, detail?.type ?? "");
+        if (number === null) {
           note.textContent = t("Not a valid {type}", { type: detail?.type ?? "number" });
           return;
         }
@@ -273,15 +274,12 @@ function detailBody(): Node[] {
     case "Array":
     case "StringSet": {
       // Rows rather than a JSON blob: one element per field, and an element that is
-      // itself structured is one line of JSON in its row. A string set holds only
-      // strings, so its rows go back as typed: `1.0` stays `1.0` rather than becoming 1.
+      // itself structured is one line of JSON in its row. StringSet rows stay raw
+      // strings even when their text looks like JSON, such as `1.0` or `true`.
       const strings = detail.type === "StringSet";
-      let items: string[];
-      try {
-        items = (JSON.parse(detail.value) as NectoJSONValue[]).map(display);
-      } catch {
-        items = [];
-      }
+      const stored = arrayItems(detail.value);
+      if (!stored) return readOnly();
+      const items = stored.map(value => display(value, strings));
 
       const rows = el("div", { style: "display:flex; flex-direction:column; gap:6px; max-width:560px" });
       const renderRows = () => {
@@ -330,14 +328,9 @@ function detailBody(): Node[] {
     }
 
     case "Dictionary": {
-      let fields: [string, string][];
-      try {
-        fields = Object.entries(JSON.parse(detail.value) as Record<string, NectoJSONValue>).map(
-          ([key, value]) => [key, display(value)],
-        );
-      } catch {
-        fields = [];
-      }
+      const stored = dictionaryFields(detail.value);
+      if (!stored) return readOnly();
+      const fields = stored.map(([key, value]): [string, string] => [key, display(value)]);
 
       const rows = el("div", { style: "display:flex; flex-direction:column; gap:6px; max-width:560px" });
       const renderRows = () => {
@@ -406,14 +399,19 @@ function detailBody(): Node[] {
     }
 
     default:
-      // Data and anything unrecognised: shown, never edited. Writing base64 back
-      // through a text box is how a token gets corrupted.
-      return [
-        pairs(),
-        valueTitle(),
-        el("p", { class: "necto-caption" }, [t("{value} — not editable from here", { value: detail.value })]),
-        actions([]),
-      ];
+      return readOnly();
+  }
+
+  /// Data, anything unrecognised, and a container holding either: shown, never edited.
+  /// Writing base64 back through a text box is how a token gets corrupted, and a
+  /// container that cannot be read here cannot be saved from here without losing it.
+  function readOnly(): Node[] {
+    return [
+      pairs(),
+      valueTitle(),
+      el("p", { class: "necto-caption" }, [t("{value} — not editable from here", { value: detail?.value ?? "" })]),
+      actions([]),
+    ];
   }
 
   function pairs(): Node {
@@ -444,21 +442,6 @@ function detailBody(): Node[] {
     return save;
   }
 
-  /// A string element shows as itself; anything structured shows as one line of JSON.
-  function display(value: NectoJSONValue): string {
-    return typeof value === "string" ? value : JSON.stringify(value);
-  }
-
-  /// The reverse: `47` is a number, `true` a Bool, `{"a":1}` an object, and anything
-  /// that is not JSON is the string it looks like.
-  function element(text: string): NectoJSONValue {
-    try {
-      return JSON.parse(text) as NectoJSONValue;
-    } catch {
-      return text;
-    }
-  }
-
   function saveOnReturn(field: HTMLInputElement, save: HTMLButtonElement): void {
     field.addEventListener("keydown", (event) => {
       if (event.key === "Enter") save.click();
@@ -474,18 +457,28 @@ async function select(key: string): Promise<void> {
     closeDetail();
     return;
   }
+  const store = suite;
   selectedKey = key;
   detail = null;
   renderList();
   renderDetail();
 
   try {
-    const output = await necto.device.send<{ entry: Detail }>("preferences.detail", { suite, key });
+    const output = await necto.device.send<{ entry: Detail }>("preferences.detail", { suite: store, key });
+    if (!isShowing(store, key)) return;
     detail = output.entry;
   } catch (error) {
+    if (!isShowing(store, key)) return;
     message = messageOf(error);
   }
   renderDetail();
+}
+
+/// Whether an answer still belongs to the key on screen. Requests overlap, and the one
+/// for a key already left behind can be the last to come back: shown under the key
+/// selected since, its value would be what the next save writes there.
+function isShowing(store: string, key: string): boolean {
+  return suite === store && selectedKey === key;
 }
 
 function closeDetail(): void {
@@ -506,25 +499,28 @@ function parsed(text: string): NectoJSONValue {
 }
 
 async function write(value: NectoJSONValue, typeHint?: string): Promise<void> {
+  const store = suite;
   const key = selectedKey;
   if (!key) return;
   const output = await necto.device.send<{ entry: Detail }>("preferences.set", {
-    suite,
+    suite: store,
     key,
     value,
     ...(typeHint ? { type: typeHint } : {}),
   });
-  detail = output.entry;
-  await load();
+  if (isShowing(store, key)) detail = output.entry;
+  if (suite === store) await load();
   renderDetail();
 }
 
 async function erase(): Promise<void> {
-  if (!selectedKey) return;
+  const store = suite;
+  const key = selectedKey;
+  if (!key) return;
   try {
-    await necto.device.send("preferences.remove", { suite, key: selectedKey });
-    closeDetail();
-    await load();
+    await necto.device.send("preferences.remove", { suite: store, key });
+    if (isShowing(store, key)) closeDetail();
+    if (suite === store) await load();
   } catch (error) {
     message = messageOf(error);
     renderList();

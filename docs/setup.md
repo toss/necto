@@ -4,20 +4,27 @@ Necto's SDK is a debug tool that compiles into your app. This page covers integr
 the SDK and excluding its calls from production builds. Install the Mac app separately
 using [install.md](install.md).
 
+Use Necto only with trusted apps and runtime environments, including development
+devices and networks. The SDK connection has no peer
+authentication or TLS: USB and loopback do not prevent other apps on the device or
+programs on the Mac from connecting. Do not expose or forward its ports to untrusted
+networks.
+
 ## Wiring it up
 
 Add `https://github.com/toss/necto.git` in Xcode's Package Dependencies.
-Select the `NectoSDK` product for your app target. It includes the SDK and built-in
-plugin modules; keep the imports for the modules you use, as shown below.
-Register the plugins once during app startup, then start the SDK:
+Select `NectoSDK` and only the plugin products you need. The example below also
+uses `NectoEventsPlugin`, `NectoProcessMetricPlugin`, `NectoURLSessionCapturePlugin`
+and `NectoUIControlPlugin`. Automatic capture and UI Control use private APIs;
+omit those two products in apps that prohibit private APIs.
 
 ```swift
-import NectoDefaultPlugins
-import NectoProcessMetrics
+import NectoEventsPlugin
+import NectoUIControlPlugin
+import NectoProcessMetricPlugin
 import NectoSDK
-import NectoURLSessionCapture
+import NectoURLSessionCapturePlugin
 
-#if DEBUG
 let events = NectoEventsPlugin()
 NectoSDK.register(URLSessionNetworkPlugin())   // network, captured for you
 NectoSDK.register(events)
@@ -25,42 +32,70 @@ NectoSDK.register(ProcessPerformancePlugin())  // six process metrics while obse
 NectoSDK.register(NectoUIControlPlugin())
 NectoSDK.start()
 events.report(NectoEvent(level: .info, tag: "App", message: "App started"))
-#endif
 ```
 
 Register only the plugins you need. Adding the package does not register plugins,
-start a listener or enable capture. Built-in plugin code and panel resources are
-included in the product even if you do not register them.
+start a listener or enable capture. Each selected plugin carries only its own code
+and panel resources, plus its declared dependencies.
 Your own plugins register the same way; their panels appear
 in Necto when the app connects. See [the device plugin tutorial](tutorial-device.md)
 for a complete implementation.
 
-### Updating existing dependencies
+### Choosing products
 
-If your app or plugin package explicitly depends on `NectoDefaultPlugins`,
-`NectoProcessMetrics`, `NectoURLSessionCapture`, `NectoModel` or `NectoTransport`
-products, replace those product dependencies with `NectoSDK`. In a `Package.swift`:
+| Product / import | Purpose | Private APIs |
+| --- | --- | --- |
+| `NectoSDK` | Connection and plugin registration | No |
+| `NectoNetworkPlugin` | Report requests from your own networking hooks | No |
+| `NectoEventsPlugin` | Application events | No |
+| `NectoFilesPlugin` | Files | No |
+| `NectoPreferencesPlugin` | Preferences | No |
+| `NectoPerformancePlugin` | Report performance readings | No |
+| `NectoProcessMetricPlugin` | Automatic process metrics | No |
+| `NectoUIControlPlugin` | UI inspection and interaction | Yes |
+| `NectoURLSessionCapturePlugin` | Automatic URLSession recording | Yes |
+
+Apps previously using only `NectoSDK` must explicitly add the products they use.
+Replace `import NectoDefaultPlugins` with imports for the individual plugins above.
+Rename `NectoProcessMetrics` and `NectoURLSessionCapture` imports to
+`NectoProcessMetricPlugin` and `NectoURLSessionCapturePlugin`.
+Registration methods and plugin type names are unchanged.
 
 ```swift
-.product(name: "NectoSDK", package: "necto")
+.product(name: "NectoSDK", package: "necto"),
+.product(name: "NectoNetworkPlugin", package: "necto"),
+.product(name: "NectoEventsPlugin", package: "necto")
 ```
-
-The module names, imports and registration APIs are unchanged. This is a package
-configuration change: manifests referencing the old products must be updated before
-adopting the new version. Mac host products now live in the local `NectoMac` package and
-are not part of the SDK.
 
 ## Keeping it away from users
 
 Do not run debugging tools in builds distributed to users.
 
-> Wrap every Necto call in `#if DEBUG`.
+The SDK does not restrict capture to a build configuration. The app decides where
+to include the products and when to register plugins and start the SDK, including
+internal Release builds.
 
-Calls inside `#if DEBUG` are excluded when `DEBUG` is not defined. Check that your
-Release build settings do not define `DEBUG`.
+The built-in UI Control provider synthesizes touches using private UIKit and
+IOHID entry points. Its Swift implementation lives in `NectoUIControlPlugin` and
+resolves selectors and C functions at runtime instead of linking Objective-C
+private method declarations. It supports positioned taps, 1–5 simultaneous fingers,
+1–3 successive taps, swipes, and edge-back gestures. Native controls and text inputs
+are discovered through public UIKit properties. SwiftUI support additionally enables
+application accessibility through `_AXSApplicationAccessibilitySetEnabled` and
+routes each touch through `_UIHitTestContext`, `_hitTestWithContext:` and
+`_setResponder:`. These use the same runtime symbol resolver; there is no separate
+`libAccessibility.dylib` load or `_accessibilityInit` call. If these runtime entry
+points are missing, SwiftUI target discovery or touch delivery may be unavailable.
+Runtime lookup does not make these APIs public.
+Missing required touch entry points return `OPERATION_UNAVAILABLE`. OS changes can still
+break the implementation, and Swift cannot catch Objective-C exceptions.
 
-`NectoSDK.start()` starts the listener. However, `URLSessionNetworkPlugin` starts
-capture when registered, so guard plugin creation and registration as well as `start()`.
+Runtime lookup is not a guarantee of App Store Connect or TestFlight acceptance.
+Inspect the final app and embedded frameworks, and keep the debugging tool out of
+builds distributed to users.
+
+Registering `URLSessionNetworkPlugin` starts network capture.
+Calling `NectoSDK.start()` lets you view the captured requests in the Necto app on your Mac.
 
 Excluding calls does not guarantee removal of all package code and resources.
 What remains depends on linking and build settings such as dead-code stripping.
@@ -81,5 +116,31 @@ dependencies and inspect the actual Release output for remaining code and resour
 
 Start with `URLSessionNetworkPlugin` and `NectoEventsPlugin`. Network requests appear
 as they happen. Keep the registered `events` instance in your app's debug logging code
-and call `events.report(...)` to send log entries, as in the example above. Guard these
-calls with `#if DEBUG` too. Add other plugins for the data you need to inspect.
+and call `events.report(...)` to send log entries, as in the example above. Add other
+plugins for the data you need to inspect.
+
+### Which requests are captured
+
+Add `NectoURLSessionCapturePlugin` and register `URLSessionNetworkPlugin()`
+to automatically record HTTP(S) requests from `URLSession.shared` and sessions the
+app creates. Keep normal `URLSession` construction and request calls. No factory,
+wrapper or session protocol is required. Remove any old `protocolClass` registration;
+the compatibility protocol remains available but never intercepts a request.
+
+Like PulseProxy, capture observes the original session through runtime hooks. It
+never reissues a request or replaces the application's configuration or delegates.
+Foundation and the app continue to handle credentials, cookies, authentication
+challenges and redirects. Use the public-API-only `NectoNetworkPlugin` for manual logging.
+
+- Capture works in both Debug and Release when installed. To exclude its private
+  APIs, omit `NectoURLSessionCapturePlugin` from the app target dependencies.
+- Private Foundation classes and methods are involved. OS changes and other
+  SDK hooks can affect capture. Presence and signature checks do not guarantee future compatibility.
+- Data, upload, download and streaming requests are recorded with bounded body previews.
+  Application body streams are never consumed; streamed uploads may have no request preview.
+- WebSocket messages and background transfers running in another process are unsupported.
+- `uninstall()` stops recording. Hooks remain as pass-throughs instead of restoring
+  old implementations over hooks installed by another SDK.
+
+Reference implementations: [PulseProxy](https://github.com/kean/Pulse/blob/main/Sources/PulseProxy/URLSessionSwizzler.swift)
+and [Atlantis Network.framework loader support](https://github.com/ProxymanApp/atlantis/blob/main/Sources/NetworkInjector%2BNWURLSession.swift).

@@ -5,7 +5,7 @@
 import Foundation
 import NectoModel
 import Testing
-@testable import NectoDefaultPlugins
+@testable import NectoUIControlPlugin
 @testable import NectoSDK
 
 private func call(_ plugin: NectoUIControlPlugin, _ name: String, _ input: NectoJSONValue = [:]) async throws -> NectoJSONValue {

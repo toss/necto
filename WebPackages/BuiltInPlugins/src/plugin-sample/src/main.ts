@@ -23,20 +23,6 @@ interface Tick {
   timestamp: number;
 }
 
-interface ShellApprovalResult {
-  approved: boolean;
-  approvedCommands: string[];
-}
-
-interface ShellExecutionResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
-
-const shellCommand = "/usr/bin/printf 'Hello from Plugin Sample\\n'";
-const unapprovedShellCommand = "/usr/bin/printf 'This command was not approved\\n'";
-
 // -- rendering ---------------------------------------------------------------
 
 function pairs(id: string, rows: [string, string | number][]): void {
@@ -155,47 +141,6 @@ async function stopTicks(): Promise<void> {
   subscription = undefined;
 }
 
-// -- shell ------------------------------------------------------------------
-
-async function requestShellApproval(fullAccess = false): Promise<void> {
-  try {
-    const result = await necto.desktop.send<ShellApprovalResult>("shell.request", fullAccess
-      ? {
-        access: "fullAccess",
-        title: t("Allow every Plugin Sample command?"),
-        message: t("Full Access lets Plugin Sample run any shell command without asking again."),
-      }
-      : {
-        commands: [commandField()?.value ?? shellCommand],
-        title: t("Allow the Plugin Sample greeting?"),
-        message: t("The sample uses printf to verify shell execution and stdout."),
-      });
-    pairs("shell-result", [
-      ["approved", String(result.approved)],
-      ["commands", fullAccess ? t("All commands") : result.approvedCommands.join("\n") || "—"],
-    ]);
-  } catch (error) {
-    pairs("shell-result", [[codeOf(error), messageOf(error)]]);
-  }
-}
-
-async function runShell(command: string): Promise<void> {
-  try {
-    const result = await necto.desktop.send<ShellExecutionResult>("shell.execute", { command });
-    pairs("shell-result", [
-      ["stdout", result.stdout || "—"],
-      ["stderr", result.stderr || "—"],
-      ["exitCode", result.exitCode],
-    ]);
-  } catch (error) {
-    pairs("shell-result", [[codeOf(error), messageOf(error)]]);
-  }
-}
-
-function commandField(): HTMLInputElement | null {
-  return document.getElementById("shell-command") as HTMLInputElement | null;
-}
-
 // -- deliberate failures -----------------------------------------------------
 
 /// Each button asks for something Necto will refuse, so an author can see the shape of
@@ -231,9 +176,6 @@ function messageOf(error: unknown): string {
 // -- start -------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const field = commandField();
-  if (field) field.value = shellCommand;
-
   if (!necto.isAvailable()) {
     pairs("context", [[t("Notice"), t("This plugin only works inside Necto")]]);
     return;
@@ -242,14 +184,6 @@ async function main(): Promise<void> {
   document.getElementById("run-info")?.addEventListener("click", () => void runInfo());
   document.getElementById("start-ticks")?.addEventListener("click", () => void startTicks());
   document.getElementById("stop-ticks")?.addEventListener("click", () => void stopTicks());
-  document.getElementById("request-shell-access")?.addEventListener("click", () => void requestShellApproval());
-  document.getElementById("request-shell-full-access")?.addEventListener("click", () => void requestShellApproval(true));
-  document.getElementById("run-shell-command")?.addEventListener("click", () => {
-    void runShell(commandField()?.value ?? shellCommand);
-  });
-  document.getElementById("run-unapproved-shell-command")?.addEventListener("click", () => {
-    void runShell(unapprovedShellCommand);
-  });
 
   try {
     const pluginContext = await necto.context();

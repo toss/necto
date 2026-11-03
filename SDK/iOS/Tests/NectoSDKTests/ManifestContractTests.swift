@@ -3,11 +3,16 @@
 //
 
 import NectoModel
-import NectoProcessMetrics
+import NectoProcessMetricPlugin
 import Foundation
 import Testing
 
-@testable import NectoDefaultPlugins
+@testable import NectoNetworkPlugin
+@testable import NectoEventsPlugin
+@testable import NectoFilesPlugin
+@testable import NectoPreferencesPlugin
+@testable import NectoPerformancePlugin
+@testable import NectoUIControlPlugin
 @testable import NectoSDK
 
 /// The manifest is the contract, and the runtime validates both sides against it. So a

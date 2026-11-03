@@ -64,6 +64,11 @@ source confirmation again. Device plugins trust the app developer who registers 
 Every call still validates its route and payload; shell execution also checks its
 separate runtime policy.
 
+Device plugins cannot call `necto.desktop.shell.*`, including authorization requests.
+The host returns `PERMISSION_DENIED` even with saved shell grants or Global Full
+Access. Existing panels still load; their device and other desktop operations keep
+their existing behavior.
+
 A plugin reaches Necto one of two ways, and the way is decided by what it binds:
 
 - **Device plugins.** Anything that binds `necto.device.*` ships inside the Swift
@@ -102,8 +107,8 @@ manifest `author`, ZIP filename or folder path
 does not authenticate its publisher. Installation UUIDs live in Necto's records,
 outside plugin payloads, and cannot be supplied or inherited through a ZIP.
 
-**Device updates.** Same app bundle ID and plugin ID retain shell grants when files
-change. Different apps' same-named plugins do not share grants. The SDK asserts on
+**Device updates.** Same app bundle ID and plugin ID retain their principal when files
+change. Different apps' same-named plugins have separate principals. The SDK asserts on
 a currently registered duplicate ID in debug and rejects it in every build, before
 calling its handlers. Intentional replacement uses `NectoSDK.unregister(id:)` then
 `register`. Reuse of an ID by a different implementation inside a trusted app is
@@ -162,6 +167,7 @@ the individual access levels. Keep it off when testing permission isolation.
 | --- | --- | --- |
 | Binds `necto.device.*` | Yes | Refused at install |
 | Binds `necto.desktop.*` | Yes | Yes |
+| Calls `necto.desktop.shell.*` | Refused | Subject to shell policy |
 | Appears | While its app is connected | Always |
 | The agreement | Adding the package to the app | The install dialog |
 | Removal | Remove the package from the app | Settings, or delete the folder |
@@ -175,7 +181,6 @@ Connection and display behavior:
   USB devices can connect alongside them.
 - Device manifests are registered per target. Different apps or devices can carry
   different builds of the same plugin ID without replacing each other's registration.
-  Shell grants follow the app bundle ID and plugin ID, not the device or content hash.
 - A device plugin whose app disconnects stays in the sidebar in gray, drawn from
   the cached panel, and comes back to life when the app does. Only ids are written
   down; right-click offers Forget, and an id the app stops carrying disappears at

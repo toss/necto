@@ -3,18 +3,18 @@
 //
 
 import Foundation
-import NectoDefaultPlugins
+import NectoEventsPlugin
 import NectoModel
-import NectoProcessMetrics
+import NectoProcessMetricPlugin
 import NectoSDK
-import NectoURLSessionCapture
+import NectoURLSessionCapturePlugin
 import Testing
 
 #if canImport(NectoMacService) || canImport(NectoCLIService) || canImport(ArgumentParser)
 #error("The SDK consumer must not depend on host modules")
 #endif
 
-@Test("One SDK product provides the defaults without registering or starting them")
+@Test("Selected plugin products provide their panels without starting them")
 func sdkConsumer() throws {
     #expect(NectoSDK.status == .stopped)
     #expect(NectoSDK.plugins.isEmpty)
@@ -22,6 +22,8 @@ func sdkConsumer() throws {
     let events = NectoEventsPlugin()
     let performance = ProcessPerformancePlugin()
     let network = URLSessionNetworkPlugin()
+    let session: URLSession = URLSession(configuration: .ephemeral)
+    session.invalidateAndCancel()
     for plugin in [events as any NectoPlugin, performance, network] {
         let panel = try #require(plugin.panel)
         #expect(FileManager.default.fileExists(atPath: panel.root.appendingPathComponent("index.html").path))

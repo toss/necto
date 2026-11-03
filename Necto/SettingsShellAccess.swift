@@ -29,7 +29,7 @@ struct SettingsShellAccess: View {
             NectoRow(
                 label: NectoL10n.text("Full Access"),
                 hint: NectoL10n.text(
-                    "Allow every plugin and CLI request without confirmation."
+                    "Allow every desktop plugin and CLI request without confirmation."
                 ),
                 scale: scale
             ) {
@@ -58,7 +58,6 @@ struct SettingsShellAccess: View {
                 .foregroundStyle(NectoTheme.textTertiary)
                 .padding(.bottom, 8)
 
-            callerGroup(NectoL10n.text("Device Plugins"), callers: callers(of: .device))
             callerGroup(NectoL10n.text("Desktop Plugins"), callers: callers(of: .desktop))
             callerGroup(NectoL10n.text("CLI access"), callers: callers(of: .cli))
 
@@ -71,7 +70,7 @@ struct SettingsShellAccess: View {
         .sheet(isPresented: $isConfirmingFullAccess) {
             NectoDialog(
                 title: NectoL10n.text("Enable Full Access?"),
-                caption: NectoL10n.text("Every plugin and necto-cli command will run without confirmation."),
+                caption: NectoL10n.text("Every desktop plugin and necto-cli command will run without confirmation."),
                 scale: scale
             ) {
                 NectoNotice(

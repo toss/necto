@@ -35,6 +35,23 @@ builds, release packaging tests, and a fresh vulnerability scan.
 | Android SDK or the Mac's Android connection | `SDK/Android/gradlew -p SDK/Android build`, then the Android checks below |
 | Contract change | Update fixtures in the same commit |
 
+`node --test script/tests/package.test.mjs` checks SDK module boundaries, including
+independent plugin products and exclusion of private runtime modules from the core SDK.
+For touch-runtime changes, inspect all Mach-O files in the final Debug and Release
+iOS apps: the known private selectors must not appear in `__objc_methname`,
+`__objc_selrefs`, or undefined Objective-C message-send symbols. Runtime lookup
+strings will still be present. This checks the binary representation, not whether
+the APIs are public or whether Apple's upload validation will accept the app.
+
+Run touch checks in a freshly launched ExampleApp before attaching a runtime
+inspector: an inspector can initialize accessibility and hide discovery limitations.
+Use Loupe's external simulator screenshot mode for this baseline. Verify all 15
+native finger/tap configurations, input, positioned taps, scroll, and edge-back by
+observing changed content. Also verify SwiftUI virtual target discovery, tap,
+Unicode input, navigation, edge-back, scrolling and covered content exclusion.
+`node script/tests/control-e2e.mjs <device-id> <dedicated-example-bundle-id>`
+runs both UIKit and SwiftUI checks over the real host.
+
 `script/test` runs Swift and Vitest unit tests, native cache and WebView integration
 tests, package/release contracts and panel asset checks. Check layouts and localized
 copy in the plugin preview. Passing tests does not verify UI or transport changes;
@@ -113,7 +130,7 @@ Use a simulator for the loopback connection path.
 
 ```bash
 xcrun simctl boot <device-id>
-xcodebuild -project Necto.xcodeproj -scheme ExampleApp -destination "id=<device-id>" build
+xcodebuild -project Necto.xcodeproj -scheme ExampleApp -destination "id=<device-id>" SYMROOT="$PWD/Build/Products" build
 xcrun simctl install <device-id> Build/Products/Debug-iphonesimulator/ExampleApp.app
 xcrun simctl launch <device-id> im.toss.necto.example
 ```
@@ -181,7 +198,8 @@ For identity or installation changes, also check these with global Full Access o
 3. Remove and reinstall the same ID: the installation UUID changes and the command
    is no longer approved. Duplicate folders and a wrong-ID targeted update are refused.
 4. Update/reconnect a device plugin with the same app bundle ID and plugin ID:
-   shell grants stay. Another app's same ID must not inherit them. The SDK rejects
+   shell execution and authorization requests must be denied whether Global Full Access
+   is on or off. Other operations must keep working. The SDK rejects
    duplicate registration even with assertions disabled; unregister/register works.
 
 For destructive lifecycle tests, use both a temporary `CFFIXED_USER_HOME` for plugin
