@@ -19,7 +19,10 @@ final class NectoAppModel {
     ) ?? NectoSemanticVersion(major: 0, minor: 0, patch: 0)
 
     private(set) var plugins: [NectoInstalledPlugin] = [] {
-        didSet { refreshBackgroundPanels() }
+        didSet {
+            refreshBackgroundPanels()
+            prunePluginUpdates()
+        }
     }
     /// Why a plugin on disk is not in `plugins`, keyed by folder name. Shown in
     /// Settings rather than only printed, because a plugin that silently fails to
@@ -264,11 +267,8 @@ final class NectoAppModel {
     private(set) var pluginUpdates: [String: PluginUpdate] = [:]
     private(set) var isCheckingUpdates = false
 
-    /// Opening the Plugins page checks, and people open it often. Anonymous GitHub
-    /// allows sixty requests an hour, and every repository followed costs one request
-    /// plus one for each plugin installed from it, so an unthrottled check on every
-    /// visit would spend the hour and then report a rate limit as if something were
-    /// wrong. Asking explicitly ignores this.
+    /// Activation and opening Plugins share a throttle because each repository and
+    /// plugin manifest costs a GitHub request. Explicit checks bypass it.
     private var lastUpdateCheck: Date?
     private static let updateCheckInterval: TimeInterval = 15 * 60
 
@@ -292,7 +292,7 @@ final class NectoAppModel {
         isCheckingUpdates = true
         defer { isCheckingUpdates = false }
 
-        var found: [String: PluginUpdate] = [:]
+        var found = pluginUpdates
         var releases: [String: NectoReleaseSource.Release] = [:]
 
         for plugin in plugins {
@@ -330,6 +330,7 @@ final class NectoAppModel {
                 }
             }
 
+            found.removeValue(forKey: plugin.id)
             guard let offer = release.offers.first(where: { $0.manifest?.id == plugin.id }),
                   let manifest = offer.manifest,
                   let published = NectoSemanticVersion(manifest.version),
@@ -345,7 +346,20 @@ final class NectoAppModel {
         }
 
         pluginUpdates = found
+        prunePluginUpdates()
         lastUpdateCheck = Date()
+    }
+
+    private func prunePluginUpdates() {
+        pluginUpdates = pluginUpdates.filter { id, update in
+            plugins.contains { plugin in
+                guard plugin.id == id, plugin.source == .installed,
+                      let origin = plugin.installation?.origin,
+                      let installed = NectoSemanticVersion(plugin.manifest.version) else { return false }
+                return installed < update.version && origin.host == update.repository.host
+                    && origin.owner == update.repository.owner && origin.repository == update.repository.name
+            }
+        }
     }
 
     /// Fetches the newer release and asks, the same way a first install asks. An
@@ -355,7 +369,6 @@ final class NectoAppModel {
         guard let update = pluginUpdates[pluginID],
               installer.enqueueUpdate(offer: update.offer, repository: update.repository,
                                       tag: update.tag, expecting: pluginID) else { return }
-        pluginUpdates.removeValue(forKey: pluginID)
     }
 
     // MARK: Removing
@@ -473,6 +486,7 @@ final class NectoAppModel {
         await installer.reloadPlugins()
         await startControlServer()
         Task { await updater.check(quietly: true) }
+        Task { await checkPluginUpdates() }
         startWatchingConnections()
     }
 

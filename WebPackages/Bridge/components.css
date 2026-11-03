@@ -302,7 +302,7 @@ th.necto-numeric { text-align: right; }
   align-items: center;
   gap: var(--necto-space-2);
   margin: 0 var(--necto-space-2);
-  padding: 5px var(--necto-space-2);
+  padding: 5px var(--necto-space-4) 5px var(--necto-space-2);
   border: none;
   border-radius: var(--necto-radius-control);
   background: none;
@@ -563,7 +563,7 @@ th.necto-numeric { text-align: right; }
   display: flex;
   min-height: 38px;
   align-items: center;
-  padding: var(--necto-space-2) 0;
+  padding: var(--necto-space-2);
   gap: var(--necto-space-4);
 }
 

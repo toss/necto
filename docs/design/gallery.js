@@ -222,7 +222,8 @@ const pluginSearchButton = `<button type="button" class="gallery-plugin-search" 
   <svg class="necto-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4"/><path d="m10 10 4 4"/></svg>
 </button>`;
 
-const sidebar = (onSettings = false) => `
+const updateDot = '<span class="update-dot" role="img" aria-label="Update available" title="Update available"></span>';
+const sidebar = (onSettings = false, hasUpdate = false) => `
   <div class="necto-sidebar">
     <div class="win-bar">${lights}</div>
     <div class="necto-app-head">
@@ -258,7 +259,7 @@ const sidebar = (onSettings = false) => `
     <button type="button" class="necto-sidebar-item">${gaugeIcon}<span>Host Status</span><span class="necto-trailing">0.1.0</span></button>
 
     <div class="side-foot">
-      <button type="button" class="necto-sidebar-item" aria-selected="${onSettings}">${gearIcon}<span>Settings</span></button>
+      <button type="button" class="necto-sidebar-item" aria-selected="${onSettings}">${gearIcon}<span>Settings</span>${hasUpdate ? updateDot : ""}</button>
     </div>
   </div>`;
 
@@ -391,21 +392,21 @@ const desktopPlugins = [
 /// Two columns inside one screen: what you are configuring on the left, the settings
 /// themselves on the right. One flat list stopped working the moment plugins arrived —
 /// appearance and plugin management have nothing to do with each other.
-const settingsNav = (current) => `
+const settingsNav = (current, updates = false) => `
   <div class="necto-nav">
-    <button type="button" class="necto-nav-item" aria-selected="${current === "general"}">${gearIcon}<span>General</span></button>
+    <button type="button" class="necto-nav-item" aria-selected="${current === "general"}">${gearIcon}<span>General</span>${updates ? updateDot : ""}</button>
     <button type="button" class="necto-nav-item" aria-selected="${current === "shell"}">${logIcon}<span>Shell Access</span></button>
-    <button type="button" class="necto-nav-item" aria-selected="${current === "plugins"}">${sampleIcon}<span>Desktop Plugins</span></button>
+    <button type="button" class="necto-nav-item" aria-selected="${current === "plugins"}">${sampleIcon}<span>Desktop Plugins</span>${updates ? updateDot : ""}</button>
     <button type="button" class="necto-nav-item" aria-selected="false">${logIcon}<span>Log</span></button>
   </div>`;
 
-const generalPage = () => `
+const generalPage = (updates = false) => `
   <div class="necto-body" style="padding: var(--necto-space-3); --necto-font-ui:-apple-system, BlinkMacSystemFont, sans-serif; --necto-font:var(--necto-font-ui)">
     <h3 class="necto-section-title">Appearance</h3>
 
     <div class="necto-row">
       <div class="necto-row-label">Language
-        <p class="necto-row-hint">Changes Necto's native interface. Plugins manage their own language.</p>
+        <p class="necto-row-hint">Necto's display language. Plugins use their own language settings.</p>
       </div>
       <select class="necto-field" style="flex:none; width:190px" aria-label="Language">
         <option selected>System</option>
@@ -416,7 +417,7 @@ const generalPage = () => `
 
     <div class="necto-row">
       <div class="necto-row-label">Text size
-        <p class="necto-row-hint">Applies to the app and to every plugin. ⌘+ and ⌘- also move it.</p>
+        <p class="necto-row-hint">Text size in the app and plugins. Shortcuts: ⌘+ and ⌘-.</p>
       </div>
       <div class="necto-stepper">
         <button type="button" aria-label="Smaller">−</button>
@@ -428,14 +429,14 @@ const generalPage = () => `
 
     <div class="necto-row">
       <div class="necto-row-label">UI font
-        <p class="necto-row-hint">A font family or CSS fallback stack.</p>
+        <p class="necto-row-hint">Font for the app and plugin interface.</p>
       </div>
       <input class="necto-field" style="flex:none; width:190px" value="-apple-system" aria-label="UI font" />
     </div>
 
     <div class="necto-row">
       <div class="necto-row-label">Code font
-        <p class="necto-row-hint">Used for code, values and plugin data.</p>
+        <p class="necto-row-hint">Font for code, values and plugin data.</p>
       </div>
       <input class="necto-field" style="flex:none; width:190px" value="ui-monospace" aria-label="Code font" />
     </div>
@@ -443,21 +444,24 @@ const generalPage = () => `
     <h3 class="necto-section-title">About</h3>
 
     <div class="necto-row">
-      <div class="necto-row-label">Necto</div>
+      <div class="necto-row-label">Necto
+        ${updates ? '<p class="necto-row-hint">Version 0.2.2 is available. Necto restarts after updating.</p>' : ''}
+      </div>
       <div class="necto-toolbar-group" style="padding: 0">
-        <button type="button" class="necto-button necto-button-quiet">Check for updates</button>
+        <button type="button" class="necto-button ${updates ? "necto-button-primary" : "necto-button-quiet"}">${updates ? "Update" : "Check for updates"}</button>
         <span class="necto-row-value">0.1.0</span>
       </div>
+      ${updates ? updateDot : ""}
     </div>
     <div class="necto-row">
       <div class="necto-row-label">Protocol
-        <p class="necto-row-hint">The wire version this build speaks.</p>
+        <p class="necto-row-hint">Version used to communicate with connected apps.</p>
       </div>
       <span class="necto-row-value">1</span>
     </div>
     <div class="necto-row">
       <div class="necto-row-label">Command line tool
-        <p class="necto-row-hint">Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval.</p>
+        <p class="necto-row-hint">Use necto or necto-cli in your terminal. Installation requires administrator approval.</p>
       </div>
       <button type="button" class="necto-button necto-button-quiet">Install CLI</button>
     </div>
@@ -476,9 +480,9 @@ const generalPage = () => `
     </div>
   </div>`;
 
-const pluginsPage = () => `
+const pluginsPage = (updates = false) => `
   <div class="necto-body" style="padding: var(--necto-space-3)">
-    <h3 class="necto-section-title">Installed</h3>
+    <h3 class="necto-section-title">Installed plugins</h3>
     <table class="necto-table">
       <thead><tr>
         <th style="width:44px">On</th><th>Name</th>
@@ -497,11 +501,18 @@ const pluginsPage = () => `
       </tbody>
     </table>
 
-    <h3 class="necto-section-title">Add and edit</h3>
+    <h3 class="necto-section-title">Install and manage</h3>
 
     <div class="necto-row">
-      <div class="necto-row-label">Install
-        <p class="necto-row-hint">Install a built desktop plugin from a folder or zip file. Necto does not verify the source or check for updates for file installs. Device plugins must be included in the app's Swift package.</p>
+      <div class="necto-row-label">Install from GitHub
+        <p class="necto-row-hint">Install using a repository or release URL.</p>
+      </div>
+      <button type="button" class="necto-button">Add…</button>
+    </div>
+
+    <div class="necto-row">
+      <div class="necto-row-label">Install from a file
+        <p class="necto-row-hint">Install from a folder or ZIP file. Source verification and update checks are not available.</p>
       </div>
       <div class="necto-toolbar-group" style="padding: 0">
         <button type="button" class="necto-button">Choose…</button>
@@ -510,13 +521,28 @@ const pluginsPage = () => `
 
     <div class="necto-row">
       <div class="necto-row-label">Plugins folder
-        <p class="necto-row-hint">After adding or changing a plugin folder, reload and approve the plugin. Deleting its folder also removes its permissions.</p>
+        <p class="necto-row-hint">Reload after adding or changing a plugin folder.</p>
       </div>
       <div class="necto-toolbar-group" style="padding: 0">
         <button type="button" class="necto-button necto-button-quiet">Open</button>
         <button type="button" class="necto-button necto-button-quiet">Reload</button>
       </div>
     </div>
+    <div class="necto-row">
+      <div class="necto-row-label">Updates
+        <p class="necto-row-hint">Check for updates to plugins installed from GitHub.</p>
+      </div>
+      <button type="button" class="necto-button necto-button-quiet">Check for updates</button>
+    </div>
+    ${updates ? `
+      <h3 class="necto-section-title">Available updates</h3>
+      <div class="necto-row">
+        <div class="necto-row-label">Target Notes
+          <p class="necto-row-hint">Version 0.2.0 is available.</p>
+        </div>
+        <button type="button" class="necto-button">Update</button>
+        ${updateDot}
+      </div>` : ""}
   </div>`;
 
 const shellCallers = [
@@ -577,17 +603,17 @@ const shellDetailPage = () => `
     </table>
   </div>`;
 
-const settingsPane = (page = "general") => `
+const settingsPane = (page = "general", updates = false) => `
   <div class="necto-app">
     <div class="win-bar"><span class="win-heading">${gearIcon}<span>Settings</span></span></div>
     <div style="display: flex; min-height: 0; flex: 1; padding-left: var(--necto-space-3)">
-      ${settingsNav(page)}
-      ${page === "general" ? generalPage() : page === "plugins" ? pluginsPage() : page === "shell-detail" ? shellDetailPage() : shellAccessPage()}
+      ${settingsNav(page, updates)}
+      ${page === "general" ? generalPage(updates) : page === "plugins" ? pluginsPage(updates) : page === "shell-detail" ? shellDetailPage() : shellAccessPage()}
     </div>
   </div>`;
 
-document.getElementById("settings").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("general")}</div>`;
-document.getElementById("settings-plugins").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("plugins")}</div>`;
+document.getElementById("settings").innerHTML = `<div class="win">${sidebar(true, true)}${settingsPane("general", true)}</div>`;
+document.getElementById("settings-plugins").innerHTML = `<div class="win">${sidebar(true, true)}${settingsPane("plugins", true)}</div>`;
 document.getElementById("settings-shell").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("shell")}</div>`;
 document.getElementById("settings-shell-detail").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("shell-detail")}</div>`;
 
