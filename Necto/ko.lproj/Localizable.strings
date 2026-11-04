@@ -233,3 +233,10 @@
 
 "Search plugins" = "플러그인 검색";
 "No plugins found" = "검색 결과 없음";
+
+/* Event exporter management */
+"Remove the installed event exporter before installing another." = "다른 Exporter를 설치하려면 기존 Exporter를 제거해 주세요.";
+"Allow event collection" = "이벤트 수집 허용";
+"Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection." = "Necto 자체 활동과 현재 및 앞으로 설치되는 플러그인의 사용 기록을 이 Exporter에 전달해요. 기존 제외 목록은 유지되며, 개별 플러그인은 언제든 제외할 수 있어요. 전체 수집을 끝내려면 Exporter를 제거해 주세요.";
+"Install and allow collection" = "설치 및 수집 허용";
+"Update and allow collection" = "업데이트 및 수집 허용";

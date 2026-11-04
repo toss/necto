@@ -28,6 +28,9 @@
 		BA00000000000000000000004 /* NectoFilesPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000004 /* NectoFilesPlugin */; };
 		BA00000000000000000000005 /* NectoPreferencesPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000005 /* NectoPreferencesPlugin */; };
 		BA00000000000000000000006 /* NectoUIControlPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000006 /* NectoUIControlPlugin */; };
+		AF2000000000000000000000 /* NectoPluginInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000001 /* NectoPluginInstaller.swift */; };
+		AF2000000000000000000002 /* NectoPluginLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000003 /* NectoPluginLibrary.swift */; };
+		AF2000000000000000000004 /* InstallCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000005 /* InstallCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +51,9 @@
 		25CF17BF6F214F22D88B9758 /* ExampleApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExampleApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3284D23DEBBF44C6D6C76925 /* toss-necto */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "toss-necto"; path = .; sourceTree = SOURCE_ROOT; };
 		B7B65F74B879EC9BB4A82269 /* Necto.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Necto.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AF2000000000000000000001 /* NectoPluginInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoPluginInstaller.swift; sourceTree = SOURCE_ROOT; };
+		AF2000000000000000000003 /* NectoPluginLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoPluginLibrary.swift; sourceTree = SOURCE_ROOT; };
+		AF2000000000000000000005 /* InstallCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/InstallCoordinator.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -284,6 +290,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF2000000000000000000000 /* NectoPluginInstaller.swift in Sources */,
+				AF2000000000000000000002 /* NectoPluginLibrary.swift in Sources */,
+				AF2000000000000000000004 /* InstallCoordinator.swift in Sources */,
 				AF00000000000000000001 /* NectoShellAccessController.swift in Sources */,
 				AF1000000000000000000000 /* NectoDevicePluginStore.swift in Sources */,
 				AF1000000000000000000002 /* NectoInstalledPlugin.swift in Sources */,

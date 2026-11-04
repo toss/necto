@@ -13,6 +13,8 @@ import NectoModel
 @MainActor
 @Observable
 final class InstallCoordinator {
+    private let installedPlugins: @MainActor () -> [NectoInstalledPlugin]
+    private let installationDirectory: URL?
     private let shellAccess: NectoShellAccessController
     private let reload: @MainActor () async -> [NectoInstalledPlugin]
     private let present: @MainActor () throws -> Void
@@ -23,7 +25,11 @@ final class InstallCoordinator {
          reload: @escaping @MainActor () async -> [NectoInstalledPlugin],
          present: @escaping @MainActor () throws -> Void,
          delete: @escaping @MainActor (String) async throws -> NectoJSONValue,
-         logFailure: @escaping @MainActor (String, String) -> Void) {
+         logFailure: @escaping @MainActor (String, String) -> Void,
+         installedPlugins: @escaping @MainActor () -> [NectoInstalledPlugin] = { NectoPluginLibrary.loadInstalled().plugins },
+         installationDirectory: URL? = nil) {
+        self.installedPlugins = installedPlugins
+        self.installationDirectory = installationDirectory
         self.shellAccess = shellAccess
         self.reload = reload
         self.present = present
@@ -306,7 +312,7 @@ final class InstallCoordinator {
         do {
             let staged = try await NectoPluginInstaller.stage(
                 from: source,
-                installed: NectoPluginLibrary.loadInstalled().plugins,
+                installed: installedPlugins(),
                 expectedPluginID: expectedPluginID,
                 describedAs: origin.map { "\($0.label) \($0.tag)" }
             )
@@ -512,10 +518,11 @@ final class InstallCoordinator {
         pendingInstall = nil
 
         do {
+            try NectoPluginInstaller.validateExporter(staged.manifest, installed: installedPlugins())
             guard NectoPluginLibrary.installations[staged.manifest.id] == staged.previous?.installation else {
                 throw NectoLocalPluginFiles.Failure.changedSinceReview
             }
-            let installed = try NectoPluginInstaller.commit(staged, into: NectoPluginLibrary.directory)
+            let installed = try NectoPluginInstaller.commit(staged, into: installationDirectory ?? NectoPluginLibrary.directory)
             let origin = pending.origin
             var record = staged.previous?.installation ?? NectoLocalPluginInstallation(
                 pluginID: staged.manifest.id,

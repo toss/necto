@@ -33,10 +33,12 @@ private func makeOperation(
 }
 
 private func makeManifest(
+    type: NectoPluginType? = nil,
     operations: [NectoOperation] = [makeOperation()],
     version: String = "1.0.0"
 ) -> NectoPluginManifest {
     NectoPluginManifest(
+        type: type,
         id: "network-logger",
         name: "Network Logger",
         description: "Inspect network requests",
@@ -55,6 +57,59 @@ private func makeManifest(
 
 @Test func acceptsAPureWebPluginWithoutHostOperations() throws {
     try makeManifest(operations: []).validate()
+}
+
+@Test func acceptsDesktopEventExporters() throws {
+    try makeManifest(type: .eventExporter).validate()
+    try makeManifest(type: .eventExporter, operations: []).validate()
+}
+
+@Test func rejectsEventExportersWithDeviceBindings() {
+    let manifest = makeManifest(
+        type: .eventExporter,
+        operations: [makeOperation(binding: makeBinding(name: "necto.device.events.list"))]
+    )
+    #expect(throws: NectoManifestValidationError.eventExporterRequiresDesktop) {
+        try manifest.validate()
+    }
+}
+
+@Test func preservesAnOrdinaryManifestWithoutAType() throws {
+    let original = makeManifest()
+    let encoded = try JSONEncoder().encode(original)
+    let json = try JSONDecoder().decode(NectoJSONValue.self, from: encoded)
+    #expect(json["type"] == nil)
+
+    let decoded = try JSONDecoder().decode(NectoPluginManifest.self, from: encoded)
+    #expect(decoded.type == nil)
+    #expect(decoded == original)
+    try decoded.validate()
+}
+
+@Test func roundTripsTheEventExporterType() throws {
+    let original = makeManifest(type: .eventExporter)
+    let encoded = try JSONEncoder().encode(original)
+    let json = try JSONDecoder().decode(NectoJSONValue.self, from: encoded)
+    #expect(json["type"] == .string("event-exporter"))
+
+    let decoded = try JSONDecoder().decode(NectoPluginManifest.self, from: encoded)
+    #expect(decoded.type == .eventExporter)
+    #expect(decoded == original)
+    try decoded.validate()
+}
+
+@Test func rejectsUnsupportedPluginTypes() throws {
+    let manifest = try JSONDecoder().decode(
+        NectoJSONValue.self,
+        from: JSONEncoder().encode(makeManifest())
+    )
+    var json = try #require(manifest.objectValue)
+    json["type"] = "unsupported"
+    let encoded = try JSONEncoder().encode(NectoJSONValue.object(json))
+
+    #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(NectoPluginManifest.self, from: encoded)
+    }
 }
 
 /// The name is the whole declaration, so one that says who answers it is the only

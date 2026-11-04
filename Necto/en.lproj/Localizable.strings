@@ -233,3 +233,10 @@
 
 "Search plugins" = "Search plugins";
 "No plugins found" = "No plugins found";
+
+/* Event exporter management */
+"Remove the installed event exporter before installing another." = "Remove the installed event exporter before installing another.";
+"Allow event collection" = "Allow event collection";
+"Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection." = "Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection.";
+"Install and allow collection" = "Install and allow collection";
+"Update and allow collection" = "Update and allow collection";

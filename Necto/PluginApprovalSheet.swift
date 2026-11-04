@@ -59,11 +59,20 @@ struct PluginApprovalSheet: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        if manifest.type == .eventExporter {
+                            NectoNotice(
+                                title: NectoL10n.text("Allow event collection"),
+                                detail: NectoL10n.text("Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection."),
+                                scale: scale
+                            )
+                            .padding(.bottom, 8)
+                        }
+
                         ForEach(bindings, id: \.identity) { binding in
                             GrantRow(binding: binding, scale: scale)
                         }
 
-                        if manifest.operations.isEmpty {
+                        if manifest.operations.isEmpty && manifest.type != .eventExporter {
                             Text("This plugin asks for nothing. It can draw, and that is all.")
                                 .font(.necto(.label, scale: scale))
                                 .foregroundStyle(NectoTheme.textSecondary)
@@ -84,7 +93,9 @@ struct PluginApprovalSheet: View {
                 .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
                 .keyboardShortcut(.cancelAction)
 
-            Button(NectoL10n.text(staged.replaces == nil ? "Install" : "Update"), action: approve)
+            Button(NectoL10n.text(manifest.type == .eventExporter
+                ? (staged.replaces == nil ? "Install and allow collection" : "Update and allow collection")
+                : (staged.replaces == nil ? "Install" : "Update")), action: approve)
                 .buttonStyle(NectoButtonStyle(scale: scale, primary: true))
                 .accessibilityIdentifier("plugin-install.confirm")
         }

@@ -688,32 +688,37 @@ const grants = [
   ["necto.desktop.targets.list", "Necto", "Which apps and devices are connected."],
 ];
 
-const approvePane = () => `
+const approvePane = (exporter = false) => `
   <div class="necto-app">
     <div class="win-bar"><span class="win-heading">${gearIcon}<span>Settings</span></span></div>
     <div class="necto-dialog-scrim">
-      <div class="necto-dialog" role="dialog" aria-modal="true" aria-labelledby="grant-title">
+      <div class="necto-dialog" role="dialog" aria-modal="true" aria-labelledby="${exporter ? "grant-exporter-title" : "grant-title"}">
         <div class="necto-dialog-head">
-          <div class="necto-dialog-title" id="grant-title">Update Target Notes?</div>
+          <div class="necto-dialog-title" id="${exporter ? "grant-exporter-title" : "grant-title"}">${exporter ? "Install Example Exporter?" : "Update Target Notes?"}</div>
           <p class="necto-caption">
             0.1.0 by Example Author · web assets only, no native code
           </p>
         </div>
 
         <div class="necto-dialog-body">
-          <div class="necto-notice necto-notice-danger" style="margin-bottom: var(--necto-space-3)">
+          ${exporter ? `<div class="necto-notice" style="margin-bottom: var(--necto-space-3)"><div>
+            <span class="necto-notice-title">Allow event collection</span>
+            <p>Necto activity and usage events from current and future plugins will be shared with this exporter.
+            Existing plugin exclusions are preserved. You can exclude individual plugins at any time.
+            Remove the exporter to stop all collection.</p>
+          </div></div>` : `<div class="necto-notice necto-notice-danger" style="margin-bottom: var(--necto-space-3)">
             <div>
               <span class="necto-notice-title">Update Target Notes</span>
               <p>The ID matches, but Necto cannot verify the author of local files.
               Only update if you trust their source. This keeps existing permissions
               and settings, including Shell Access.</p>
             </div>
-          </div>
+          </div>`}
 
-          <p class="necto-caption" style="margin: 0 0 var(--necto-space-2)">com.example.target-notes</p>
-          <p class="necto-caption" style="margin: 0 0 var(--necto-space-2)">/Users/me/Downloads/target-notes.zip</p>
+          <p class="necto-caption" style="margin: 0 0 var(--necto-space-2)">${exporter ? "com.example.exporter" : "com.example.target-notes"}</p>
+          <p class="necto-caption" style="margin: 0 0 var(--necto-space-2)">${exporter ? "github.com/example/exporter v1.0.0" : "/Users/me/Downloads/target-notes.zip"}</p>
 
-          ${grants.map(([name, owner, what]) => `
+          ${(exporter ? [] : grants).map(([name, owner, what]) => `
             <div class="necto-grant">
               <span class="necto-caption">${owner}</span>
               <span class="necto-grant-key">${name}<p class="necto-grant-what">${what}</p></span>
@@ -727,7 +732,7 @@ const approvePane = () => `
 
         <div class="necto-dialog-actions">
           <button type="button" class="necto-button necto-button-quiet">Cancel</button>
-          <button type="button" class="necto-button necto-button-primary">Update</button>
+          <button type="button" class="necto-button necto-button-primary">${exporter ? "Install and allow collection" : "Update"}</button>
         </div>
       </div>
     </div>
@@ -762,6 +767,7 @@ const failedPane = () => `
 
 document.getElementById("plugins-manage").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("plugins")}</div>`;
 document.getElementById("plugins-approve").innerHTML = `<div class="win">${sidebar(true)}${approvePane()}</div>`;
+document.getElementById("plugins-approve-exporter").innerHTML = `<div class="win">${sidebar(true)}${approvePane(true)}</div>`;
 document.getElementById("plugins-failed").innerHTML = `<div class="win">${sidebar(true)}${failedPane()}</div>`;
 
 // -- copy buttons on code blocks -------------------------------------------

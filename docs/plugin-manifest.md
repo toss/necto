@@ -38,6 +38,7 @@ syntax and nothing falls back.
 | Field | Required | Type | Description |
 | --- | --- | --- | --- |
 | `schemaVersion` | ✅ | `1` | Manifest format version |
+| `type` | — | `"event-exporter"` | Identifies an event exporter; omit for an ordinary plugin |
 | `id` | ✅ | string | Unique identifier, `[A-Za-z0-9._-]+` |
 | `name` | ✅ | string | Name shown in the sidebar |
 | `description` | ✅ | string | One line summary |
@@ -57,6 +58,12 @@ cannot call the native bridge; ordinary web network requests are not blocked.
 
 There is no `permissions` field. The bridges bound by a plugin's operations define
 its requested permissions.
+
+`type` is optional. Existing manifests without it remain ordinary plugins. The only
+supported value is `"event-exporter"`; other values are rejected. Event exporters
+install as desktop plugins and cannot bind `necto.device.*` operations. A page
+carried by a connected app cannot register an exporter receiver. The marker does
+not itself grant access to events.
 
 For a desktop plugin, installation approval covers the requested bridges: the dialog
 lists every bridge, and declining leaves the plugin uninstalled. Local updates require

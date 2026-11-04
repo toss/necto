@@ -31,6 +31,7 @@ enum NectoPluginInstaller {
         case unpackFailed(String)
         case severalPlugins([String])
         case deviceBound(String)
+        case exporterAlreadyInstalled
 
         var errorDescription: String? {
             switch self {
@@ -49,6 +50,8 @@ enum NectoPluginInstaller {
                     "This holds several plugins (%@). Install them one at a time, or give Necto the repository they were published from.",
                     names.joined(separator: ", ")
                 )
+            case .exporterAlreadyInstalled:
+                NectoL10n.text("Remove the installed event exporter before installing another.")
             case let .deviceBound(name):
                 NectoL10n.format(
                     "This plugin binds to '%@', which a connected app answers. A plugin that needs the app rides in the app: add its Swift package there, and it appears here on its own.",
@@ -93,6 +96,8 @@ enum NectoPluginInstaller {
         let existing = installed.filter { $0.id == manifest.id }
         guard existing.count <= 1 else { throw Failure.duplicateID(manifest.id) }
 
+        try validateExporter(manifest, installed: installed)
+
         // What is added here lives on this Mac and answers from this Mac. Anything
         // that needs the app is the app's to carry, and letting it install here would
         // bring back the two-place adoption this split exists to end.
@@ -106,6 +111,17 @@ enum NectoPluginInstaller {
             origin: describedOrigin ?? source.path,
             previous: existing.first
         )
+    }
+
+    static func validateExporter(_ manifest: NectoPluginManifest, installed: [NectoInstalledPlugin]) throws {
+        guard manifest.type == .eventExporter else { return }
+        guard !installed.contains(where: {
+            $0.id != manifest.id && $0.manifest.type == .eventExporter
+                && $0.source == .installed
+                && $0.installation?.approvedContentHash == $0.contentIdentity
+        }) else {
+            throw Failure.exporterAlreadyInstalled
+        }
     }
 
     /// Only once the user has said yes. Until then nothing has been written to the
