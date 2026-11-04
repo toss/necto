@@ -37,7 +37,8 @@ struct NectoInstalledPlugin: Identifiable, Sendable {
 
     var runsInBackground: Bool {
         source == .installed && !manifest.requiresTarget
-            && manifest.operations.contains { NectoBackgroundProvider().descriptor.mismatch(with: $0) == nil }
+            && (manifest.type == .eventExporter
+                || manifest.operations.contains { NectoBackgroundProvider().descriptor.mismatch(with: $0) == nil })
     }
 }
 

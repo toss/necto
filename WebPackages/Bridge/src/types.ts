@@ -72,3 +72,29 @@ export interface NectoSubscription {
   readonly id: string;
   unsubscribe(): Promise<void>;
 }
+
+/** The common envelope the host adds to every exported usage event. */
+interface NectoEventEnvelope {
+  eventId: string;
+  /** Time the host accepted the event, in milliseconds since the Unix epoch. */
+  occurredAt: number;
+  installationId: string;
+  nectoVersion: string;
+  /** Absent for background activity that is not attributable to UI or CLI. */
+  channel?: "ui" | "cli";
+  eventName: string;
+  params: NectoJSONObject;
+}
+
+/** Usage data delivered to an exporter, with identity established by the host. */
+export type NectoEvent = NectoEventEnvelope & (
+  | { origin: "device" | "desktop"; pluginId: string; pluginVersion: string }
+  | { origin: "necto"; relatedPluginId?: string }
+);
+
+export interface NectoExporterOptions {
+  /** Handle a newly accepted event. Persistence and external delivery belong to the exporter. */
+  onEvent: (event: NectoEvent) => void | Promise<void>;
+}
+
+export type NectoDiagnosticLevel = "info" | "warning" | "failure";

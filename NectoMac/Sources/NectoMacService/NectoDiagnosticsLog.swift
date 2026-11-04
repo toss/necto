@@ -12,9 +12,8 @@ import Foundation
 /// nothing at all — an app that never appears looked exactly like an app nobody
 /// launched.
 public actor NectoDiagnosticsLog {
-    /// Counted rather than measured in bytes, unlike `NectoChannelBuffer`. A log line is
-    /// a sentence Necto wrote about itself, so its size is bounded by construction; a
-    /// channel payload is whatever the app under test sent.
+    /// Retains the most recent diagnostic entries, including exporter diagnostics.
+    /// This is an entry count, not a byte limit; callers should keep details concise.
     public static let capacity = 500
 
     public enum Severity: String, Sendable, CaseIterable {
@@ -29,6 +28,7 @@ public actor NectoDiagnosticsLog {
         case plugin
         case bridge
         case target
+        case exporter
     }
 
     public struct Entry: Sendable, Equatable, Identifiable {

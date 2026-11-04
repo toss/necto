@@ -18,7 +18,12 @@ final class NectoBackgroundPanels {
     private var entries: [String: Entry] = [:]
     private var owners: [String: UUID] = [:]
 
-    func synchronize(plugins: [NectoInstalledPlugin], registry: NectoPluginRegistry) {
+    func synchronize(
+        plugins: [NectoInstalledPlugin],
+        registry: NectoPluginRegistry,
+        eventDispatcher: NectoEventDispatcher? = nil,
+        diagnostics: NectoDiagnosticsLog? = nil
+    ) {
         let identities = Dictionary(uniqueKeysWithValues: plugins.map {
             ($0.id, "\($0.principal?.sourceIdentity ?? "")|\($0.contentIdentity)")
         })
@@ -27,7 +32,14 @@ final class NectoBackgroundPanels {
             owners.removeValue(forKey: id)
         }
         for plugin in plugins where entries[plugin.id] == nil {
-            let page = NectoPluginPage(plugin: plugin, registry: registry, target: nil, locale: NectoL10n.languageCode)
+            let page = NectoPluginPage(
+                plugin: plugin,
+                registry: registry,
+                target: nil,
+                locale: NectoL10n.languageCode,
+                eventDispatcher: eventDispatcher,
+                diagnostics: diagnostics
+            )
             page.setVisible(false, find: nil, scale: 1)
             entries[plugin.id] = Entry(identity: identities[plugin.id]!, page: page)
         }

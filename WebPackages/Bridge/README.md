@@ -65,6 +65,41 @@ Inputs, outputs and stream events are validated against the JSON Schemas in the
 manifest before they reach your code, so a resolved promise means the payload
 already matches what you declared.
 
+## Event exporters and diagnostics
+
+A desktop plugin with `"type": "event-exporter"` in its manifest registers its
+event callback with the host:
+
+```ts
+await necto.registerExporter({
+  onEvent(event) {
+    console.log(event.eventName, event.params);
+  },
+});
+```
+
+The callback is installed before the registration request, so events can arrive
+before the promise resolves. This API does not require `necto.ready()`. Register
+once per page: a duplicate rejects without replacing the callback, and a failed
+registration removes its callback so it can be retried. The host unregisters the
+exporter when the page ends or the plugin is removed.
+
+`NectoEvent` includes `eventId`, `occurredAt` (Unix milliseconds), `installationId`,
+`nectoVersion`, `eventName`, `params`, and an optional `channel` (`ui` or `cli`).
+The host sets `origin` to `device`, `desktop`, or `necto`. Device and desktop events
+include `pluginId` and `pluginVersion`; Necto events may include `relatedPluginId`.
+
+Write local diagnostics separately:
+
+```ts
+await necto.diagnostics.log("warning", "Delivery pending", { count: 2 });
+```
+
+Levels are `info`, `warning`, and `failure`; metadata is an optional JSON object.
+Diagnostics appear in Necto's native diagnostic log and are not delivered as
+exporter events. A thrown or rejected `onEvent` callback is reported there as a
+failure. A failure to write that diagnostic does not trigger another report.
+
 ## Errors
 
 Failures reject with an `Error` carrying a `code`:

@@ -53,12 +53,14 @@ final class NectoPluginPage {
          uiFontFamily: String = NectoFontPreference.defaultUI,
          codeFontFamily: String = NectoFontPreference.defaultCode,
          locale: String = "en", isDark: Bool = false,
-         websiteDataStore: WKWebsiteDataStore? = nil) {
+         websiteDataStore: WKWebsiteDataStore? = nil,
+         eventDispatcher: NectoEventDispatcher? = nil, diagnostics: NectoDiagnosticsLog? = nil) {
         let originHost = plugin.principal.map(NectoPluginSchemeHandler.originHost(for:))
             ?? UUID().uuidString.lowercased()
         bridge = NectoBridgeCoordinator(plugin: plugin, originHost: originHost, registry: registry, target: target, find: find,
                                         uiFontFamily: uiFontFamily, codeFontFamily: codeFontFamily,
-                                        locale: locale, isDarkAppearance: isDark)
+                                        locale: locale, isDarkAppearance: isDark,
+                                        eventDispatcher: eventDispatcher, diagnostics: diagnostics)
         let controller = WKUserContentController()
         controller.addUserScript(NectoBridgeCoordinator.localeUserScript(locale))
         controller.addScriptMessageHandler(bridge, contentWorld: .page, name: NectoBridgeCoordinator.handlerName)
@@ -126,6 +128,12 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
     private let plugin: NectoInstalledPlugin
     private let originHost: String
     private let registry: NectoPluginRegistry
+    private let eventDispatcher: NectoEventDispatcher?
+    private let diagnostics: NectoDiagnosticsLog?
+    private var exporterRegistrationID: UUID?
+    private var exporterRegistrationPending = false
+    private var documentID = UUID()
+    private var exporterCleanup: Task<Void, Never>?
     weak var find: NectoFindSession?
     private var target: NectoTarget?
 
@@ -170,11 +178,15 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         uiFontFamily: String,
         codeFontFamily: String,
         locale: String,
-        isDarkAppearance: Bool
+        isDarkAppearance: Bool,
+        eventDispatcher: NectoEventDispatcher? = nil,
+        diagnostics: NectoDiagnosticsLog? = nil
     ) {
         self.plugin = plugin
         self.originHost = originHost
         self.registry = registry
+        self.eventDispatcher = eventDispatcher
+        self.diagnostics = diagnostics
         self.target = target
         self.find = find
         self.uiFontFamily = uiFontFamily
@@ -184,6 +196,9 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
     }
 
     deinit {
+        if let registrationID = exporterRegistrationID, let eventDispatcher {
+            Task { await eventDispatcher.unregisterExporter(registrationID: registrationID) }
+        }
         recoveryTask?.cancel()
         for task in invokeTasks.values { task.cancel() }
         for task in streamTasks.values { task.cancel() }
@@ -275,6 +290,16 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
     }
 
     private func resetPage() {
+        documentID = UUID()
+        exporterRegistrationPending = false
+        if let registrationID = exporterRegistrationID, let eventDispatcher {
+            exporterRegistrationID = nil
+            let previousCleanup = exporterCleanup
+            exporterCleanup = Task {
+                await previousCleanup?.value
+                await eventDispatcher.unregisterExporter(registrationID: registrationID)
+            }
+        }
         isReady = false
         bufferedEvents.removeAll()
         for task in invokeTasks.values { task.cancel() }
@@ -365,6 +390,12 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
             }
             return Self.successReply(NectoJSONValue.null)
 
+        case "registerExporter":
+            return await registerExporter()
+
+        case "diagnostic":
+            return await recordDiagnostic(body)
+
         case "invoke":
             guard let operationID = body["operationID"] as? String else {
                 return Self.failureReply(.init(code: .invalidInput, message: "operationID is missing"))
@@ -397,6 +428,73 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         default:
             return Self.failureReply(.init(code: .operationNotFound, message: "Unknown request '\(type)'"))
         }
+    }
+
+    /// The host supplies this dispatcher only to approved, installed background pages.
+    /// Registration goes directly to the dispatcher, not through registry subscriptions.
+    private func registerExporter() async -> [String: Any] {
+        guard plugin.source == .installed, plugin.principal != nil,
+              plugin.manifest.type == .eventExporter, let eventDispatcher else {
+            return Self.failureReply(.init(code: .operationUnavailable,
+                message: "Only an installed event exporter can receive usage events"))
+        }
+        guard exporterRegistrationID == nil, !exporterRegistrationPending else {
+            return Self.failureReply(.init(code: .operationUnavailable,
+                message: "This exporter is already registered"))
+        }
+        exporterRegistrationPending = true
+        let document = documentID
+        await exporterCleanup?.value
+        guard documentID == document, !Task.isCancelled else {
+            return Self.failureReply(.init(code: .operationUnavailable, message: "The exporter document was closed"))
+        }
+        do {
+            let registrationID = try await eventDispatcher.registerExporter { [weak self] event in
+                // A serial main queue preserves acceptance order without a replay buffer.
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.documentID == document else { return }
+                    self.evaluate("window.__nectoExporterReceive?.(\(Self.jsObject(event.jsonValue)))")
+                }
+            }
+            guard documentID == document, !Task.isCancelled else {
+                await eventDispatcher.unregisterExporter(registrationID: registrationID)
+                return Self.failureReply(.init(code: .operationUnavailable, message: "The exporter document was closed"))
+            }
+            exporterRegistrationID = registrationID
+            exporterRegistrationPending = false
+            await diagnostics?.append(.info, .exporter, "Event exporter registered", detail: plugin.id)
+            return Self.successReply(NectoJSONValue.null)
+        } catch {
+            if documentID == document { exporterRegistrationPending = false }
+            await diagnostics?.append(.failure, .exporter, "Event exporter registration failed",
+                                      detail: "\(plugin.id): \(error)")
+            return Self.failureReply(Self.bridgeError(from: error, operationID: "registerExporter"))
+        }
+    }
+
+    private func recordDiagnostic(_ body: [String: Any]) async -> [String: Any] {
+        guard plugin.source == .installed, plugin.principal != nil,
+              plugin.manifest.type == .eventExporter, let diagnostics else {
+            return Self.failureReply(.init(code: .operationUnavailable,
+                message: "Exporter diagnostics are not available to this page"))
+        }
+        guard let level = body["level"] as? String,
+              let severity = NectoDiagnosticsLog.Severity(rawValue: level),
+              let message = body["message"] as? String, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return Self.failureReply(.init(code: .invalidInput, message: "A diagnostic requires a level and message"))
+        }
+        var detail = plugin.id
+        if let metadata = body["metadata"] {
+            guard metadata is [String: Any], JSONSerialization.isValidJSONObject(metadata),
+                  let data = try? JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys]),
+                  let json = String(data: data, encoding: .utf8) else {
+                return Self.failureReply(.init(code: .invalidInput, message: "Diagnostic metadata must be a JSON object"))
+            }
+            detail += "\n" + json
+        }
+        // Local diagnostics never enter the usage event dispatcher.
+        await diagnostics.append(severity, .exporter, message, detail: detail)
+        return Self.successReply(NectoJSONValue.null)
     }
 
     private func startSubscription(operationID: String, body: [String: Any]) async -> [String: Any] {

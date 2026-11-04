@@ -18,11 +18,13 @@ import type {
   NectoSubscription,
 } from "./types";
 import { createTranslator, locale } from "./localization";
+import { diagnostics, registerExporter } from "./exporter";
 
 export type * from "./types";
 export type * from "./localization";
 export { NectoBridgeUnavailableError };
 export { createTranslator, locale };
+export { diagnostics, registerExporter };
 
 installStreamReceivers();
 
@@ -142,6 +144,8 @@ export const necto = {
   locale,
   createTranslator,
   isOperationAvailable,
+  registerExporter,
+  diagnostics,
 
   /** Answered by the connected app, on a device or a simulator. */
   device: side(),
