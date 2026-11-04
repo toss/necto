@@ -7,6 +7,7 @@
 - Why there is no server process
 - Why the app listens and the Mac connects
 - Plugin identity
+- Usage event delivery
 - Build layout
 
 ## Shape of the system
@@ -119,6 +120,84 @@ from permission identity. The installer commits approved snapshots, and WebViews
 serve those snapshots rather than mutable local files. Registry calls from a panel
 check its expected principal so an old page cannot call as a replacement installation.
 See [the trust policy](plugin-manifest.md#identity-and-trust).
+
+## Usage event delivery
+
+Usage events use a host-side dispatcher, separate from diagnostic logs and ordinary
+operation execution. The service is not yet connected to plugin-facing web or CLI
+commands, installation consent UI, or an HTTP exporter.
+
+```text
+Host recording entry -> Registry.recordEvent -> EventDispatcher -> registered exporter
+                                                    |
+                                            EventCollectionPolicy
+
+Host exporter runtime ---------------------> registerExporter
+```
+
+`NectoPluginRegistry.recordEvent` verifies the host-supplied caller principal and
+uses the installed manifest for the plugin ID, version and device/desktop origin. It forwards only explicit
+records. Normal `invoke` and `subscribe` calls do not emit usage events. The registry
+never selects or registers the exporter.
+
+`NectoEventDispatcher` enriches a record, checks `NectoEventCollectionPolicy`, and
+hands it to the registered receiver. The host supplies the installation ID and Necto
+version. Installation ID persistence and installation consent are separate host
+integration work. Without a registered exporter, events are not delivered.
+
+The installation UI decides whether registration proceeds. On acceptance, the host
+registers the desktop exporter's receiver directly with the dispatcher; on rejection,
+it does not call registration. The dispatcher does not store approval records or
+recheck approval. It rejects a second live receiver. The callback must accept each
+event promptly and return;
+the exporter owns any subsequent asynchronous work, batching and persistence. The
+callback is not an HTTP request handler and must not perform blocking network IO.
+The registration token prevents an old runtime's cleanup from disconnecting a newer
+registration.
+
+Policy changes and callback delivery are serialized by the dispatcher actor without
+suspending between the policy check and handoff. The policy is a separate value type,
+owned by the dispatcher, so callers apply changes through `updatePolicy` rather than
+mutating shared state. Collection policy contains only excluded plugin IDs; there
+is no global collection switch. A registered exporter receives allowed events.
+Removing the exporter unregisters its receiver and ends its runtime. Excluding one
+plugin does not revoke events already accepted by the exporter.
+
+There is no dispatcher queue or replay. Records received without a receiver or from
+an excluded plugin are dropped, not retained for later registration or inclusion. Exclusions match plugin IDs across apps and versions. A host event related to
+a plugin, such as opening its panel, uses the related ID for the same policy check.
+
+### Event envelope
+
+Record input contains `eventName` and optional
+`params` (a JSON object, empty when omitted). Nested objects, arrays and nulls are
+accepted. Classification belongs to the plugin: it may use event names or fields
+such as `params.kind` or `params.category`. There is no common `kind` field or enum.
+No per-event manifest declaration is required. Empty names, unknown
+common fields and non-JSON values are rejected; destination-specific
+size limits belong to the exporter. Event names and parameters do not determine
+host identity, permissions or routing.
+
+An exported event includes:
+
+- `eventId`: unique occurrence ID, retained by the exporter when retrying that event.
+- `occurredAt`: milliseconds since the Unix epoch when the dispatcher accepts the
+  record, not when a server receives it.
+- `installationId`, `nectoVersion`: host-supplied metadata.
+- `origin`: `necto`, `device` (app-carried plugin), or `desktop` (installed
+  desktop plugin). Plugin origin comes from the registry installation record, not
+  the presence of a selected target or plugin-supplied parameters.
+- `pluginId`, `pluginVersion`: included for plugin records; omitted for host records.
+- `relatedPluginId`: included for host activity associated with a particular plugin.
+- `channel`: `ui` or `cli` when established by the host; omitted for background or
+  other activity that cannot be attributed to either surface.
+- `eventName`, `params`: the explicit record input. Properties stay inside
+  `params` and cannot replace top-level metadata.
+
+The host must derive caller identity and channel from its execution context rather
+than accepting those values from plugin JavaScript. Native event types stay in
+`NectoMacService`; no SDK wire type, new operation provider or manifest binding is
+introduced by this service.
 
 ## Build layout
 

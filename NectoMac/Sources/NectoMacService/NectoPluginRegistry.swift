@@ -77,9 +77,14 @@ public actor NectoPluginRegistry {
     /// Shared with the target bridges, so a handle issued here is the same one a
     /// plugin may pass back to `necto.targets.*`.
     public let targetHandles: NectoTargetHandles
+    private let eventDispatcher: NectoEventDispatcher?
 
-    public init(targetHandles: NectoTargetHandles = NectoTargetHandles()) {
+    public init(
+        targetHandles: NectoTargetHandles = NectoTargetHandles(),
+        eventDispatcher: NectoEventDispatcher? = nil
+    ) {
         self.targetHandles = targetHandles
+        self.eventDispatcher = eventDispatcher
     }
 
     deinit {
@@ -256,6 +261,33 @@ public actor NectoPluginRegistry {
             operations: operations,
             target: info
         )
+    }
+
+    /// Records usage explicitly; ordinary operation calls never generate events.
+    /// The host supplies the authenticated caller and the recording channel.
+    /// Exporters register directly with the dispatcher, not with this registry.
+    public func recordEvent(
+        pluginID: String,
+        input: NectoJSONValue,
+        target: NectoTarget?,
+        expectedPrincipal: NectoPluginPrincipal,
+        channel: NectoEvent.Channel? = nil
+    ) async throws {
+        guard let plugin = plugin(id: pluginID, target: target) else {
+            throw NectoBridgeError(code: .operationNotFound, message: "The recording plugin is not installed")
+        }
+        guard expectedPrincipal == plugin.principal else {
+            throw NectoBridgeError(code: .permissionDenied, message: "The recording plugin installation changed")
+        }
+        let eventInput = try NectoEvent.Input(jsonValue: input)
+        let source: NectoEvent.Source
+        switch plugin.source {
+        case .device:
+            source = .device(id: plugin.manifest.id, version: plugin.manifest.version)
+        case .desktop:
+            source = .desktop(id: plugin.manifest.id, version: plugin.manifest.version)
+        }
+        await eventDispatcher?.record(eventInput, source: source, channel: channel)
     }
 
     public func invoke(
