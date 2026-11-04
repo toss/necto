@@ -51,6 +51,9 @@ kind, and it never adds a line to `NectoSDKRuntime`.
 
 **Check:** test the evaluated Swift package dependencies and the external SDK consumer.
 Review feature boundaries in code; comments and identifier spellings are not test assertions.
+For Android, `script/test-android-consumer` checks the published dependency graph and
+panels of independent consumers. `necto-core` and `necto-android` must not depend on
+feature modules; reporting plugins must not pull in their optional capture adapters.
 
 ```bash
 node --test script/tests/package.test.mjs

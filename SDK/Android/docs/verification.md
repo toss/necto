@@ -6,11 +6,26 @@ What was checked, and how to check it again. Update it when behaviour changes.
 
 `./gradlew build` runs them all.
 
-| Module | Tests | What they cover |
-| --- | --- | --- |
-| necto-core | 33 | Protocol models and JSON, schema validation, the shipped panel manifests, SDK runtime, plugin behaviour, including a folder deleted without following the links inside it, a link deleted as a link, and a body cut mid-character that keeps its text. The runtime tests feed it a hostile peer: frames outside 1 byte to 64 KiB, nesting past 64, invalid UTF-8, trailing JSON, a stalled frame, a silent handshake, an oversized handshake answer, long or duplicate request IDs and more than 32 active requests. Each closes the session, and the next connection works |
-| necto-okhttp | 10 | Request and response capture, an upload captured as it is sent, a body that closes its sink, capped large bodies, failures and `RuntimeException`s, a body that fails to read recorded as failed, streams that are not held back, bodies closed unread, large uploads, a cURL command that quotes every part |
-| necto-android | 22 (17 Robolectric) | UI Control on Views and Compose: listing with labels, test tags, values and secure fields; tap, text input (replace and append) and swipe on Compose; a cancelled tap or swipe sends ACTION_CANCEL; a Compose element covered inside its host is not touched; a clickable parent, View or Compose, is not tapped where a clickable child inside it takes the tap; nothing is acted on while another window has focus, including a second tap after the first opened a dialog; a touch-transparent full-window overlay does not hide content, while a clickable one does. The frame rate is left out until a full second has been measured. DataStore Preferences: a Long a JSON number would round (2^53 and beyond) is shown read-only and not written back rounded, a value outside an Int key's range is refused, and a string set keeps every row as typed, so `1.0` is not saved as `1` and a quoted `"x"` is not mistaken for `x` |
+| Modules | Coverage |
+| --- | --- |
+| `necto-core` | Protocol, JSON, schema validation, runtime lifecycle, request limits and plugin routing, with Events and Network as test-only consumers |
+| `necto-network`, `necto-okhttp` | Reporting, cURL quoting, truncated UTF-8, upload/response capture, failures and streaming bodies |
+| `necto-files` | Listing, previews, writes, path containment and deleting links without entering their targets |
+| `necto-performance`, `necto-process-metrics` | Custom series and budgets, failing sampler cleanup and initial frame-rate availability |
+| `necto-control` | Geometry, Views and Compose discovery/actions, cancellation, coverage and other-window focus |
+| `necto-datastore` | Numeric precision/range preservation and string-set round trips |
+| `sample` | Every selected plugin's packaged manifest validates and its panel loads |
+
+`script/test-android-artifacts` checks that every plugin owns its panel, the bridge
+carries no feature implementation or panel, and no SDK AAR declares a permission.
+`script/test-android-consumer` publishes the artifacts to a local repository and builds
+five independent minified consumers. The bridge consumer has no plugins; OkHttp,
+DataStore and Control consumers resolve only their selected feature; an all-plugins
+consumer resolves all eleven SDK modules. None includes
+Compose, and release builds have no Necto dependency. The fixture's bridge release
+also compiles to catch SDK references accidentally placed in shared sources.
+`script/test-android-consumer --jitpack <tag-or-commit>` runs the same consumer checks
+against JitPack artifacts without publishing to or using the local test repository.
 
 The overlay test fails when the hit test treats every visible view as a blocker.
 

@@ -29,12 +29,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "necto-android"
 
-include(":necto-core")
-include(":necto-okhttp")
+include(":necto-core", ":necto-plugin-support", ":necto-events", ":necto-network", ":necto-performance", ":necto-okhttp")
 
-// The Android library needs the Android Gradle Plugin from Google's Maven. Pass
-// -Pnecto.skipAndroid=true where that is unreachable to build the JVM modules alone.
+// Build the platform-independent reporting plugins without an Android SDK.
 if (providers.gradleProperty("necto.skipAndroid").orNull != "true") {
-    include(":necto-android")
-    include(":sample")
+    include(":necto-android", ":necto-files", ":necto-control", ":necto-process-metrics", ":necto-datastore", ":sample")
 }

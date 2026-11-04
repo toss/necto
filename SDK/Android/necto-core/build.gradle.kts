@@ -3,6 +3,7 @@
 plugins {
     kotlin("jvm")
     `java-library`
+    `java-test-fixtures`
     `maven-publish`
 }
 
@@ -21,27 +22,13 @@ kotlin {
 
 dependencies {
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    testImplementation(project(":necto-events"))
+    testImplementation(project(":necto-network"))
     testImplementation(kotlin("test"))
 }
 
 tasks.test {
     useJUnitPlatform()
-}
-
-// The iOS SDK's built panels, carried unchanged apart from the manifests in
-// src/main/panel-manifests. `yarn build` in WebPackages writes them.
-val generatePanelResources by tasks.registering(NectoPanelResources::class) {
-    panels.from(rootProject.fileTree("../iOS/Sources") {
-        include("*/Panels/*/manifest.json")
-    }.files.map { it.parentFile })
-    ids.set(listOf("control", "event-log", "files", "network-logger", "performance-monitor", "preferences"))
-    manifests.set(layout.projectDirectory.dir("src/main/panel-manifests"))
-    root.set("necto/panels")
-    output.set(layout.buildDirectory.dir("generated/panelResources"))
-}
-
-sourceSets.main {
-    resources.srcDir(generatePanelResources)
 }
 
 publishing {
@@ -52,3 +39,8 @@ publishing {
         }
     }
 }
+
+// The harness is for sibling tests, not a published SDK API.
+val javaComponent = components["java"] as AdhocComponentWithVariants
+javaComponent.withVariantsFromConfiguration(configurations["testFixturesApiElements"]) { skip() }
+javaComponent.withVariantsFromConfiguration(configurations["testFixturesRuntimeElements"]) { skip() }

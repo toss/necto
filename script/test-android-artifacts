@@ -3,6 +3,7 @@
 iOS panels unchanged, and the sample is debuggable in debug builds only."""
 import argparse
 import json
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -16,32 +17,44 @@ parser.add_argument("--aapt", default=str(sdk / "build-tools/35.0.0/aapt"))
 args = parser.parse_args()
 results = {}
 
-# The SDK must not change what the app asks the user for.
-aar = android / "necto-android/build/outputs/aar/necto-android-release.aar"
-with zipfile.ZipFile(aar) as archive:
-    assert "classes.jar" in archive.namelist()
-    manifest = archive.read("AndroidManifest.xml").decode()
-    assert "uses-permission" not in manifest, "necto-android declares a permission"
-results["nectoAndroidAAR"] = dict(bytes=aar.stat().st_size, permissions=0)
-
-# The panels are the built iOS ones; only the overridden manifests may differ.
-panels = sorted((root / "SDK/iOS/Sources").glob("*/Panels/*/manifest.json"))
-overrides = android / "necto-core/src/main/panel-manifests"
-jar = next((android / "necto-core/build/libs").glob("necto-core-*[0-9].jar"))
+# A plugin owns its panel; the bridge and capture adapters carry no unrelated assets.
+plugins = {
+    "necto-events": "event-log",
+    "necto-network": "network-logger",
+    "necto-files": "files",
+    "necto-control": "control",
+    "necto-performance": "performance-monitor",
+    "necto-datastore": "preferences",
+}
+android_modules = {"necto-android", "necto-files", "necto-control", "necto-process-metrics", "necto-datastore"}
+modules = ["necto-core", "necto-plugin-support", "necto-android", "necto-okhttp", "necto-process-metrics", *plugins]
 compared = 0
-with zipfile.ZipFile(jar) as archive:
-    assert panels, "No built iOS panels found"
-    for manifest in panels:
-        panel = manifest.parent
-        for file in sorted(path for path in panel.rglob("*") if path.is_file()):
-            relative = file.relative_to(panel).as_posix()
-            expected = file.read_bytes()
-            override = overrides / f"{panel.name}.json"
-            if relative == "manifest.json" and override.exists():
-                expected = override.read_bytes()
-            actual = archive.read(f"necto/panels/{panel.name}/{relative}")
-            assert actual == expected, f"{panel.name}/{relative} differs from its source"
-            compared += 1
+for module in modules:
+    if module in android_modules:
+        artifact = android / f"{module}/build/outputs/aar/{module}-release.aar"
+        with zipfile.ZipFile(artifact) as aar:
+            assert "uses-permission" not in aar.read("AndroidManifest.xml").decode(), module
+            contents = aar.read("classes.jar")
+        archive = zipfile.ZipFile(io.BytesIO(contents))
+    else:
+        artifact = next(path for path in (android / module / "build/libs").glob(f"{module}-[0-9]*.jar")
+                        if not path.name.endswith(("-sources.jar", "-test-fixtures.jar")))
+        archive = zipfile.ZipFile(artifact)
+    with archive:
+        carried = {name.split("/")[2] for name in archive.namelist() if name.startswith("necto/panels/") and name.endswith("manifest.json")}
+        expected_id = plugins.get(module)
+        assert carried == ({expected_id} if expected_id else set()), (module, carried)
+        if module == "necto-core":
+            assert not any(name.startswith("im/toss/necto/plugins/") for name in archive.namelist())
+        if expected_id:
+            panel = next((root / "SDK/iOS/Sources").glob(f"*/Panels/{expected_id}/manifest.json")).parent
+            override = android / module / f"src/main/panel-manifests/{expected_id}.json"
+            for file in sorted(path for path in panel.rglob("*") if path.is_file()):
+                relative = file.relative_to(panel).as_posix()
+                expected = override.read_bytes() if relative == "manifest.json" and override.exists() else file.read_bytes()
+                assert archive.read(f"necto/panels/{expected_id}/{relative}") == expected, (module, relative)
+                compared += 1
+    results[module] = dict(bytes=artifact.stat().st_size, panels=sorted(carried))
 results["panels"] = dict(files=compared)
 
 # Necto starts in debuggable builds only, so a release must not be debuggable.
@@ -55,4 +68,4 @@ for variant, suffix in (("debug", ""), ("release", "-unsigned")):
 output = root / "Build/Android/artifact-results.json"
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_text(json.dumps(results, indent=2))
-print(f"PASS: no SDK permissions, {compared} panel files match, debuggable in debug only")
+print(f"PASS: optional modules carry only their own panels, no SDK permissions, {compared} panel files match, debuggable in debug only")

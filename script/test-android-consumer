@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""Build independent apps from Maven artifacts and check that unselected plugins stay out."""
+from pathlib import Path
+import argparse
+import subprocess
+import xml.etree.ElementTree as ET
+import zipfile
+
+root = Path(__file__).resolve().parent.parent
+sdk = root / "SDK/Android"
+consumer = sdk / "Tests/Fixtures/Consumer"
+repository = sdk / "build/consumer-repository"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--jitpack", metavar="VERSION", help="Download a tag or commit from JitPack instead of publishing locally")
+args, extra = parser.parse_known_args()
+if extra[:1] == ["--"]:
+    extra = extra[1:]
+wrapper = str(sdk / "gradlew")
+common = ["--no-daemon", "--console=plain", *extra]
+if args.jitpack:
+    repository = "https://jitpack.io"
+    group = "com.github.toss.necto"
+    version = args.jitpack
+else:
+    subprocess.run([wrapper, "-p", str(sdk), *common, "publishAllPublicationsToConsumerTestRepository"], check=True)
+    pom = ET.parse(sdk / "necto-core/build/publications/maven/pom-default.xml")
+    version = pom.findtext("{http://maven.apache.org/POM/4.0.0}version")
+    group = pom.findtext("{http://maven.apache.org/POM/4.0.0}groupId")
+assert version and group
+subprocess.run([
+    wrapper, "-p", str(consumer), *common,
+    f"-Pnecto.repository={repository}", f"-Pnecto.group={group}", f"-Pnecto.version={version}",
+    "verifyDependencies", "assembleBridgeDebug", "assembleNetworkDebug", "assembleDatastoreDebug",
+    "assembleControlDebug", "assembleAllDebug", "assembleBridgeRelease",
+], check=True)
+
+expected = {"bridge": set(), "network": {"network-logger"}, "datastore": {"preferences"}, "control": {"control"}}
+expected["all"] = {"event-log", "network-logger", "files", "performance-monitor", "preferences", "control"}
+for flavor, panels in expected.items():
+    apk = next((consumer / f"build/outputs/apk/{flavor}/debug").glob("*.apk"))
+    with zipfile.ZipFile(apk) as archive:
+        actual = {name.split("/")[2] for name in archive.namelist()
+                  if name.startswith("necto/panels/") and name.endswith("manifest.json")}
+        assert actual == panels, (flavor, actual, panels)
+        for panel in panels:
+            assert f"necto/panels/{panel}/files.txt" in archive.namelist()
+print(f"PASS: five independent minified consumers use {group}:{version}; selected panels only, no Compose, release has no Necto dependency")

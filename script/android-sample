@@ -38,7 +38,7 @@ if [[ "$mode" == build ]]; then
         export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
     fi
     export ANDROID_HOME="$sdk"
-    run android SDK/Android/gradlew -p SDK/Android :sample:assembleDebug :necto-core:test :necto-android:testDebugUnitTest
+    run android SDK/Android/gradlew -p SDK/Android :sample:assembleDebug test
     run mac xcodebuild -project Necto.xcodeproj -scheme Necto -destination 'platform=macOS' \
         -derivedDataPath "$out/DerivedData" SYMROOT="$out/Products" OBJROOT="$out/Intermediates" \
         PRODUCT_BUNDLE_IDENTIFIER=im.toss.necto.android-sample build
