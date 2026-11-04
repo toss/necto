@@ -23,6 +23,7 @@ struct SettingsScreen: View {
     @AppStorage(NectoLanguage.key) private var language = NectoLanguage.system.rawValue
     @AppStorage("settingsNavWidth") private var navWidth = Double(NectoNav<Page>.defaultWidth)
     @State private var page = Page.general
+    @State private var eventPluginSearch = ""
     @State private var selectedShellCaller: NectoShellCaller?
 
     private var scale: CGFloat {
@@ -40,12 +41,15 @@ struct SettingsScreen: View {
         case general
         case shellAccess
         case plugins
+        case eventExporter
         case diagnostics
     }
 
     @State private var entries: [NectoDiagnosticsLog.Entry] = []
     @State private var droppedLines = 0
     @State private var didCopy = false
+    @State private var exporterEntries: [NectoDiagnosticsLog.Entry] = []
+    @State private var didCopyExporterLog = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -54,6 +58,7 @@ struct SettingsScreen: View {
                     (.general, NectoL10n.text("General"), "slider.horizontal.3"),
                     (.shellAccess, NectoL10n.text("Shell Access"), "terminal"),
                     (.plugins, NectoL10n.text("Desktop Plugins"), "square.grid.2x2"),
+                    (.eventExporter, NectoL10n.text("Event Exporter"), "arrow.up.doc"),
                     (.diagnostics, NectoL10n.text("Log"), "text.alignleft"),
                 ],
                 selection: page,
@@ -77,6 +82,7 @@ struct SettingsScreen: View {
                             selectedCaller: $selectedShellCaller
                         )
                     case .plugins: plugins
+                    case .eventExporter: eventExporter
                     case .diagnostics: diagnostics
                     }
                 }
@@ -99,6 +105,9 @@ struct SettingsScreen: View {
             }
             if page != .shellAccess { selectedShellCaller = nil }
             if page == .plugins { await model.checkPluginUpdates() }
+            if page == .eventExporter {
+                exporterEntries = await model.diagnostics.recent(source: .exporter)
+            }
             guard page == .diagnostics else { return }
             entries = await model.diagnostics.recent()
             droppedLines = await model.diagnostics.dropped()
@@ -348,11 +357,104 @@ struct SettingsScreen: View {
     }
 
     @ViewBuilder
+    private var eventExporter: some View {
+        NectoSectionTitle(NectoL10n.text("Event Exporter"), scale: scale, isFirst: true)
+
+        if let exporter = model.eventExporter {
+            NectoRow(
+                label: exporter.manifest.name,
+                hint: [exporter.id, exporter.manifest.version, exporter.installation?.origin?.label ?? exporter.rootURL.path].joined(separator: " · "),
+                scale: scale
+            ) {
+                Button(NectoL10n.text("Remove")) { model.remove(exporter) }
+                    .buttonStyle(NectoButtonStyle(scale: scale, quiet: true, danger: true))
+            }
+            Text(NectoL10n.text("Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection."))
+                .font(.necto(.caption, scale: scale))
+                .foregroundStyle(NectoTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 8)
+        } else {
+            Text(NectoL10n.text("No event exporter installed. Install one to allow collection. Plugin exclusions are preserved."))
+                .font(.necto(.label, scale: scale))
+                .foregroundStyle(NectoTheme.textSecondary)
+                .padding(.vertical, 8)
+        }
+
+        NectoSectionTitle(NectoL10n.text("Plugin events"), scale: scale)
+
+        if !model.eventCollectionPlugins.isEmpty {
+            NectoField(placeholder: NectoL10n.text("Search plugin IDs"), text: $eventPluginSearch, scale: scale)
+                .accessibilityIdentifier("settings.event-collection.search")
+                .padding(.vertical, 8)
+
+            ForEach(model.eventCollectionPlugins.filter {
+                eventPluginSearch.isEmpty || $0.id.localizedStandardContains(eventPluginSearch)
+                    || $0.name.localizedStandardContains(eventPluginSearch)
+            }) { plugin in
+                NectoRow(label: plugin.name, hint: "\(plugin.id) · \(plugin.detail)", scale: scale) {
+                    NectoSwitch(isOn: !model.eventCollectionPolicy.excludedPluginIDs.contains(plugin.id)) { included in
+                        Task { await model.setEventCollection(plugin.id, included: included) }
+                    }
+                    .accessibilityLabel(NectoL10n.format("Include %@ in event collection", plugin.id))
+                    .accessibilityIdentifier("settings.event-collection.\(plugin.id)")
+                }
+            }
+            Text(NectoL10n.text("Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent."))
+                .font(.necto(.caption, scale: scale))
+                .foregroundStyle(NectoTheme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
+        }
+
+        exporterDiagnostics
+    }
+
+    @ViewBuilder
+    private var exporterDiagnostics: some View {
+        HStack(alignment: .firstTextBaseline) {
+            NectoSectionTitle(NectoL10n.text("Exporter diagnostics"), scale: scale)
+            Spacer(minLength: 12)
+            Button(didCopyExporterLog ? NectoL10n.text("Copied") : NectoL10n.text("Copy all")) {
+                copyExporterLog()
+            }
+            .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+            .disabled(exporterEntries.isEmpty)
+        }
+
+        if exporterEntries.isEmpty {
+            NectoEmpty(
+                title: NectoL10n.text("Nothing logged yet"),
+                detail: NectoL10n.text("Exporter diagnostics appear here."),
+                scale: scale
+            )
+            .frame(height: 120)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(exporterEntries) { entry in
+                    LogRow(entry: entry, scale: scale)
+                }
+            }
+        }
+    }
+
+    private func copyExporterLog() {
+        Task {
+            let transcript = await model.diagnostics.transcript(source: .exporter)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(transcript, forType: .string)
+
+            didCopyExporterLog = true
+            try? await Task.sleep(for: .seconds(1.4))
+            didCopyExporterLog = false
+        }
+    }
+
+    @ViewBuilder
     private var plugins: some View {
         NectoSectionTitle(NectoL10n.text("Installed plugins"), scale: scale, isFirst: true)
 
         PluginTable(model: model, scale: scale)
-
 
 
         NectoSectionTitle(NectoL10n.text("Install and manage"), scale: scale)

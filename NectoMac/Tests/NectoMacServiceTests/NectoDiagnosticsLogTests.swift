@@ -114,6 +114,34 @@ struct NectoDiagnosticsLogTests {
         #expect(lines[1].hasSuffix("warning  target  app disconnected"))
     }
 
+    @Test("exporter copies contain only exporter diagnostics in chronological order")
+    func exporterTranscript() async {
+        let log = NectoDiagnosticsLog()
+        await log.append(.info, .exporter, "registered", detail: "com.example.exporter")
+        await log.append(.failure, .connection, "unrelated connection failure")
+        await log.append(.warning, .exporter, "retry scheduled", detail: "attempt 2")
+
+        let lines = await log.transcript(source: .exporter).split(separator: "\n")
+        #expect(lines.count == 4)
+        #expect(lines[0].hasSuffix("info  exporter  registered"))
+        #expect(lines[1] == "    com.example.exporter")
+        #expect(lines[2].hasSuffix("warning  exporter  retry scheduled"))
+        #expect(lines[3] == "    attempt 2")
+        #expect(await log.transcript().contains("unrelated connection failure"))
+        #expect(await log.recent(source: .exporter).map(\.message) == ["retry scheduled", "registered"])
+        #expect(await log.unreadIssueCount() == 1)
+    }
+
+    @Test("filtered copies do not attribute global evictions to an exporter")
+    func filteredTranscriptDoesNotClaimGlobalEvictions() async {
+        let log = NectoDiagnosticsLog()
+        for _ in 0...NectoDiagnosticsLog.capacity {
+            await log.append(.info, .connection, "connection diagnostic")
+        }
+        #expect(await log.transcript(source: .exporter).isEmpty)
+        #expect(await log.transcript().hasPrefix("1 earlier lines dropped."))
+    }
+
     @Test("puts a detail on its own indented line")
     func transcriptIndentsDetail() async {
         let log = NectoDiagnosticsLog()

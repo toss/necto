@@ -397,6 +397,7 @@ const settingsNav = (current, updates = false) => `
     <button type="button" class="necto-nav-item" aria-selected="${current === "general"}">${gearIcon}<span>General</span>${updates ? updateDot : ""}</button>
     <button type="button" class="necto-nav-item" aria-selected="${current === "shell"}">${logIcon}<span>Shell Access</span></button>
     <button type="button" class="necto-nav-item" aria-selected="${current === "plugins"}">${sampleIcon}<span>Desktop Plugins</span>${updates ? updateDot : ""}</button>
+    <button type="button" class="necto-nav-item" aria-selected="${current === "exporter"}">${logIcon}<span>Event Exporter</span></button>
     <button type="button" class="necto-nav-item" aria-selected="false">${logIcon}<span>Log</span></button>
   </div>`;
 
@@ -480,6 +481,38 @@ const generalPage = (updates = false) => `
     </div>
   </div>`;
 
+const eventExporterPage = () => `
+  <div class="necto-body" style="padding: var(--necto-space-3)">
+    <h3 class="necto-section-title">Event Exporter</h3>
+    <div class="necto-row">
+      <div class="necto-row-label">Example Exporter
+        <p class="necto-row-hint">com.example.exporter · 1.0.0 · github.com/example/exporter</p>
+      </div>
+      <button type="button" class="necto-button necto-button-quiet necto-button-danger">Remove</button>
+    </div>
+    <p class="necto-caption">Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection.</p>
+    <h3 class="necto-section-title">Plugin events</h3>
+    <input class="necto-field" type="search" placeholder="Search plugin IDs" aria-label="Search plugin IDs" />
+    ${[
+      ["Target Notes", "com.example.target-notes", "1.0.0, 2.0.0", true],
+      ["com.example.absent", "com.example.absent", "Not currently installed or connected", false],
+    ].map(([name, id, detail, included]) => `
+      <div class="necto-row">
+        <div class="necto-row-label">${name}<p class="necto-row-hint">${id} · ${detail}</p></div>
+        <button type="button" class="necto-switch" role="switch" aria-checked="${included}" aria-label="Include ${id} in event collection"></button>
+      </div>`).join("")}
+    <p class="necto-caption">Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent.</p>
+    <div style="display:flex;align-items:baseline;justify-content:space-between">
+      <h3 class="necto-section-title">Exporter diagnostics</h3>
+      <button type="button" class="necto-button necto-button-quiet">Copy all</button>
+    </div>
+    <div class="necto-row">
+      <span class="necto-caption">14:32:01</span>
+      <span class="necto-caption">exporter</span>
+      <div class="necto-row-label">Event exporter registered<p class="necto-row-hint">com.example.exporter</p></div>
+    </div>
+  </div>`;
+
 const pluginsPage = (updates = false) => `
   <div class="necto-body" style="padding: var(--necto-space-3)">
     <h3 class="necto-section-title">Installed plugins</h3>
@@ -498,6 +531,10 @@ const pluginsPage = (updates = false) => `
             <td>${author}</td>
             <td><div class="row-actions"><button type="button" class="necto-button necto-button-quiet necto-button-danger">Remove</button></div></td>
           </tr>`).join("")}
+        <tr>
+          <td>—</td><td>Example Exporter</td><td>1.0.0</td><td>Example Author</td>
+          <td><div class="row-actions"><button type="button" class="necto-button necto-button-quiet necto-button-danger">Remove</button></div></td>
+        </tr>
       </tbody>
     </table>
 
@@ -608,12 +645,13 @@ const settingsPane = (page = "general", updates = false) => `
     <div class="win-bar"><span class="win-heading">${gearIcon}<span>Settings</span></span></div>
     <div style="display: flex; min-height: 0; flex: 1; padding-left: var(--necto-space-3)">
       ${settingsNav(page, updates)}
-      ${page === "general" ? generalPage(updates) : page === "plugins" ? pluginsPage(updates) : page === "shell-detail" ? shellDetailPage() : shellAccessPage()}
+      ${page === "general" ? generalPage(updates) : page === "plugins" ? pluginsPage(updates) : page === "exporter" ? eventExporterPage() : page === "shell-detail" ? shellDetailPage() : shellAccessPage()}
     </div>
   </div>`;
 
 document.getElementById("settings").innerHTML = `<div class="win">${sidebar(true, true)}${settingsPane("general", true)}</div>`;
 document.getElementById("settings-plugins").innerHTML = `<div class="win">${sidebar(true, true)}${settingsPane("plugins", true)}</div>`;
+document.getElementById("settings-exporter").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("exporter")}</div>`;
 document.getElementById("settings-shell").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("shell")}</div>`;
 document.getElementById("settings-shell-detail").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("shell-detail")}</div>`;
 

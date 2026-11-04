@@ -240,3 +240,14 @@
 "Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection." = "Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection.";
 "Install and allow collection" = "Install and allow collection";
 "Update and allow collection" = "Update and allow collection";
+"Event collection" = "Event collection";
+"No event exporter installed. Install one to allow collection. Plugin exclusions are preserved." = "No event exporter installed. Install one to allow collection. Plugin exclusions are preserved.";
+"Search plugin IDs" = "Search plugin IDs";
+"Include %@ in event collection" = "Include %@ in event collection";
+"Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent." = "Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent.";
+"Not currently installed or connected" = "Not currently installed or connected";
+"Event Exporter" = "Event Exporter";
+"Plugin events" = "Plugin events";
+"Exporter diagnostics" = "Exporter diagnostics";
+"Exporter diagnostics appear here." = "Exporter diagnostics appear here.";
+"Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection." = "Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection.";

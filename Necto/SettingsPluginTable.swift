@@ -49,9 +49,15 @@ private struct PluginRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            NectoSwitch(isOn: isEnabled) { model.setPlugin(plugin.id, enabled: $0) }
-                .frame(width: 34, alignment: .leading)
-                .accessibilityLabel(NectoL10n.format("Enable %@", plugin.manifest.name))
+            Group {
+                if plugin.manifest.type == .eventExporter {
+                    Text("—").foregroundStyle(NectoTheme.textTertiary)
+                } else {
+                    NectoSwitch(isOn: isEnabled) { model.setPlugin(plugin.id, enabled: $0) }
+                        .accessibilityLabel(NectoL10n.format("Enable %@", plugin.manifest.name))
+                }
+            }
+            .frame(width: 34, alignment: .leading)
 
             HStack(spacing: 6) {
                 Image(systemName: plugin.manifest.icon.systemName)

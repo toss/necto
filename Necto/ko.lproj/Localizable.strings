@@ -240,3 +240,14 @@
 "Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection." = "Necto 자체 활동과 현재 및 앞으로 설치되는 플러그인의 사용 기록을 이 Exporter에 전달해요. 기존 제외 목록은 유지되며, 개별 플러그인은 언제든 제외할 수 있어요. 전체 수집을 끝내려면 Exporter를 제거해 주세요.";
 "Install and allow collection" = "설치 및 수집 허용";
 "Update and allow collection" = "업데이트 및 수집 허용";
+"Event collection" = "이벤트 수집";
+"No event exporter installed. Install one to allow collection. Plugin exclusions are preserved." = "설치된 이벤트 Exporter가 없어요. Exporter를 설치하면 수집을 허용할 수 있어요. 플러그인 제외 목록은 유지돼요.";
+"Search plugin IDs" = "플러그인 ID 검색";
+"Include %@ in event collection" = "%@ 이벤트 수집에 포함";
+"Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent." = "플러그인을 제외하면 같은 ID를 사용하는 모든 앱과 버전의 새 이벤트 전달을 중지해요. 이미 Exporter에 전달한 이벤트는 계속 전송될 수 있어요.";
+"Not currently installed or connected" = "설치되지 않았거나 연결되지 않음";
+"Event Exporter" = "Event Exporter";
+"Plugin events" = "플러그인 이벤트";
+"Exporter diagnostics" = "Exporter 진단 로그";
+"Exporter diagnostics appear here." = "Exporter의 진단 내용을 확인할 수 있어요.";
+"Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection." = "Necto 자체 활동과 현재 및 앞으로 설치되는 플러그인을 포함하며, 제외한 ID는 전달하지 않아요. 수집을 끝내려면 Exporter를 제거해 주세요.";

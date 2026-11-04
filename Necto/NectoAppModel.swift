@@ -120,7 +120,10 @@ final class NectoAppModel {
     }
 
     private func refreshBackgroundPanels() {
-        backgroundPanels.synchronize(plugins: enabledPlugins.filter(\.runsInBackground), registry: registry)
+        backgroundPanels.synchronize(
+            plugins: enabledPlugins.filter(\.runsInBackground), registry: registry,
+            eventDispatcher: eventDispatcher, diagnostics: diagnostics
+        )
     }
 
     // MARK: Device plugins
@@ -141,7 +144,10 @@ final class NectoAppModel {
 
     private static let targetHandles = NectoTargetHandles()
 
-    let registry = NectoPluginRegistry(targetHandles: NectoAppModel.targetHandles)
+    let registry: NectoPluginRegistry
+    let eventDispatcher: NectoEventDispatcher
+    @ObservationIgnored private let eventPreferences: NectoEventPreferences
+    private(set) var eventCollectionPolicy: NectoEventCollectionPolicy
 
     private let connections = NectoConnectionCenter()
     private let storage = NectoPluginStorage()
@@ -155,7 +161,16 @@ final class NectoAppModel {
     private let appBridge: NectoDeviceBridgeClient
     private var connectionTask: Task<Void, Never>?
 
-    init() {
+    init(eventPreferences: NectoEventPreferences = NectoEventPreferences()) {
+        self.eventPreferences = eventPreferences
+        eventCollectionPolicy = eventPreferences.policy
+        let dispatcher = NectoEventDispatcher(
+            installationID: eventPreferences.installationID,
+            nectoVersion: Self.nectoVersion.description,
+            policy: eventPreferences.policy
+        )
+        eventDispatcher = dispatcher
+        registry = NectoPluginRegistry(targetHandles: Self.targetHandles, eventDispatcher: dispatcher)
         shellAccess = NectoShellAccessController(snapshot: NectoPluginLibrary.shellPolicy) {
             NectoPluginLibrary.shellPolicy = $0
         }
@@ -196,19 +211,23 @@ final class NectoAppModel {
         deviceOrder = NectoPluginLibrary.deviceOrder
     }
 
-    /// What the sidebar lists, in the order the user arranged. A disabled plugin stays
-    /// installed and keeps its folder, it just stops being somewhere to navigate to.
+    /// Active desktop plugins. Exporters remain active until removed.
     var enabledPlugins: [NectoInstalledPlugin] {
-        plugins.filter { !disabledIDs.contains($0.id) }
+        plugins.filter { $0.manifest.type == .eventExporter || !disabledIDs.contains($0.id) }
+    }
+
+    /// Exporters run in the background without a selectable panel.
+    var navigablePlugins: [NectoInstalledPlugin] {
+        enabledPlugins.filter { $0.manifest.type != .eventExporter }
     }
 
     /// Takes the move `List` already worked out, once, when the row is dropped.
     func movePlugins(from source: IndexSet, to destination: Int) {
-        var enabled = enabledPlugins
+        var enabled = navigablePlugins
         enabled.move(fromOffsets: source, toOffset: destination)
 
         // Disabled plugins keep their places, so turning one back on does not move it.
-        plugins = enabled + plugins.filter { disabledIDs.contains($0.id) }
+        plugins = enabled + plugins.filter { $0.manifest.type == .eventExporter || disabledIDs.contains($0.id) }
 
         // The whole list is written, not just the pair that moved: an order held as
         // gaps between neighbours drifts as plugins come and go.
@@ -232,9 +251,53 @@ final class NectoAppModel {
     }
 
     func setPlugin(_ id: String, enabled: Bool) {
+        guard !plugins.contains(where: { $0.id == id && $0.manifest.type == .eventExporter }) else { return }
         NectoPluginLibrary.setEnabled(id, enabled)
         disabledIDs = NectoPluginLibrary.disabledIDs
 
+    }
+
+    // MARK: Event collection
+
+    var eventExporter: NectoInstalledPlugin? {
+        plugins.first { $0.manifest.type == .eventExporter }
+    }
+
+    struct EventCollectionPlugin: Identifiable {
+        let id: String
+        let name: String
+        let detail: String
+    }
+
+    /// Keep excluded IDs visible even when their plugin is absent. Names and
+    /// versions are descriptions only; all installations of an ID share a policy.
+    var eventCollectionPlugins: [EventCollectionPlugin] {
+        let known = plugins + pluginsAwaitingApproval + devicePlugins.map(\.plugin)
+        let grouped = Dictionary(grouping: known, by: \.id)
+        let ids = Set(grouped.keys).union(eventCollectionPolicy.excludedPluginIDs)
+        return ids.sorted().map { id in
+            let plugins = grouped[id] ?? []
+            let descriptions = Set(plugins.map { plugin in
+                if case let .device(appName, _) = plugin.source {
+                    return "\(appName) \(plugin.manifest.version)"
+                }
+                return plugin.manifest.version
+            }).sorted().joined(separator: ", ")
+            return EventCollectionPlugin(
+                id: id,
+                name: plugins.first?.manifest.name ?? id,
+                detail: descriptions.isEmpty ? NectoL10n.text("Not currently installed or connected") : descriptions
+            )
+        }
+    }
+
+    func setEventCollection(_ id: String, included: Bool) async {
+        var policy = eventCollectionPolicy
+        if included { policy.excludedPluginIDs.remove(id) }
+        else { policy.excludedPluginIDs.insert(id) }
+        eventPreferences.policy = policy
+        eventCollectionPolicy = policy
+        await eventDispatcher.updatePolicy(policy)
     }
 
     // MARK: Installing

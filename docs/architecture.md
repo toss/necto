@@ -124,10 +124,9 @@ See [the trust policy](plugin-manifest.md#identity-and-trust).
 ## Usage event delivery
 
 Usage events use a host-side dispatcher, separate from diagnostic logs and ordinary
-operation execution. The WebView bridge supports delivering events to an installed
-desktop exporter. App-level dispatcher injection and persistent settings are follow-up
-integration work; this runtime layer alone does not start collection in the app.
-Plugin-facing recording APIs, host instrumentation and HTTP delivery are also separate work.
+operation execution. An installed desktop event exporter receives events through its hidden WebView.
+Plugin-facing recording APIs, host instrumentation and HTTP delivery are separate
+follow-up work.
 
 ```text
 Host recording entry -> Registry.recordEvent -> EventDispatcher -> registered exporter
@@ -144,8 +143,9 @@ never selects or registers the exporter.
 
 `NectoEventDispatcher` enriches a record, checks `NectoEventCollectionPolicy`, and
 hands it to the registered receiver. The host supplies the installation ID and Necto
-version. Installation ID persistence and app-level dispatcher composition are separate
-integration work. Without a registered exporter, events are not delivered.
+version. The app creates a random installation ID on first initialization and stores
+it with plugin-ID exclusions in UserDefaults. Removing or replacing an exporter
+does not reset either value. Without a registered exporter, events are not delivered.
 
 The optional manifest field `type: "event-exporter"` lets the installation UI explain
 collection before running any plugin code. Installation and collection consent are
@@ -153,9 +153,8 @@ one action, covering Necto activity and current and future plugins except exclud
 A second exporter cannot be installed until the current one is removed. A folder
 discovered on disk still requires the existing review and approval flow.
 
-When an installed background page is supplied with a dispatcher, it can call
-`necto.registerExporter({ onEvent })`. The WebView coordinator registers its receiver
-directly with that dispatcher.
+After successful installation, the background page calls `necto.registerExporter({ onEvent })`.
+The WebView coordinator registers its receiver directly with the dispatcher.
 Cancellation or installation failure does not start that page or call registration. The dispatcher does not store approval records or
 recheck approval. It rejects a second live receiver. The callback must accept each
 event promptly and return;
@@ -165,8 +164,14 @@ The registration token prevents an old runtime's cleanup from disconnecting a ne
 registration. Navigation and removal unregister the old document; a reloaded document
 must register again. No events from the gap are replayed.
 
+A dedicated Event Exporter page in native Settings shows installation information,
+plugin-ID exclusions and exporter diagnostics. It reads only the exporter source
+from the existing diagnostic log; copying from this page includes only that source.
+Opening the page does not acknowledge unrelated failures. The general Log page
+and shared retention policy remain unchanged.
+The exporter has no selectable feature panel or enable/disable switch.
 `necto.diagnostics.log(level, message, metadata?)` adds the exporter identity and
-current time to the host's local Log view. These diagnostics never call the usage
+current time to the host's local diagnostic log. These diagnostics never call the usage
 event dispatcher. Do not include credentials or raw event payloads in diagnostics.
 
 Policy changes and callback delivery are serialized by the dispatcher actor without

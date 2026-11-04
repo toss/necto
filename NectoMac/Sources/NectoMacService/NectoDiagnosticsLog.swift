@@ -105,14 +105,14 @@ public actor NectoDiagnosticsLog {
         acknowledgedFailures = entries.count { $0.severity == .failure }
     }
 
-    /// The whole log as text, for pasting into a bug report.
+    /// The log, optionally limited to one source, for pasting into a bug report.
     ///
     /// Timestamped in full, unlike the screen: a line read days later and somewhere
     /// else needs more than "15:39". Oldest first, because that is the order the
     /// events happened in and the order someone reading the report will follow.
-    public func transcript() -> String {
+    public func transcript(source: Source? = nil) -> String {
         let stamp = ISO8601DateFormatter()
-        var lines = entries.map { entry -> String in
+        var lines = entries.filter { source == nil || $0.source == source }.map { entry -> String in
             let head = [
                 stamp.string(from: entry.at),
                 entry.severity.rawValue,
@@ -125,7 +125,8 @@ public actor NectoDiagnosticsLog {
         }
 
         // Said first, so a transcript that is missing its beginning says so.
-        if droppedCount > 0 {
+        // The eviction count covers all sources, so do not attribute it to a filtered source.
+        if source == nil, droppedCount > 0 {
             lines.insert("\(droppedCount) earlier lines dropped.", at: 0)
         }
         return lines.joined(separator: "\n")
