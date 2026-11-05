@@ -59,6 +59,14 @@ export async function ready(): Promise<void> {
   await callHost<null>("ready");
 }
 
+/** Records a usage event without waiting for a reply or exposing delivery failures. */
+export function log(eventName: string, params: NectoJSONObject = {}): void {
+  if (!isHostAvailable()) return;
+  void callHost<null>("log", { input: { eventName, params } }).catch(() => {
+    console.warn("Necto could not record an event.");
+  });
+}
+
 /**
  * One side of the bridge: everything answered by the Mac, or everything answered by
  * the connected app.
@@ -141,6 +149,7 @@ export const necto = {
   isAvailable: isNectoAvailable,
   context,
   ready,
+  log,
   locale,
   createTranslator,
   isOperationAvailable,

@@ -65,6 +65,27 @@ Inputs, outputs and stream events are validated against the JSON Schemas in the
 manifest before they reach your code, so a resolved promise means the payload
 already matches what you declared.
 
+## Usage events
+
+A plugin decides when to record an event and what it means:
+
+```ts
+necto.log("note.opened", { source: "sidebar" });
+necto.log("notes.refreshed"); // params defaults to {}
+```
+
+`necto.log(eventName, params?)` returns `void` immediately. It is best effort and
+provides no delivery receipt. Host failures produce a generic console warning
+without the event's params or the host's error payload. In a plain browser preview,
+the call is a quiet no-op.
+
+`params` is a JSON object; event names and params do not require manifest schemas.
+The host supplies event identity, timestamps, installation and plugin metadata.
+Events from the WebView have `channel: "web"`, including timers and background
+callbacks. Use the same event name for the same meaning across web and CLI entry
+points; the channel distinguishes where it came from. This API records web-plugin
+events; CLI and app logging APIs are separate work.
+
 ## Event exporters and diagnostics
 
 A desktop plugin with `"type": "event-exporter"` in its manifest registers its
@@ -85,7 +106,7 @@ registration removes its callback so it can be retried. The host unregisters the
 exporter when the page ends or the plugin is removed.
 
 `NectoEvent` includes `eventId`, `occurredAt` (Unix milliseconds), `installationId`,
-`nectoVersion`, `eventName`, `params`, and an optional `channel` (`ui` or `cli`).
+`nectoVersion`, `eventName`, `params`, and an optional `channel` (`web` or `cli`).
 The host sets `origin` to `device`, `desktop`, or `necto`. Device and desktop events
 include `pluginId` and `pluginVersion`; Necto events may include `relatedPluginId`.
 
@@ -175,8 +196,9 @@ involved.
 
 ## Running outside Necto
 
-Every call throws `NectoBridgeUnavailableError` in a plain browser. Guard with
-`necto.isAvailable()` when you want the page to render without a host.
+Bridge requests that return promises reject with `NectoBridgeUnavailableError` in
+a plain browser. Guard with `necto.isAvailable()` when you want the page to render
+without a host. `necto.log()` is a quiet no-op without a host.
 
 ## License
 

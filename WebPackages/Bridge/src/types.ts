@@ -80,8 +80,8 @@ interface NectoEventEnvelope {
   occurredAt: number;
   installationId: string;
   nectoVersion: string;
-  /** Absent for background activity that is not attributable to UI or CLI. */
-  channel?: "ui" | "cli";
+  /** WebView activity uses web, including timers; unrelated native activity omits it. */
+  channel?: "web" | "cli";
   eventName: string;
   params: NectoJSONObject;
 }

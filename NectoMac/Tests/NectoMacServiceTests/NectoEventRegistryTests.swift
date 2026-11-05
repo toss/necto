@@ -19,19 +19,19 @@ struct NectoEventRegistryTests {
 
         try await fixture.registry.recordEvent(
             pluginID: plugin.manifest.id, input: eventInput, target: nil,
-            expectedPrincipal: plugin.principal, channel: .ui
+            expectedPrincipal: plugin.principal, channel: .web
         )
 
         try await fixture.registry.recordEvent(
             pluginID: plugin.manifest.id, input: eventInput,
             target: NectoTarget(deviceID: "selected-device", appBundleID: "com.example.selected"),
-            expectedPrincipal: plugin.principal, channel: .ui
+            expectedPrincipal: plugin.principal, channel: .web
         )
         let event = try #require(fixture.receiver.events.first)
         #expect(fixture.receiver.events.count == 2)
         #expect(fixture.receiver.events.allSatisfy { $0.jsonValue["origin"] == "desktop" })
         #expect(event.source == .desktop(id: plugin.manifest.id, version: "2.3.4"))
-        #expect(event.channel == .ui)
+        #expect(event.channel == .web)
         #expect(event.input.eventName == "records.opened")
         #expect(event.jsonValue["kind"] == nil)
     }
@@ -141,12 +141,12 @@ struct NectoEventRegistryTests {
         try await fixture.registry.recordEvent(
             pluginID: plugin.manifest.id,
             input: ["eventName": "records.opened", "params": params],
-            target: nil, expectedPrincipal: plugin.principal, channel: .ui
+            target: nil, expectedPrincipal: plugin.principal, channel: .web
         )
 
         let event = try #require(fixture.receiver.events.first)
         #expect(event.source == .desktop(id: "event-source", version: "4.0.0"))
-        #expect(event.channel == .ui)
+        #expect(event.channel == .web)
         #expect(event.installationID == "host-installation")
         #expect(event.nectoVersion == "1.2.3")
         #expect(event.occurredAt == Date(timeIntervalSince1970: 123))

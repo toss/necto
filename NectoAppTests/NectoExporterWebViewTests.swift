@@ -150,7 +150,7 @@ struct NectoExporterWebViewTests {
         await dispatcher.updatePolicy(.init(excludedPluginIDs: ["com.example.excluded"]))
         await dispatcher.record(try .init(eventName: "excluded"), source: .desktop(id: "com.example.excluded", version: "1.0.0"))
         for index in 0..<5 {
-            await dispatcher.record(try .init(eventName: "event.\(index)"), source: .necto(), channel: .ui)
+            await dispatcher.record(try .init(eventName: "event.\(index)"), source: .necto(), channel: .web)
         }
         try await NectoWebViewSecurityTests.wait(page, for: "window.events.length === 5")
         let names = try await page.webView.evaluateJavaScript("window.events.map(e => e.eventName).join(',')") as? String

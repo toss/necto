@@ -42,7 +42,7 @@ struct NectoEventDispatcherTests {
         ]
         let input = try NectoEvent.Input(eventName: "any.new.event", params: params)
         await dispatcher.record(input, source: recordingSource, channel: .cli)
-        await dispatcher.record(input, source: recordingSource, channel: .ui)
+        await dispatcher.record(input, source: recordingSource, channel: .web)
 
         let events = receiver.events
         #expect(events.count == 2)
@@ -60,7 +60,7 @@ struct NectoEventDispatcherTests {
         #expect(event.jsonValue["pluginVersion"] == "1.2.0")
         #expect(event.jsonValue["nectoVersion"] == "1.0.0")
         #expect(events.first?.eventID != events.last?.eventID)
-        #expect(events.last?.channel == .ui)
+        #expect(events.last?.channel == .web)
         #expect(events.last?.installationID == event.installationID)
         _ = try event.jsonValue.jsonData()
     }
@@ -127,7 +127,7 @@ struct NectoEventDispatcherTests {
         await dispatcher.updatePolicy(.init(excludedPluginIDs: ["tools"]))
         await dispatcher.record(try eventInput("excluded"), source: .device(id: "tools", version: "2.0.0"))
         await dispatcher.record(try eventInput("excluded.desktop"), source: .desktop(id: "tools", version: "3.0.0"))
-        await dispatcher.record(try eventInput("panel.opened"), source: .necto(relatedPluginID: "tools"), channel: .ui)
+        await dispatcher.record(try eventInput("panel.opened"), source: .necto(relatedPluginID: "tools"), channel: .web)
         await dispatcher.record(try eventInput("new.plugin"), source: .device(id: "new-tools", version: "1.0.0"))
         await dispatcher.record(try eventInput("necto.launched"), source: .necto())
         #expect(receiver.events.map(\.input.eventName) == ["already.accepted", "new.plugin", "necto.launched"])

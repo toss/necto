@@ -390,6 +390,9 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
             }
             return Self.successReply(NectoJSONValue.null)
 
+        case "log":
+            return await recordEvent(body)
+
         case "registerExporter":
             return await registerExporter()
 
@@ -427,6 +430,29 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
 
         default:
             return Self.failureReply(.init(code: .operationNotFound, message: "Unknown request '\(type)'"))
+        }
+    }
+
+    private func recordEvent(_ body: [String: Any]) async -> [String: Any] {
+        guard let principal = package.principal else {
+            return Self.failureReply(
+                .init(
+                    code: .operationUnavailable,
+                    message: "Only an installed plugin can record usage events"
+                )
+            )
+        }
+        do {
+            try await registry.recordEvent(
+                pluginID: package.id,
+                input: Self.jsonValue(from: body["input"]),
+                target: target,
+                expectedPrincipal: principal,
+                channel: .web
+            )
+            return Self.successReply(NectoJSONValue.null)
+        } catch {
+            return Self.failureReply(Self.bridgeError(from: error, operationID: "log"))
         }
     }
 

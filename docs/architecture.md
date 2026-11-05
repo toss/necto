@@ -147,8 +147,8 @@ event reception remains a direct registration with `NectoEventDispatcher`.
 
 Usage events use a host-side dispatcher, separate from diagnostic logs and ordinary
 operation execution. An installed desktop event exporter receives events through its hidden WebView.
-Plugin-facing recording APIs, host instrumentation and HTTP delivery are separate
-follow-up work.
+Web plugins can record explicit events with `necto.log(eventName, params?)`.
+App-side recording, host instrumentation and HTTP delivery are separate follow-up work.
 
 ```text
 Host recording entry -> Registry.recordEvent -> EventDispatcher -> registered exporter
@@ -208,6 +208,26 @@ There is no dispatcher queue or replay. Records received without a receiver or f
 an excluded plugin are dropped, not retained for later registration or inclusion. Exclusions match plugin IDs across apps and versions. A host event related to
 a plugin, such as opening its panel, uses the related ID for the same policy check.
 
+### Recording from a web plugin
+
+`necto.log(eventName, params?)` returns immediately without waiting for export.
+It sends the common input through the page's authenticated WebKit bridge to
+`NectoPluginRegistry.recordEvent`. The host supplies the installed ID, version,
+principal and target; the caller cannot set envelope metadata. Device-carried pages
+retain their device origin even though their recording channel is web.
+
+All WebView calls use `channel: "web"`, including timers and hidden background
+pages. This identifies the calling path, not a user gesture or a visible impression.
+Plugins decide the event name, parameters and when to record. No operation is
+recorded automatically and no per-event manifest declaration is needed.
+
+A missing exporter or an excluded plugin drops the record without buffering.
+Invalid inputs and stale or missing installation identities are rejected by the
+host. The web helper contains failures so an ignored logging call cannot interrupt
+the original feature or leave an unhandled promise rejection. It warns locally
+without printing event parameters; outside Necto it is a no-op. There is no delivery
+receipt, retry or queue in this helper.
+
 ### Event envelope
 
 Record input contains `eventName` and optional
@@ -230,8 +250,8 @@ An exported event includes:
   the presence of a selected target or plugin-supplied parameters.
 - `pluginId`, `pluginVersion`: included for plugin records; omitted for host records.
 - `relatedPluginId`: included for host activity associated with a particular plugin.
-- `channel`: `ui` or `cli` when established by the host; omitted for background or
-  other activity that cannot be attributed to either surface.
+- `channel`: `web` or `cli` when established by the host; omitted for activity
+  outside those paths. WebView timers and hidden pages also use `web`.
 - `eventName`, `params`: the explicit record input. Properties stay inside
   `params` and cannot replace top-level metadata.
 

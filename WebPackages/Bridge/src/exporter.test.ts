@@ -27,7 +27,7 @@ const event = {
   origin: "desktop" as const,
   pluginId: "com.example.notes",
   pluginVersion: "1.0.0",
-  channel: "ui" as const,
+  channel: "web" as const,
   eventName: "note.opened",
   params: { source: "sidebar" },
 };

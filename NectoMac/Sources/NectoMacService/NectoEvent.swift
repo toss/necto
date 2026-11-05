@@ -8,7 +8,7 @@ import NectoModel
 /// Usage data handed to an exporter, separate from the host's diagnostic log.
 public struct NectoEvent: Sendable, Equatable {
     public enum Channel: String, Sendable {
-        case ui
+        case web
         case cli
     }
 
@@ -70,7 +70,7 @@ public struct NectoEvent: Sendable, Equatable {
     public let installationID: String
     public let nectoVersion: String
     public let source: Source
-    /// Nil for background or host activity that is not attributable to UI or CLI.
+    /// The recording path, not proof of a user gesture. Nil outside web or CLI paths.
     public let channel: Channel?
     public let input: Input
 
