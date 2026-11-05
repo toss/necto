@@ -11,7 +11,7 @@ import Testing
 @Suite("Exporter installation", .serialized)
 @MainActor
 struct NectoExporterInstallationTests {
-    private func fixture(at root: URL, id: String = "com.example.exporter", exporter: Bool = true) throws -> NectoInstalledPlugin {
+    private func fixture(at root: URL, id: String = "com.example.exporter", exporter: Bool = true) throws -> NectoInstalledPackage {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let manifest = NectoPluginManifest(
             type: exporter ? .eventExporter : nil,
@@ -21,10 +21,10 @@ struct NectoExporterInstallationTests {
         )
         try JSONEncoder().encode(manifest).write(to: root.appending(path: "manifest.json"))
         try Data("<!doctype html><title>Example</title>".utf8).write(to: root.appending(path: "index.html"))
-        return try NectoPluginLoader.load(from: root)
+        return try NectoPackageLoader.load(from: root)
     }
 
-    private func approved(_ plugin: NectoInstalledPlugin) -> NectoInstalledPlugin {
+    private func approved(_ plugin: NectoInstalledPackage) -> NectoInstalledPackage {
         var plugin = plugin
         plugin.installation = NectoLocalPluginInstallation(
             pluginID: plugin.id, directoryPath: plugin.rootURL.path,
@@ -61,7 +61,7 @@ struct NectoExporterInstallationTests {
 
     private func coordinator(
         directory: URL,
-        installed: @escaping @MainActor () -> [NectoInstalledPlugin] = { [] }
+        installed: @escaping @MainActor () -> [NectoInstalledPackage] = { [] }
     ) -> InstallCoordinator {
         InstallCoordinator(
             shellAccess: NectoShellAccessController(snapshot: .init()) { _ in },
@@ -76,6 +76,66 @@ struct NectoExporterInstallationTests {
             await Task.yield()
         }
         _ = try #require(coordinator.pendingInstall)
+    }
+
+    @Test("install and update preserve verified bytes and approval identity", arguments: [false, true])
+    func installAndUpdate(exporter: Bool) async throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let originalInstallations = NectoPluginLibrary.installations
+        let originalGrants = NectoPluginLibrary.grants
+        defer {
+            NectoPluginLibrary.installations = originalInstallations
+            NectoPluginLibrary.grants = originalGrants
+        }
+        let source = try fixture(
+            at: root.appending(path: "source"),
+            id: "com.example.roundtrip-\(UUID().uuidString)", exporter: exporter
+        )
+        let directory = root.appending(path: "plugins", directoryHint: .isDirectory)
+        var installed: [NectoInstalledPackage] = []
+        let coordinator = InstallCoordinator(
+            shellAccess: NectoShellAccessController(snapshot: .init()) { _ in },
+            reload: {
+                installed = NectoPackageLoader.loadAll(in: directory).packages.map { package in
+                    var package = package
+                    package.installation = NectoPluginLibrary.installations[package.id]
+                    return package
+                }
+                return installed
+            },
+            present: {}, delete: { _ in .null }, logFailure: { _, _ in },
+            installedPlugins: { installed }, installationDirectory: directory
+        )
+
+        let request = Task { try await coordinator.installPluginFromCLI(source: .localPath(source.rootURL.path)) }
+        try await waitForApproval(coordinator)
+        coordinator.confirmInstall()
+        _ = try await request.value
+        let first = try #require(installed.first)
+        #expect(first.manifest == source.manifest)
+        #expect(first.archive == source.archive)
+        #expect(first.contentIdentity == source.contentIdentity)
+        #expect(first.source == .installed)
+        let approval = try #require(first.installation)
+        #expect(first.principal == approval.principal)
+        #expect(approval.approvedContentHash == first.contentIdentity)
+
+        try Data("<!doctype html><title>Updated</title>".utf8).write(to: source.rootURL.appending(path: "index.html"))
+        let updatedSource = try NectoPackageLoader.load(from: source.rootURL)
+        let update = Task { try await coordinator.installPluginFromCLI(source: .localPath(source.rootURL.path)) }
+        try await waitForApproval(coordinator)
+        coordinator.confirmInstall()
+        _ = try await update.value
+        let updated = try #require(installed.first)
+        #expect(updated.rootURL == first.rootURL)
+        #expect(updated.manifest == updatedSource.manifest)
+        #expect(updated.archive == updatedSource.archive)
+        #expect(updated.contentIdentity == updatedSource.contentIdentity)
+        #expect(updated.contentIdentity != first.contentIdentity)
+        #expect(updated.installation?.id == approval.id)
+        #expect(updated.installation?.approvedContentHash == updated.contentIdentity)
+        #expect(updated.principal == first.principal)
     }
 
     @Test("cancelling approval leaves no installed files")
@@ -124,7 +184,7 @@ struct NectoExporterInstallationTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let plugin = try fixture(at: root.appending(path: "source"), id: "com.example.pending-\(UUID().uuidString)")
         let first = approved(try fixture(at: root.appending(path: "first")))
-        var installed: [NectoInstalledPlugin] = []
+        var installed: [NectoInstalledPackage] = []
         let directory = root.appending(path: "plugins")
         let coordinator = coordinator(directory: directory, installed: { installed })
         let request = Task { try await coordinator.installPluginFromCLI(source: .localPath(plugin.rootURL.path)) }

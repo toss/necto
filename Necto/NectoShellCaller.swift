@@ -26,7 +26,7 @@ extension NectoAppModel {
     var shellCallers: [NectoShellCaller] {
         var seen: Set<NectoPluginPrincipal> = []
 
-        let desktop = plugins.compactMap { plugin -> NectoShellCaller? in
+        let desktop = installedPackages.compactMap { plugin -> NectoShellCaller? in
             guard plugin.manifest.usesShellBridge else { return nil }
             guard let principal = plugin.principal else { return nil }
             guard seen.insert(principal).inserted else { return nil }
@@ -58,7 +58,7 @@ extension NectoAppModel {
 
     func shellCallerSource(for principal: NectoPluginPrincipal) -> String {
         if principal == NectoShellIdentity.cli { return "necto-cli" }
-        if let plugin = plugins.first(where: { $0.principal == principal }),
+        if let plugin = installedPackages.first(where: { $0.principal == principal }),
            let installation = plugin.installation {
             return installation.origin?.label ?? installation.directoryPath
         }

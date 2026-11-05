@@ -13,16 +13,14 @@ import SwiftUI
 final class NectoBackgroundPanels {
     private struct Entry {
         let identity: String
-        let page: NectoPluginPage
+        let page: NectoWebPage
     }
     private var entries: [String: Entry] = [:]
     private var owners: [String: UUID] = [:]
 
     func synchronize(
         plugins: [NectoInstalledPlugin],
-        registry: NectoPluginRegistry,
-        eventDispatcher: NectoEventDispatcher? = nil,
-        diagnostics: NectoDiagnosticsLog? = nil
+        registry: NectoPluginRegistry
     ) {
         let identities = Dictionary(uniqueKeysWithValues: plugins.map {
             ($0.id, "\($0.principal?.sourceIdentity ?? "")|\($0.contentIdentity)")
@@ -32,20 +30,18 @@ final class NectoBackgroundPanels {
             owners.removeValue(forKey: id)
         }
         for plugin in plugins where entries[plugin.id] == nil {
-            let page = NectoPluginPage(
-                plugin: plugin,
+            let page = NectoWebPage(
+                package: plugin.package,
                 registry: registry,
                 target: nil,
-                locale: NectoL10n.languageCode,
-                eventDispatcher: eventDispatcher,
-                diagnostics: diagnostics
+                locale: NectoL10n.languageCode
             )
             page.setVisible(false, find: nil, scale: 1)
             entries[plugin.id] = Entry(identity: identities[plugin.id]!, page: page)
         }
     }
 
-    func page(for id: String) -> NectoPluginPage? { entries[id]?.page }
+    func page(for id: String) -> NectoWebPage? { entries[id]?.page }
     func owner(of id: String) -> UUID? { owners[id] }
     func present(_ id: String, in windowID: UUID) {
         guard entries[id] != nil else { return }
@@ -57,7 +53,7 @@ final class NectoBackgroundPanels {
 /// A window borrows the retained page. Moving it never reloads the plugin document.
 struct NectoBackgroundPluginView: NSViewRepresentable {
     @Environment(\.colorScheme) private var colorScheme
-    let page: NectoPluginPage?
+    let page: NectoWebPage?
     let ownsPage: Bool
     let isVisible: Bool
     let textScale: CGFloat
@@ -66,7 +62,7 @@ struct NectoBackgroundPluginView: NSViewRepresentable {
     let locale: String
     let find: NectoFindSession
 
-    final class Coordinator { var page: NectoPluginPage? }
+    final class Coordinator { var page: NectoWebPage? }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSView { NSView() }
 

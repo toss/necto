@@ -13,20 +13,20 @@ import NectoModel
 @MainActor
 @Observable
 final class InstallCoordinator {
-    private let installedPlugins: @MainActor () -> [NectoInstalledPlugin]
+    private let installedPlugins: @MainActor () -> [NectoInstalledPackage]
     private let installationDirectory: URL?
     private let shellAccess: NectoShellAccessController
-    private let reload: @MainActor () async -> [NectoInstalledPlugin]
+    private let reload: @MainActor () async -> [NectoInstalledPackage]
     private let present: @MainActor () throws -> Void
     private let delete: @MainActor (String) async throws -> NectoJSONValue
     private let logFailure: @MainActor (String, String) -> Void
 
     init(shellAccess: NectoShellAccessController,
-         reload: @escaping @MainActor () async -> [NectoInstalledPlugin],
+         reload: @escaping @MainActor () async -> [NectoInstalledPackage],
          present: @escaping @MainActor () throws -> Void,
          delete: @escaping @MainActor (String) async throws -> NectoJSONValue,
          logFailure: @escaping @MainActor (String, String) -> Void,
-         installedPlugins: @escaping @MainActor () -> [NectoInstalledPlugin] = { NectoPluginLibrary.loadInstalled().plugins },
+         installedPlugins: @escaping @MainActor () -> [NectoInstalledPackage] = { NectoPluginLibrary.loadInstalled().packages },
          installationDirectory: URL? = nil) {
         self.installedPlugins = installedPlugins
         self.installationDirectory = installationDirectory
@@ -268,7 +268,7 @@ final class InstallCoordinator {
         ))
     }
 
-    func beginInstallFromFile(updating plugin: NectoInstalledPlugin? = nil) {
+    func beginInstallFromFile(updating plugin: NectoInstalledPackage? = nil) {
         guard !isBusy else { return }
         let panel = NSOpenPanel()
         panel.message = NectoL10n.text("Choose a plugin folder or a zip of one.")
@@ -282,7 +282,7 @@ final class InstallCoordinator {
         stageLocal(from: url, expectedPluginID: plugin?.id)
     }
 
-    func review(_ plugin: NectoInstalledPlugin) {
+    func review(_ plugin: NectoInstalledPackage) {
         guard !isBusy else { return }
         stageLocal(from: plugin.rootURL, expectedPluginID: plugin.id)
     }

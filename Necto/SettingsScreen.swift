@@ -366,8 +366,13 @@ struct SettingsScreen: View {
                 hint: [exporter.id, exporter.manifest.version, exporter.installation?.origin?.label ?? exporter.rootURL.path].joined(separator: " · "),
                 scale: scale
             ) {
-                Button(NectoL10n.text("Remove")) { model.remove(exporter) }
+                Button(NectoL10n.text("Remove")) { model.remove(exporter.package) }
                     .buttonStyle(NectoButtonStyle(scale: scale, quiet: true, danger: true))
+            }
+            .contextMenu {
+                Button(NectoL10n.text("Update from file…")) {
+                    model.beginInstallFromFile(updating: exporter.package)
+                }
             }
             Text(NectoL10n.text("Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection."))
                 .font(.necto(.caption, scale: scale))
@@ -536,9 +541,9 @@ struct SettingsScreen: View {
                 .padding(.top, 12)
         }
 
-        if !model.pluginsAwaitingApproval.isEmpty {
+        if !model.packagesAwaitingApproval.isEmpty {
             NectoSectionTitle(NectoL10n.text("Review required"), scale: scale)
-            ForEach(model.pluginsAwaitingApproval) { plugin in
+            ForEach(model.packagesAwaitingApproval) { plugin in
                 NectoRow(
                     label: plugin.manifest.name,
                     hint: NectoL10n.text("Review the source before running new or changed files."),

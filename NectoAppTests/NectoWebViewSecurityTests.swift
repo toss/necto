@@ -42,7 +42,7 @@ struct NectoWebViewSecurityTests {
         try await Self.verifyStorageIsolation(dataStore: .nonPersistent())
     }
 
-    static func wait(_ page: NectoPluginPage, for expression: String) async throws {
+    static func wait(_ page: NectoWebPage, for expression: String) async throws {
         let deadline = ContinuousClock.now + .seconds(8)
         while ContinuousClock.now < deadline {
             if (try? await page.webView.evaluateJavaScript(expression) as? Bool) == true { return }
@@ -65,24 +65,24 @@ struct NectoWebViewSecurityTests {
             source: source, archive: archive, contentIdentity: archive.contentHash, installation: installation)
     }
 
-    private static func open(_ plugin: NectoInstalledPlugin, dataStore: WKWebsiteDataStore) async throws -> NectoPluginPage {
+    private static func open(_ plugin: NectoInstalledPlugin, dataStore: WKWebsiteDataStore) async throws -> NectoWebPage {
         let registry = NectoPluginRegistry()
         if let principal = plugin.principal {
             try await registry.install(manifest: plugin.manifest, sourceIdentity: principal.sourceIdentity)
         }
-        let page = NectoPluginPage(plugin: plugin, registry: registry, target: nil, websiteDataStore: dataStore)
+        let page = NectoWebPage(package: plugin.package, registry: registry, target: nil, websiteDataStore: dataStore)
         do { try await Self.wait(page, for: "window.loaded === true"); return page }
         catch { page.invalidate(); throw error }
     }
 
     private static func verifyStorageIsolation(dataStore: WKWebsiteDataStore) async throws {
-        func open(_ plugin: NectoInstalledPlugin) async throws -> NectoPluginPage {
+        func open(_ plugin: NectoInstalledPlugin) async throws -> NectoWebPage {
             try await Self.open(plugin, dataStore: dataStore)
         }
         let id = "com.example.storage-" + UUID().uuidString.lowercased()
         let source = NectoInstalledPlugin.Source.device(appName: "A", appBundleID: "com.example.a")
         let first = fixture(id: id, source: source)
-        var pages: [NectoPluginPage] = []
+        var pages: [NectoWebPage] = []
         defer { for page in pages { page.invalidate() } }
         let a = try await open(first)
         pages.append(a)
@@ -169,7 +169,7 @@ struct NectoWebViewSecurityTests {
             sourceIdentity: "device:\(target.appBundleID)", for: target)
         try await registry.install(manifest: plugin.manifest, sourceIdentity: "local:approved")
         for provider in providers { await registry.registerHostProvider(provider) }
-        let page = NectoPluginPage(plugin: plugin, registry: registry, target: target, websiteDataStore: .nonPersistent())
+        let page = NectoWebPage(package: plugin.package, registry: registry, target: target, websiteDataStore: .nonPersistent())
         defer { page.invalidate() }
         try await Self.wait(page, for: "window.loaded === true")
         for index in providers.indices {
@@ -195,11 +195,11 @@ struct NectoWebViewSecurityTests {
     private static func verifySampleErrors(dataStore: WKWebsiteDataStore) async throws {
         let root = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("WebPackages/BuiltInPlugins/Plugins/plugin-sample")
-        let plugin = try NectoPluginLoader.load(from: root, source: .device(appName: "Fixture", appBundleID: "com.example.error-fixture"))
+        let plugin = NectoInstalledPlugin(package: try NectoPackageLoader.load(from: root, source: .device(appName: "Fixture", appBundleID: "com.example.error-fixture")))
         let registry = NectoPluginRegistry()
         try await registry.install(manifest: plugin.manifest, sourceIdentity: "device:com.example.error-fixture")
         await registry.registerHostProvider(ErrorTicksProvider())
-        let page = NectoPluginPage(plugin: plugin, registry: registry, target: nil, websiteDataStore: dataStore)
+        let page = NectoWebPage(package: plugin.package, registry: registry, target: nil, websiteDataStore: dataStore)
         defer { page.invalidate() }
         try await Self.wait(page, for: "document.querySelector('#info-status .necto-status-danger') !== null")
         for count in 1...5 {

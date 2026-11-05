@@ -531,10 +531,6 @@ const pluginsPage = (updates = false) => `
             <td>${author}</td>
             <td><div class="row-actions"><button type="button" class="necto-button necto-button-quiet necto-button-danger">Remove</button></div></td>
           </tr>`).join("")}
-        <tr>
-          <td>—</td><td>Example Exporter</td><td>1.0.0</td><td>Example Author</td>
-          <td><div class="row-actions"><button type="button" class="necto-button necto-button-quiet necto-button-danger">Remove</button></div></td>
-        </tr>
       </tbody>
     </table>
 

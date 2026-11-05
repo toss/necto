@@ -18,7 +18,7 @@ enum NectoPluginInstaller {
         let archive: NectoPanelArchive
         /// Where it came from, shown on the approval screen so the answer is informed.
         let origin: String
-        let previous: NectoInstalledPlugin?
+        let previous: NectoInstalledPackage?
         var replaces: String? { previous?.manifest.name }
         var keepsPermissions: Bool { previous?.installation != nil }
     }
@@ -68,7 +68,7 @@ enum NectoPluginInstaller {
     /// deserves to be told the repository rather than the directory.
     static func stage(
         from source: URL,
-        installed: [NectoInstalledPlugin],
+        installed: [NectoInstalledPackage],
         expectedPluginID: String? = nil,
         describedAs describedOrigin: String? = nil
     ) async throws -> Staged {
@@ -83,9 +83,9 @@ enum NectoPluginInstaller {
             throw Failure.severalPlugins(roots.map(\.lastPathComponent))
         }
 
-        let plugin: NectoInstalledPlugin
+        let plugin: NectoInstalledPackage
         do {
-            plugin = try NectoPluginLoader.load(from: root)
+            plugin = try NectoPackageLoader.load(from: root)
         } catch {
             throw Failure.unreadableManifest(String(describing: error))
         }
@@ -113,7 +113,7 @@ enum NectoPluginInstaller {
         )
     }
 
-    static func validateExporter(_ manifest: NectoPluginManifest, installed: [NectoInstalledPlugin]) throws {
+    static func validateExporter(_ manifest: NectoPluginManifest, installed: [NectoInstalledPackage]) throws {
         guard manifest.type == .eventExporter else { return }
         guard !installed.contains(where: {
             $0.id != manifest.id && $0.manifest.type == .eventExporter

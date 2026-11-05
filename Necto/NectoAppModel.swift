@@ -24,11 +24,28 @@ final class NectoAppModel {
             prunePluginUpdates()
         }
     }
-    /// Why a plugin on disk is not in `plugins`, keyed by folder name. Shown in
+    private(set) var eventExporter: NectoInstalledExporter? {
+        didSet {
+            exporterRuntime.synchronize(
+                exporter: eventExporter,
+                registry: registry,
+                eventDispatcher: eventDispatcher,
+                diagnostics: diagnostics
+            )
+            prunePluginUpdates()
+        }
+    }
+
+    /// Shared installation operations use package metadata, not the panel list.
+    var installedPackages: [NectoInstalledPackage] {
+        plugins.map(\.package) + (eventExporter.map { [$0.package] } ?? [])
+    }
+
+    /// Why a package on disk is not loaded, keyed by folder name. Shown in
     /// Settings rather than only printed, because a plugin that silently fails to
     /// appear is the hardest kind to debug.
     private(set) var pluginFailures: [String: String] = [:]
-    private(set) var pluginsAwaitingApproval: [NectoInstalledPlugin] = []
+    private(set) var packagesAwaitingApproval: [NectoInstalledPackage] = []
     private(set) var disabledIDs = NectoPluginLibrary.disabledIDs {
         didSet { refreshBackgroundPanels() }
     }
@@ -44,7 +61,7 @@ final class NectoAppModel {
         reload: { [weak self] in
             guard let self else { return [] }
             await self.reloadPluginCatalog()
-            return self.plugins
+            return self.installedPackages
         },
         present: { [weak self] in
             guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
@@ -72,6 +89,7 @@ final class NectoAppModel {
     private(set) var connectedApps: [NectoConnectedApp] = []
 
     let backgroundPanels = NectoBackgroundPanels()
+    private let exporterRuntime = NectoExporterRuntime()
     let cliInstaller = NectoCLIInstaller()
     let agentSkills = NectoAgentSkills()
     private(set) var presentationWindowID: UUID?
@@ -121,8 +139,8 @@ final class NectoAppModel {
 
     private func refreshBackgroundPanels() {
         backgroundPanels.synchronize(
-            plugins: enabledPlugins.filter(\.runsInBackground), registry: registry,
-            eventDispatcher: eventDispatcher, diagnostics: diagnostics
+            plugins: enabledPlugins.filter(\.runsInBackground),
+            registry: registry
         )
     }
 
@@ -211,23 +229,18 @@ final class NectoAppModel {
         deviceOrder = NectoPluginLibrary.deviceOrder
     }
 
-    /// Active desktop plugins. Exporters remain active until removed.
+    /// Active feature plugins, in the user's sidebar order.
     var enabledPlugins: [NectoInstalledPlugin] {
-        plugins.filter { $0.manifest.type == .eventExporter || !disabledIDs.contains($0.id) }
-    }
-
-    /// Exporters run in the background without a selectable panel.
-    var navigablePlugins: [NectoInstalledPlugin] {
-        enabledPlugins.filter { $0.manifest.type != .eventExporter }
+        plugins.filter { !disabledIDs.contains($0.id) }
     }
 
     /// Takes the move `List` already worked out, once, when the row is dropped.
     func movePlugins(from source: IndexSet, to destination: Int) {
-        var enabled = navigablePlugins
+        var enabled = enabledPlugins
         enabled.move(fromOffsets: source, toOffset: destination)
 
         // Disabled plugins keep their places, so turning one back on does not move it.
-        plugins = enabled + plugins.filter { $0.manifest.type == .eventExporter || disabledIDs.contains($0.id) }
+        plugins = enabled + plugins.filter { disabledIDs.contains($0.id) }
 
         // The whole list is written, not just the pair that moved: an order held as
         // gaps between neighbours drifts as plugins come and go.
@@ -251,17 +264,12 @@ final class NectoAppModel {
     }
 
     func setPlugin(_ id: String, enabled: Bool) {
-        guard !plugins.contains(where: { $0.id == id && $0.manifest.type == .eventExporter }) else { return }
         NectoPluginLibrary.setEnabled(id, enabled)
         disabledIDs = NectoPluginLibrary.disabledIDs
 
     }
 
     // MARK: Event collection
-
-    var eventExporter: NectoInstalledPlugin? {
-        plugins.first { $0.manifest.type == .eventExporter }
-    }
 
     struct EventCollectionPlugin: Identifiable {
         let id: String
@@ -272,7 +280,9 @@ final class NectoAppModel {
     /// Keep excluded IDs visible even when their plugin is absent. Names and
     /// versions are descriptions only; all installations of an ID share a policy.
     var eventCollectionPlugins: [EventCollectionPlugin] {
-        let known = plugins + pluginsAwaitingApproval + devicePlugins.map(\.plugin)
+        let known = plugins.map(\.package)
+            + packagesAwaitingApproval.filter { $0.manifest.type != .eventExporter }
+            + devicePlugins.map { $0.plugin.package }
         let grouped = Dictionary(grouping: known, by: \.id)
         let ids = Set(grouped.keys).union(eventCollectionPolicy.excludedPluginIDs)
         return ids.sorted().map { id in
@@ -305,8 +315,8 @@ final class NectoAppModel {
     func installPluginFromCLI(source: NectoPluginInstallSource) async throws -> NectoJSONValue {
         try await installer.installPluginFromCLI(source: source)
     }
-    func beginInstallFromFile(updating plugin: NectoInstalledPlugin? = nil) { installer.beginInstallFromFile(updating: plugin) }
-    func review(_ plugin: NectoInstalledPlugin) { installer.review(plugin) }
+    func beginInstallFromFile(updating plugin: NectoInstalledPackage? = nil) { installer.beginInstallFromFile(updating: plugin) }
+    func review(_ plugin: NectoInstalledPackage) { installer.review(plugin) }
     func beginAddingLink() { installer.beginAddingLink() }
     func cancelAddingLink() { installer.cancelAddingLink() }
     func dismissPrompt() { installer.dismissPrompt() }
@@ -358,7 +368,7 @@ final class NectoAppModel {
         var found = pluginUpdates
         var releases: [String: NectoReleaseSource.Release] = [:]
 
-        for plugin in plugins {
+        for plugin in installedPackages {
             guard plugin.source == .installed,
                   let origin = plugin.installation?.origin,
                   let installed = NectoSemanticVersion(plugin.manifest.version) else { continue }
@@ -381,7 +391,7 @@ final class NectoAppModel {
                     release = try await NectoReleaseSource.release(
                         of: repository,
                         describing: Set(
-                            plugins
+                            installedPackages
                                 .filter { $0.installation?.origin?.identity == origin.identity }
                                 .map(\.id)
                         )
@@ -415,7 +425,7 @@ final class NectoAppModel {
 
     private func prunePluginUpdates() {
         pluginUpdates = pluginUpdates.filter { id, update in
-            plugins.contains { plugin in
+            installedPackages.contains { plugin in
                 guard plugin.id == id, plugin.source == .installed,
                       let origin = plugin.installation?.origin,
                       let installed = NectoSemanticVersion(plugin.manifest.version) else { return false }
@@ -440,7 +450,7 @@ final class NectoAppModel {
         try await installer.deletePlugin(id: id)
     }
 
-    func remove(_ plugin: NectoInstalledPlugin) {
+    func remove(_ plugin: NectoInstalledPackage) {
         Task {
             do { _ = try await installer.deletePlugin(id: plugin.id) }
             catch {
@@ -451,7 +461,7 @@ final class NectoAppModel {
     }
 
     private func removeInstalledPlugin(id: String) async throws -> NectoJSONValue {
-        guard let plugin = (plugins + pluginsAwaitingApproval).first(where: { $0.id == id && $0.source == .installed }) else {
+        guard let plugin = (installedPackages + packagesAwaitingApproval).first(where: { $0.id == id && $0.source == .installed }) else {
             throw NectoBridgeError(code: .operationNotFound, message: "No installed desktop plugin has that ID. Device plugins are managed by their app.")
         }
         try NectoPluginLibrary.remove(plugin)
@@ -469,8 +479,9 @@ final class NectoAppModel {
         await registry.uninstall(pluginID: plugin.id)
         if let principal { await shellAccess.forget(principal) }
 
+        if eventExporter?.id == plugin.id { eventExporter = nil }
         plugins.removeAll { $0.id == plugin.id }
-        pluginsAwaitingApproval.removeAll { $0.id == plugin.id }
+        packagesAwaitingApproval.removeAll { $0.id == plugin.id }
         disabledIDs = NectoPluginLibrary.disabledIDs
         pluginUpdates.removeValue(forKey: id)
         return ["deleted": true, "pluginID": .string(id)]
@@ -711,7 +722,7 @@ final class NectoAppModel {
         // A plugin in the plugins folder wins over the same id carried by an app:
         // that folder is the developer override, and the day the two collide is the
         // day someone is working on exactly this panel.
-        if plugins.contains(where: { $0.id == discovered.id }) {
+        if installedPackages.contains(where: { $0.id == discovered.id }) {
             await log(.info, .plugin, "'\(discovered.id)' from \(appLabel(of: discovered)) is shadowed by an installed plugin")
             return
         }
@@ -894,15 +905,15 @@ final class NectoAppModel {
         // The registry refuses a second install of the same id, so a reload has to take
         // the previous registration out first. Without this every plugin fails the
         // moment the list is refreshed.
-        for plugin in plugins {
+        for plugin in installedPackages {
             if let principal = plugin.principal { shellAccess.cancelRequests(for: principal) }
             await registry.uninstall(pluginID: plugin.id)
         }
 
         let installedScan = NectoPluginLibrary.loadInstalled()
-        let found = installedScan.plugins
+        let found = installedScan.packages
         var failures = installedScan.failures
-        var awaitingApproval: [NectoInstalledPlugin] = []
+        var awaitingApproval: [NectoInstalledPackage] = []
 
         var records = NectoPluginLibrary.installations
         var grants = NectoPluginLibrary.grants
@@ -919,7 +930,7 @@ final class NectoAppModel {
         NectoPluginLibrary.installations = records
         NectoPluginLibrary.grants = grants
 
-        var installed: [NectoInstalledPlugin] = []
+        var installed: [NectoInstalledPackage] = []
 
         for plugin in found {
             // An id is claimed once. A second plugin claiming it would quietly shadow
@@ -964,14 +975,19 @@ final class NectoAppModel {
             }
         }
 
-        plugins = NectoPluginLibrary.sorted(installed)
-        pluginsAwaitingApproval = awaitingApproval
+        // The shared installer enforces one exporter before approval. Classification
+        // here separates panel ownership from the exporter's independent lifetime.
+        eventExporter = installed.first { $0.manifest.type == .eventExporter }.map(NectoInstalledExporter.init(package:))
+        plugins = NectoPluginLibrary.sorted(
+            installed.filter { $0.manifest.type != .eventExporter }.map(NectoInstalledPlugin.init(package:))
+        )
+        packagesAwaitingApproval = awaitingApproval
         pluginFailures = failures
 
         for (name, reason) in failures {
             await log(.failure, .plugin, "\(name) did not load", detail: reason)
         }
-        await log(.info, .plugin, "\(plugins.count) plugins loaded")
+        await log(.info, .plugin, "\(installed.count) packages loaded")
     }
 
     /// Picks up a folder dropped into the plugins directory without a relaunch.

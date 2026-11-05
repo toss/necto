@@ -94,7 +94,7 @@ struct ContentView: View {
                 PluginChoiceSheet(
                     choice: choice,
                     scale: scale,
-                    installed: Set(model.plugins.filter { $0.source == .installed }.map(\.id)),
+                    installed: Set(model.installedPackages.filter { $0.source == .installed }.map(\.id)),
                     isBusy: model.isFetching,
                     fetching: model.fetchingAsset,
                     cancel: { model.cancelChoice() },
@@ -213,7 +213,7 @@ struct ContentView: View {
                     }
                 }
 
-                if !model.navigablePlugins.isEmpty {
+                if !model.enabledPlugins.isEmpty {
                     Section {
                         pluginGroup(
                             "Desktop Plugins",
@@ -224,7 +224,7 @@ struct ContentView: View {
                         // `editActions: .move` rather than a drag of our own: `ForEach`
                         // writes the rearranged list straight back through the binding, and
                         // the drag, its animation and the keyboard all stay the platform's.
-                        ForEach(model.navigablePlugins) { plugin in
+                        ForEach(model.enabledPlugins) { plugin in
                             SidebarItem(
                                 title: plugin.manifest.name,
                                 systemImage: plugin.manifest.icon.systemName,
@@ -267,7 +267,7 @@ struct ContentView: View {
             if showsSearch {
                 SidebarPluginSearch(
                     devicePlugins: window.activeDevicePlugins + window.disabledDevicePlugins,
-                    desktopPlugins: model.navigablePlugins,
+                    desktopPlugins: model.enabledPlugins,
                     disabledPluginIDs: Set(window.disabledDevicePlugins.map(\.id)),
                     scale: scale, selection: sidebarSelection, isSearching: $isSearchingPlugins
                 )

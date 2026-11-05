@@ -55,7 +55,7 @@ struct NectoThemeTests {
         ])
         let plugin = NectoInstalledPlugin(manifest: manifest, rootURL: URL(filePath: NSTemporaryDirectory()),
             source: .installed, archive: archive, contentIdentity: archive.contentHash)
-        let page = NectoPluginPage(plugin: plugin, registry: NectoPluginRegistry(), target: nil, isDark: isDark)
+        let page = NectoWebPage(package: plugin.package, registry: NectoPluginRegistry(), target: nil, isDark: isDark)
         defer { page.invalidate() }
         let theme = isDark ? "dark" : "light"
         let deadline = ContinuousClock.now + .seconds(8)

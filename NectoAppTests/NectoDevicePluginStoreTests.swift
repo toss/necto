@@ -43,6 +43,9 @@ struct NectoDevicePluginStoreTests {
         let first = try await load()
         #expect(fetches == 1)
         #expect(first.archive == original)
+        #expect(first.contentIdentity == original.contentHash)
+        #expect(first.source == .device(appName: "Test", appBundleID: "com.example.first"))
+        #expect(first.installation == nil)
         _ = try await load()
         #expect(fetches == 1)
 

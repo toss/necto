@@ -49,15 +49,9 @@ private struct PluginRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Group {
-                if plugin.manifest.type == .eventExporter {
-                    Text("—").foregroundStyle(NectoTheme.textTertiary)
-                } else {
-                    NectoSwitch(isOn: isEnabled) { model.setPlugin(plugin.id, enabled: $0) }
-                        .accessibilityLabel(NectoL10n.format("Enable %@", plugin.manifest.name))
-                }
-            }
-            .frame(width: 34, alignment: .leading)
+            NectoSwitch(isOn: isEnabled) { model.setPlugin(plugin.id, enabled: $0) }
+                .frame(width: 34, alignment: .leading)
+                .accessibilityLabel(NectoL10n.format("Enable %@", plugin.manifest.name))
 
             HStack(spacing: 6) {
                 Image(systemName: plugin.manifest.icon.systemName)
@@ -81,7 +75,7 @@ private struct PluginRow: View {
             // be — at the same inset, or the column looks ragged.
             Group {
                 if plugin.source == .installed {
-                    Button(NectoL10n.text("Remove")) { model.remove(plugin) }
+                    Button(NectoL10n.text("Remove")) { model.remove(plugin.package) }
                         .buttonStyle(NectoButtonStyle(scale: scale, quiet: true, danger: true))
                 } else {
                     Text("—")
@@ -95,7 +89,7 @@ private struct PluginRow: View {
         .frame(height: NectoTheme.rowHeight * scale)
         .contextMenu {
             if plugin.source == .installed {
-                Button(NectoL10n.text("Update from file…")) { model.beginInstallFromFile(updating: plugin) }
+                Button(NectoL10n.text("Update from file…")) { model.beginInstallFromFile(updating: plugin.package) }
             }
         }
     }

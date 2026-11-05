@@ -32,15 +32,15 @@ final class NectoWindowState {
 
     var selectedPluginID: String? {
         get {
-            let available = model.navigablePlugins + activeDevicePlugins + disabledDevicePlugins
+            let available = model.enabledPlugins + activeDevicePlugins + disabledDevicePlugins
             return available.first { $0.id == pluginID }?.id
-                ?? model.navigablePlugins.first?.id ?? activeDevicePlugins.first?.id
+                ?? model.enabledPlugins.first?.id ?? activeDevicePlugins.first?.id
         }
         set { pluginID = newValue }
     }
 
     var selectedPlugin: NectoInstalledPlugin? {
-        (model.navigablePlugins + activeDevicePlugins).first { $0.id == selectedPluginID }
+        (model.enabledPlugins + activeDevicePlugins).first { $0.id == selectedPluginID }
     }
 
     var disabledSelection: NectoInstalledPlugin? {

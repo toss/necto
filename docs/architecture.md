@@ -121,6 +121,28 @@ serve those snapshots rather than mutable local files. Registry calls from a pan
 check its expected principal so an old page cannot call as a replacement installation.
 See [the trust policy](plugin-manifest.md#identity-and-trust).
 
+## Installed packages and runtime roles
+
+`NectoInstalledPackage` holds the shared manifest, verified web archive, content hash,
+source and installation identity. Loading, approval, updates and removal operate on
+this package data. The manifest format and stored installation records are unchanged.
+
+After approval, the app separates feature plugins (`NectoInstalledPlugin`) from its
+single event exporter (`NectoInstalledExporter`). Sidebar selection, panel ordering
+and feature enablement only inspect the plugin list. Package-level operations such
+as update discovery and shell caller identity include both roles. Exporter metadata,
+removal and the existing file-update action remain available in its settings page.
+
+`NectoBackgroundPanels` owns background feature pages and their window placement.
+`NectoExporterRuntime` independently retains one hidden exporter document. Changing
+or closing a feature panel does not recreate that document. Removing the exporter
+ends only its document; changing content or installation identity replaces it.
+Both owners use `NectoWebPage` and its common WebKit bridge. Only the exporter runtime
+supplies the dispatcher and diagnostics dependencies for exporter callbacks.
+
+The registry still handles shared operation calls and caller identity. Exporter
+event reception remains a direct registration with `NectoEventDispatcher`.
+
 ## Usage event delivery
 
 Usage events use a host-side dispatcher, separate from diagnostic logs and ordinary
