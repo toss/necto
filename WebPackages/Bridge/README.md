@@ -108,7 +108,9 @@ exporter when the page ends or the plugin is removed.
 `NectoEvent` includes `eventId`, `occurredAt` (Unix milliseconds), `installationId`,
 `nectoVersion`, `eventName`, `params`, and an optional `channel` (`web` or `cli`).
 The host sets `origin` to `device`, `desktop`, or `necto`. Device and desktop events
-include `pluginId` and `pluginVersion`; Necto events may include `relatedPluginId`.
+include `pluginId`. Desktop events include `pluginVersion`; device events include it
+only when the connected app carries a manifest for that plugin. Necto events may
+include `relatedPluginId`.
 
 Write local diagnostics separately:
 

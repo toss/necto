@@ -10,6 +10,162 @@ import Testing
 
 @Suite("Registry event recording")
 struct NectoEventRegistryTests {
+    @Test("registered app plugins record without a panel, version or surface channel")
+    func appUsageWithoutPanel() async throws {
+        let fixture = try await EventRegistryFixture.make()
+        let target = NectoTarget(deviceID: "device", appBundleID: "com.example.app")
+        await fixture.registry.setDeviceProviders([], for: target, pluginID: "app-logger", isRegistered: true)
+        let params: NectoJSONValue = ["pluginId": "spoofed", "channel": "web", "count": 2]
+        try await fixture.registry.recordDeviceEvent(
+            NectoPluginEvent(pluginID: "app-logger", channel: "necto.usage",
+                             payload: ["eventName": "app.started", "params": params]),
+            from: target
+        )
+
+        let event = try #require(fixture.receiver.events.first)
+        #expect(event.source == .device(id: "app-logger", version: nil))
+        #expect(event.input.eventName == "app.started")
+        #expect(event.jsonValue["origin"] == "device")
+        #expect(event.jsonValue["pluginId"] == "app-logger")
+        #expect(event.jsonValue["pluginVersion"] == nil)
+        #expect(event.jsonValue["channel"] == nil)
+        #expect(event.jsonValue["params"] == params)
+        #expect(event.installationID == "host-installation")
+        #expect(event.occurredAt == Date(timeIntervalSince1970: 123))
+    }
+
+    @Test("app usage derives versions only from its own target's carried manifest")
+    func appUsageVersionsStayTargetScoped() async throws {
+        let fixture = try await EventRegistryFixture.make()
+        let first = NectoTarget(deviceID: "shared-device", appBundleID: "com.example.first")
+        let second = NectoTarget(deviceID: "shared-device", appBundleID: "com.example.second")
+        let third = NectoTarget(deviceID: "other-device", appBundleID: "com.example.first")
+        try await fixture.registry.install(manifest: eventManifest(version: "9.0.0"), sourceIdentity: "desktop")
+        try await fixture.registry.installDevice(
+            manifest: eventManifest(version: "1.0.0"), sourceIdentity: "first", for: first
+        )
+        try await fixture.registry.installDevice(
+            manifest: eventManifest(version: "2.0.0"), sourceIdentity: "second", for: second
+        )
+        for target in [first, second, third] {
+            await fixture.registry.setDeviceProviders([], for: target, pluginID: "event-source", isRegistered: true)
+            try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: target)
+        }
+        #expect(fixture.receiver.events.map(\.source) == [
+            .device(id: "event-source", version: "1.0.0"),
+            .device(id: "event-source", version: "2.0.0"),
+            .device(id: "event-source", version: nil),
+        ])
+        await fixture.registry.uninstallDevice(pluginID: "event-source", for: first)
+        try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: first)
+        #expect(fixture.receiver.events.last?.source == .device(id: "event-source", version: nil))
+    }
+
+    @Test("desktop and panel installations cannot stand in for app registration")
+    func appUsageRequiresExactRegistration() async throws {
+        let fixture = try await EventRegistryFixture.make()
+        let target = NectoTarget(deviceID: "device", appBundleID: "com.example.app")
+        let other = NectoTarget(deviceID: "other", appBundleID: "com.example.app")
+        try await fixture.registry.install(manifest: eventManifest(), sourceIdentity: "desktop")
+        try await fixture.registry.installDevice(manifest: eventManifest(), sourceIdentity: "device", for: target)
+        await fixture.registry.setDeviceProviders([], for: other, pluginID: "event-source", isRegistered: true)
+        await expectEventError(.operationNotFound) {
+            try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: target)
+        }
+        await expectEventError(.operationNotFound) {
+            try await fixture.registry.recordDeviceEvent(appUsageEvent(pluginID: "unknown"), from: other)
+        }
+        #expect(fixture.receiver.events.isEmpty)
+    }
+
+    @Test("app usage rejects malformed payloads and caller-supplied envelope metadata")
+    func appUsageValidatesCommonInput() async throws {
+        let fixture = try await EventRegistryFixture.make()
+        let target = NectoTarget(deviceID: "device", appBundleID: "com.example.app")
+        await fixture.registry.setDeviceProviders([], for: target, pluginID: "event-source", isRegistered: true)
+        var invalid: [NectoJSONValue] = [
+            .null, ["eventName": ""], ["eventName": "  "], ["eventName": 1],
+            ["eventName": "app.started", "params": [1]],
+            ["eventName": "app.started", "params": ["value": .number(.infinity)]],
+        ]
+        for field in ["eventId", "occurredAt", "installationId", "nectoVersion", "origin",
+                      "pluginId", "pluginVersion", "relatedPluginId", "source", "channel"] {
+            invalid.append(.object(["eventName": "app.started", field: "spoofed"]))
+        }
+        for payload in invalid {
+            await expectEventError(.invalidInput) {
+                try await fixture.registry.recordDeviceEvent(appUsageEvent(payload: payload), from: target)
+            }
+        }
+        #expect(fixture.receiver.events.isEmpty)
+    }
+
+    @Test("app registration removal and disconnect stop usage until re-registration")
+    func appUsageRegistrationLifecycle() async throws {
+        let fixture = try await EventRegistryFixture.make()
+        let target = NectoTarget(deviceID: "device", appBundleID: "com.example.app")
+        await fixture.registry.setDeviceProviders([], for: target, pluginID: "event-source", isRegistered: true)
+        try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: target)
+        // An explicit removal wins even if stale providers accompany it.
+        await fixture.registry.setDeviceProviders(
+            [EventFixtureProvider()], for: target, pluginID: "event-source", isRegistered: false
+        )
+        await expectEventError(.operationNotFound) {
+            try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: target)
+        }
+        await fixture.registry.setDeviceProviders([], for: target, pluginID: "event-source", isRegistered: true)
+        await fixture.registry.unregisterDeviceProviders(for: target)
+        await expectEventError(.operationNotFound) {
+            try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: target)
+        }
+        await fixture.registry.setDeviceProviders([], for: target, pluginID: "event-source", isRegistered: true)
+        try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: target)
+        #expect(fixture.receiver.events.count == 2)
+    }
+
+    @Test("legacy provider registration retains nonempty catalogs and removes empty catalogs")
+    func appUsageLegacyRegistration() async throws {
+        let fixture = try await EventRegistryFixture.make()
+        let target = NectoTarget(deviceID: "device", appBundleID: "com.example.app")
+        await fixture.registry.setDeviceProviders([EventFixtureProvider()], for: target, pluginID: "event-source")
+        try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: target)
+        await fixture.registry.setDeviceProviders([], for: target, pluginID: "event-source")
+        await expectEventError(.operationNotFound) {
+            try await fixture.registry.recordDeviceEvent(appUsageEvent(), from: target)
+        }
+        #expect(fixture.receiver.events.count == 1)
+    }
+
+    @Test("app usage honors current exclusions and never buffers without a receiver")
+    func appUsagePolicyAndReceiver() async throws {
+        let dispatcher = NectoEventDispatcher(installationID: "host", nectoVersion: "1.0.0")
+        let registry = NectoPluginRegistry(eventDispatcher: dispatcher)
+        let receiver = EventRegistryReceiver()
+        let target = NectoTarget(deviceID: "device", appBundleID: "com.example.app")
+        await registry.setDeviceProviders([], for: target, pluginID: "event-source", isRegistered: true)
+        try await registry.recordDeviceEvent(appUsageEvent(), from: target)
+        try await dispatcher.registerExporter { receiver.append($0) }
+        #expect(receiver.events.isEmpty)
+        await dispatcher.updatePolicy(.init(excludedPluginIDs: ["event-source"]))
+        try await registry.recordDeviceEvent(appUsageEvent(), from: target)
+        #expect(receiver.events.isEmpty)
+        await dispatcher.updatePolicy(.init())
+        #expect(receiver.events.isEmpty)
+        try await registry.recordDeviceEvent(appUsageEvent(), from: target)
+        #expect(receiver.events.count == 1)
+    }
+
+    @Test("app usage without a dispatcher still validates its payload")
+    func appUsageNoDispatcher() async throws {
+        let registry = NectoPluginRegistry()
+        let target = NectoTarget(deviceID: "device", appBundleID: "com.example.app")
+        await registry.setDeviceProviders([], for: target, pluginID: "event-source", isRegistered: true)
+        try await registry.recordDeviceEvent(appUsageEvent(), from: target)
+        await expectEventError(.invalidInput) {
+            try await registry.recordDeviceEvent(appUsageEvent(payload: ["eventName": ""]), from: target)
+        }
+    }
+
     @Test("desktop events retain their origin even with a selected device target")
     func desktopMetadata() async throws {
         let fixture = try await EventRegistryFixture.make()
@@ -190,6 +346,12 @@ struct NectoEventRegistryTests {
 }
 
 private let eventInput: NectoJSONValue = ["eventName": "records.opened"]
+
+private func appUsageEvent(
+    pluginID: String = "event-source", payload: NectoJSONValue = eventInput
+) -> NectoPluginEvent {
+    NectoPluginEvent(pluginID: pluginID, channel: "necto.usage", payload: payload)
+}
 private let eventBinding = NectoBridgeBinding(name: "necto.desktop.records.list", version: 1)
 
 private func eventManifest(version: String = "1.0.0") -> NectoPluginManifest {

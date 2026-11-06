@@ -148,7 +148,9 @@ event reception remains a direct registration with `NectoEventDispatcher`.
 Usage events use a host-side dispatcher, separate from diagnostic logs and ordinary
 operation execution. An installed desktop event exporter receives events through its hidden WebView.
 Web plugins can record explicit events with `necto.log(eventName, params?)`.
-App-side recording, host instrumentation and HTTP delivery are separate follow-up work.
+App plugins record through `NectoRegistrar.logger` over the existing `plugin.event`
+transport. Host instrumentation, invocation-channel propagation and HTTP delivery
+are separate follow-up work.
 
 ```text
 Host recording entry -> Registry.recordEvent -> EventDispatcher -> registered exporter
@@ -228,6 +230,37 @@ the original feature or leave an unhandled promise rejection. It warns locally
 without printing event parameters; outside Necto it is a no-op. There is no delivery
 receipt, retry or queue in this helper.
 
+### Recording from an app plugin
+
+`NectoRegistrar.logger` supplies a `NectoPluginLogger` bound to that registration's
+plugin ID. Keep the logger for callbacks or use it inside an existing handler;
+`log(eventName, params:)` returns immediately and never throws. No caller-supplied
+plugin ID, exporter reference or destination is needed.
+
+The SDK emits `NectoPluginEvent` with the existing `plugin.event` message kind,
+routing channel `necto.usage`, and payload `{ eventName, params }`. This routing
+channel is separate from the optional exported `channel` field (`web` or `cli`).
+The event router passes the full envelope and connected target to the registry.
+The registry requires registration by that exact target, derives device origin and
+uses the same target's carried manifest version when available. A panel is optional;
+unknown `pluginVersion` is omitted rather than inferred from another app or a desktop
+installation. Panel-less registrations are also listed by ID in collection settings.
+
+`plugin.register` adds an optional `isRegistered` flag. `true` permits an empty
+registered plugin that only logs; `false` removes it. This describes app registration,
+not collection consent. When absent, the previous nonempty-catalog-or-panel rule
+still applies. Existing message kinds and `NectoPlugin` protocol members stay the same.
+
+There is no SDK logging queue or replay. Calls without an accepted connection are
+dropped, and an event cannot move to a replacement connection. Retained loggers
+stop working after their registration is removed, including after the same ID is
+registered again. Events emitted before the host receives registration may also be
+dropped. The host's collection policy and exporter registration still decide delivery.
+
+App handler invocations do not yet carry their web/CLI origin. App logs therefore
+omit exported `channel` in this implementation, even when an existing handler was
+called through those surfaces. No handler is automatically instrumented.
+
 ### Event envelope
 
 Record input contains `eventName` and optional
@@ -248,7 +281,9 @@ An exported event includes:
 - `origin`: `necto`, `device` (app-carried plugin), or `desktop` (installed
   desktop plugin). Plugin origin comes from the registry installation record, not
   the presence of a selected target or plugin-supplied parameters.
-- `pluginId`, `pluginVersion`: included for plugin records; omitted for host records.
+- `pluginId`: included for plugin records; omitted for host records.
+- `pluginVersion`: included when the host has the plugin manifest; omitted for
+  app plugins without an available manifest and for host records.
 - `relatedPluginId`: included for host activity associated with a particular plugin.
 - `channel`: `web` or `cli` when established by the host; omitted for activity
   outside those paths. WebView timers and hidden pages also use `web`.

@@ -14,6 +14,15 @@ import Testing
 #error("The SDK consumer must not depend on host modules")
 #endif
 
+private final class ConsumerLoggingPlugin: NectoPlugin, @unchecked Sendable {
+    let id = "com.example.consumer-logger"
+    private(set) var logger: NectoPluginLogger?
+
+    func register(_ necto: NectoRegistrar) {
+        logger = necto.logger
+    }
+}
+
 @Test("Selected plugin products provide their panels without starting them")
 func sdkConsumer() throws {
     #expect(NectoSDK.status == .stopped)
@@ -35,4 +44,12 @@ func sdkConsumer() throws {
     defer { NectoSDK.unregister(id: events.id) }
     #expect(NectoSDK.plugins.map(\.id) == [events.id])
     #expect(NectoSDK.status == .stopped)
+
+    let logging = ConsumerLoggingPlugin()
+    NectoSDK.register(logging)
+    let logger = try #require(logging.logger)
+    NectoSDK.unregister(id: logging.id)
+    logger.log("consumer.callback", params: ["count": 1, "finished": true])
+    logger.log("consumer.empty")
+    #expect(NectoSDK.plugins.map(\.id) == [events.id])
 }

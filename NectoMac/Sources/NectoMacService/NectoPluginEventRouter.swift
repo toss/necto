@@ -12,17 +12,18 @@ import Foundation
 /// plugin therefore needs a handler registered here and nothing else, and no new
 /// message type on the wire.
 public actor NectoPluginEventRouter {
-    public typealias Handler = @Sendable (NectoJSONValue, NectoTarget) async -> Void
+    public typealias Handler = @Sendable (NectoPluginEvent, NectoTarget) async -> Void
 
     private var handlers: [String: Handler] = [:]
 
     public init() {}
 
+    /// Preserves the sender identity from the event envelope.
     public func on(channel: String, handler: @escaping Handler) {
         handlers[channel] = handler
     }
 
     public func route(_ event: NectoPluginEvent, from target: NectoTarget) async {
-        await handlers[event.channel]?(event.payload, target)
+        await handlers[event.channel]?(event, target)
     }
 }

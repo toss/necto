@@ -78,3 +78,43 @@ import Testing
     #expect(decoded.catalog.bridges.first?.version == 2)
     #expect(decoded.catalog.bridges.first?.identity == "necto.device.com.example.variables@2")
 }
+
+@Test func registrationPresenceDistinguishesLoggerOnlyPluginsFromRemoval() throws {
+    let catalog = NectoBridgeCatalog(bridges: [])
+    for isRegistered in [true, false] {
+        let registration = NectoPluginRegistration(
+            pluginID: "com.example.logger", catalog: catalog, isRegistered: isRegistered
+        )
+        let decoded = try NectoEnvelope(type: .pluginRegister, encoding: registration)
+            .decode(NectoPluginRegistration.self)
+        #expect(decoded.isRegistered == isRegistered)
+        #expect(decoded.isActive == isRegistered)
+    }
+    let removed = NectoPluginRegistration(
+        pluginID: "com.example.logger", catalog: catalog,
+        panel: NectoPanelStamp(hash: "previous-panel"), isRegistered: false
+    )
+    #expect(!removed.isActive)
+}
+
+@Test func legacyRegistrationsStillUseTheirCatalogForPresence() throws {
+    let catalog = NectoBridgeCatalog(bridges: [
+        NectoBridgeDescriptor(binding: NectoBridgeBinding(name: "necto.device.example", version: 1), kind: .once),
+    ])
+    for (catalog, active) in [(catalog, true), (NectoBridgeCatalog(bridges: []), false)] {
+        let old = NectoPluginRegistration(pluginID: "com.example.legacy", catalog: catalog)
+        let data = try JSONEncoder().encode(old)
+        #expect(try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])["isRegistered"] == nil)
+        let decoded = try JSONDecoder().decode(NectoPluginRegistration.self, from: data)
+        #expect(decoded.isRegistered == nil)
+        #expect(decoded.isActive == active)
+    }
+    let panelOnly = NectoPluginRegistration(
+        pluginID: "com.example.legacy", catalog: NectoBridgeCatalog(bridges: []),
+        panel: NectoPanelStamp(hash: "legacy-panel")
+    )
+    let decodedPanel = try NectoEnvelope(type: .pluginRegister, encoding: panelOnly)
+        .decode(NectoPluginRegistration.self)
+    #expect(decodedPanel.isRegistered == nil)
+    #expect(decodedPanel.isActive)
+}

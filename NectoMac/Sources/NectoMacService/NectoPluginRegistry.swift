@@ -201,16 +201,19 @@ public actor NectoPluginRegistry {
 
     /// What a plugin offers *now*, replacing whatever it offered before.
     ///
-    /// An app registers by declaring its whole catalog rather than adding to one, so a
-    /// plugin the app removed leaves with an empty catalog and no message of its own.
-    /// Re-registering after a reconnection is the same call and stays correct.
+    /// Explicit registration also retains plugins with no operations or panel.
+    /// Without that flag, an empty catalog keeps the legacy removal behavior.
     public func setDeviceProviders(
         _ providers: [any NectoOperationProvider],
         for target: NectoTarget,
-        pluginID: String
+        pluginID: String,
+        isRegistered: Bool? = nil
     ) {
-        guard !providers.isEmpty else {
+        guard isRegistered ?? !providers.isEmpty else {
             deviceProviders[target]?.removeValue(forKey: pluginID)
+            if deviceProviders[target]?.isEmpty == true {
+                deviceProviders.removeValue(forKey: target)
+            }
             return
         }
 
@@ -288,6 +291,20 @@ public actor NectoPluginRegistry {
             source = .desktop(id: plugin.manifest.id, version: plugin.manifest.version)
         }
         await eventDispatcher?.record(eventInput, source: source, channel: channel)
+    }
+
+    /// Records app usage from a plugin registered by this exact connected target.
+    /// A panel is optional; only its carried manifest can establish a version.
+    public func recordDeviceEvent(_ event: NectoPluginEvent, from target: NectoTarget) async throws {
+        guard deviceProviders[target]?[event.pluginID] != nil else {
+            throw NectoBridgeError(
+                code: .operationNotFound,
+                message: "The recording plugin is not registered"
+            )
+        }
+        let input = try NectoEvent.Input(jsonValue: event.payload)
+        let version = deviceInstalled[target]?[event.pluginID]?.manifest.version
+        await eventDispatcher?.record(input, source: .device(id: event.pluginID, version: version))
     }
 
     public func invoke(

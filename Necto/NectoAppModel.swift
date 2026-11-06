@@ -159,6 +159,8 @@ final class NectoAppModel {
     /// already said yes, in code, where saying yes means something. The sheet is for
     /// desktop installs, where a third party's work enters.
     private(set) var devicePlugins: [DiscoveredPlugin] = []
+    /// Includes registered app plugins that do not carry a feature panel.
+    private var registeredAppPluginIDs: [NectoTarget: Set<String>] = [:]
 
     private static let targetHandles = NectoTargetHandles()
 
@@ -284,15 +286,22 @@ final class NectoAppModel {
             + packagesAwaitingApproval.filter { $0.manifest.type != .eventExporter }
             + devicePlugins.map { $0.plugin.package }
         let grouped = Dictionary(grouping: known, by: \.id)
-        let ids = Set(grouped.keys).union(eventCollectionPolicy.excludedPluginIDs)
+        let registeredIDs = registeredAppPluginIDs.values.reduce(into: Set<String>()) { $0.formUnion($1) }
+        let ids = Set(grouped.keys).union(registeredIDs).union(eventCollectionPolicy.excludedPluginIDs)
         return ids.sorted().map { id in
             let plugins = grouped[id] ?? []
+            let appsWithoutPanels = registeredAppPluginIDs.compactMap { target, ids -> String? in
+                guard ids.contains(id), !devicePlugins.contains(where: { $0.target == target && $0.id == id }) else {
+                    return nil
+                }
+                return connectedApps.first(where: { $0.target == target })?.appName ?? target.appBundleID
+            }
             let descriptions = Set(plugins.map { plugin in
                 if case let .device(appName, _) = plugin.source {
                     return "\(appName) \(plugin.manifest.version)"
                 }
                 return plugin.manifest.version
-            }).sorted().joined(separator: ", ")
+            } + appsWithoutPanels).sorted().joined(separator: ", ")
             return EventCollectionPlugin(
                 id: id,
                 name: plugins.first?.manifest.name ?? id,
@@ -617,6 +626,7 @@ final class NectoAppModel {
                 // An app that went away takes its contracts and its parked calls with it.
                 let current = Set(apps.map(\.target))
                 for target in known.subtracting(current) {
+                    registeredAppPluginIDs.removeValue(forKey: target)
                     await registry.unregisterDeviceProviders(for: target)
                     await appBridge.targetDisconnected(target)
                     await dropDevicePlugins(for: target)
@@ -655,7 +665,8 @@ final class NectoAppModel {
                     NectoDeviceBridgeProvider(contract: $0, target: target, appBridge: appBridge)
                 },
                 for: target,
-                pluginID: registration.pluginID
+                pluginID: registration.pluginID,
+                isRegistered: registration.isActive
             )
 
         case .pluginResult:
@@ -673,12 +684,20 @@ final class NectoAppModel {
     /// Called for every plugin registration an app sends. The bridges were already
     /// wired up in `route`; this is about the panel the registration may carry.
     private func receivedRegistration(_ registration: NectoPluginRegistration, from target: NectoTarget) async {
-        // An empty registration is how a plugin is taken away.
-        if registration.catalog.bridges.isEmpty, registration.panel == nil {
+        if registration.isActive {
+            registeredAppPluginIDs[target, default: []].insert(registration.pluginID)
+        } else {
+            registeredAppPluginIDs[target]?.remove(registration.pluginID)
+            if registeredAppPluginIDs[target]?.isEmpty == true {
+                registeredAppPluginIDs.removeValue(forKey: target)
+            }
+        }
+        guard registration.isActive, let stamp = registration.panel else {
+            // Removing a panel does not unregister an app plugin that still logs.
+            // Drop its old manifest so later events do not inherit a stale version.
             await removeDevicePlugins { $0.plugin.id == registration.pluginID && $0.target == target }
             return
         }
-        guard let stamp = registration.panel else { return }
 
         let app = connectedApps.first { $0.target == target }
         let appName = app?.appName ?? target.appBundleID
@@ -834,6 +853,18 @@ final class NectoAppModel {
     }
 
     private func registerHostProviders() async {
+        await events.on(channel: "necto.usage") { [registry, diagnostics] event, target in
+            do {
+                try await registry.recordDeviceEvent(event, from: target)
+            } catch {
+                await diagnostics.append(
+                    .warning,
+                    .bridge,
+                    "An app usage event was rejected",
+                    detail: event.pluginID
+                )
+            }
+        }
         for action in ["requestAuthorization", "status", "show"] {
             await registry.registerHostProvider(NectoNotificationProvider(action: action))
         }

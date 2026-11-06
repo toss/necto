@@ -15,11 +15,25 @@ public struct NectoPluginRegistration: Sendable, Hashable, Codable {
     /// key still decode — a plugin without a panel is simply one the host has to be
     /// given a panel for.
     public let panel: NectoPanelStamp?
+    /// Whether the plugin is present in the app. This is registration state, not
+    /// permission to collect or export its events. Omitted by older SDKs.
+    public let isRegistered: Bool?
 
-    public init(pluginID: String, catalog: NectoBridgeCatalog, panel: NectoPanelStamp? = nil) {
+    public init(
+        pluginID: String,
+        catalog: NectoBridgeCatalog,
+        panel: NectoPanelStamp? = nil,
+        isRegistered: Bool? = nil
+    ) {
         self.pluginID = pluginID
         self.catalog = catalog
         self.panel = panel
+        self.isRegistered = isRegistered
+    }
+
+    /// Older SDKs used an empty catalog without a panel to announce removal.
+    public var isActive: Bool {
+        isRegistered ?? (!catalog.bridges.isEmpty || panel != nil)
     }
 }
 

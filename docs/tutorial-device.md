@@ -208,6 +208,36 @@ See [bridges.md](bridges.md#app-bridges) for handler registration details.
 Payloads use `NectoJSONValue` and are validated against the manifest schema.
 Sharing a payload struct would couple the app and host versions.
 
+## Recording usage events
+
+Inside `register(_:)`, obtain the logger once and call it where the plugin considers
+an action worth recording. For example, the existing get handler can record a request:
+
+```swift
+let logger = necto.logger
+necto.handle("uptime.get") { _ in
+    logger.log("uptime.requested")
+    return [
+        "startedAt": .string(ISO8601DateFormatter().string(from: startedAt)),
+        "uptimeSeconds": .number(Date().timeIntervalSince(startedAt)),
+    ]
+}
+```
+
+Keep the existing observe handler as well. The logger can be retained independently
+of the registrar for later callbacks. Pass only an event name and optional JSON
+parameters; the SDK binds the plugin identity and Necto applies collection policy.
+No event schema or logging operation needs to be added to the manifest.
+
+Logging never waits for delivery or throws into the feature. Disconnected records
+are dropped and are not replayed after reconnection. A removed plugin's logger cannot
+be reused by a replacement registration with the same ID. A plugin without a panel
+can log too; Necto omits its version when no manifest is available.
+
+App logs currently omit the optional web/CLI `channel`: that invocation context is
+not yet propagated to app handlers. See [usage event delivery](architecture.md#usage-event-delivery)
+for the transport, registration and metadata rules.
+
 ## The panel
 
 The panel is a web page that calls operations by their manifest ids. This example

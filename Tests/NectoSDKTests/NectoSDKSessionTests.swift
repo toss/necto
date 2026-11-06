@@ -43,6 +43,28 @@ private struct CatalogPlugin: NectoPlugin {
     }
 }
 
+private final class LoggingPlugin: NectoPlugin, @unchecked Sendable {
+    let id = "com.example.app-logger"
+    let hasHandler: Bool
+    private let lock = NSLock()
+    private var storedLogger: NectoPluginLogger?
+
+    init(hasHandler: Bool = false) { self.hasHandler = hasHandler }
+
+    var logger: NectoPluginLogger? { lock.withLock { storedLogger } }
+
+    func register(_ necto: NectoRegistrar) {
+        lock.withLock { storedLogger = necto.logger }
+        if hasHandler {
+            let logger = necto.logger
+            necto.handle("logger.echo") { input in
+                logger.log("handler.called", params: ["input": input])
+                return input
+            }
+        }
+    }
+}
+
 private final class CatalogWriteGate: @unchecked Sendable {
     private let lock = NSLock()
     private var paused = false
@@ -125,6 +147,121 @@ private func result(_ host: NectoMessageSession) async throws -> NectoPluginResu
 
 @Suite("SDK session ownership", .timeLimit(.minutes(1)))
 struct NectoSDKSessionTests {
+    @Test("a retained logger sends its bound plugin identity and payload alongside handler results")
+    func pluginLogger() async throws {
+        let harness = SessionHarness()
+        let plugin = LoggingPlugin(hasHandler: true)
+        #expect(harness.runtime.register(plugin))
+        let logger = try #require(plugin.logger)
+        let (host, worker) = try await harness.connect()
+        defer { host.close(); harness.runtime.stop(); worker.cancel() }
+        try await host.handshake(timeout: .seconds(3)) {
+            let registration = try await host.receive(NectoEnvelope.self).decode(NectoPluginRegistration.self)
+            #expect(registration.pluginID == plugin.id)
+            #expect(registration.isActive)
+
+            logger.log("callback.finished", params: ["count": 2, "nested": ["ok": true]])
+            let envelope = try await host.receive(NectoEnvelope.self)
+            #expect(envelope.type == .pluginEvent)
+            let event = try envelope.decode(NectoPluginEvent.self)
+            #expect(event.pluginID == plugin.id)
+            #expect(event.channel == "necto.usage")
+            #expect(event.payload == [
+                "eventName": "callback.finished",
+                "params": ["count": 2, "nested": ["ok": true]],
+            ])
+
+            try await host.send(NectoEnvelope(type: .pluginInvoke, encoding: NectoPluginInvocation(
+                requestID: "logged-handler", name: "necto.device.logger.echo", version: 1,
+                kind: .once, input: ["value": true]
+            )))
+            let replies = [try await host.receive(NectoEnvelope.self), try await host.receive(NectoEnvelope.self)]
+            let logged = try #require(replies.first { $0.type == .pluginEvent }).decode(NectoPluginEvent.self)
+            #expect(logged.pluginID == plugin.id)
+            #expect(logged.payload == ["eventName": "handler.called", "params": ["input": ["value": true]]])
+            let reply = try #require(replies.first { $0.type == .pluginResult }).decode(NectoPluginResult.self)
+            #expect(reply.requestID == "logged-handler")
+            #expect(reply.output == ["value": true])
+            #expect(reply.isFinal)
+        }
+        host.close()
+        await worker.value
+    }
+
+    @Test("logger-only plugins remain present and disconnected calls are never replayed")
+    func disconnectedLogger() async throws {
+        let harness = SessionHarness()
+        let plugin = LoggingPlugin()
+        #expect(harness.runtime.register(plugin))
+        let logger = try #require(plugin.logger)
+        logger.log("before.connection")
+        let first = try await harness.connect()
+        defer { first.host.close(); harness.runtime.stop(); first.worker.cancel() }
+        try await first.host.handshake(timeout: .seconds(3)) {
+            let registration = try await first.host.receive(NectoEnvelope.self).decode(NectoPluginRegistration.self)
+            #expect(registration.pluginID == plugin.id)
+            #expect(registration.catalog.bridges.isEmpty)
+            #expect(registration.panel == nil)
+            #expect(registration.isRegistered == true)
+            #expect(registration.isActive)
+            try await invoke(first.host, id: "first-marker", name: "echo")
+            #expect(try await result(first.host).requestID == "first-marker")
+        }
+        first.host.close()
+        await first.worker.value
+        logger.log("between.connections")
+
+        let second = try await harness.connect {
+            logger.log("during.handshake")
+        }
+        defer { second.host.close(); second.worker.cancel() }
+        try await second.host.handshake(timeout: .seconds(3)) {
+            let registration = try await second.host.receive(NectoEnvelope.self).decode(NectoPluginRegistration.self)
+            #expect(registration.isActive)
+            logger.log("current.connection")
+            let event = try await second.host.receive(NectoEnvelope.self).decode(NectoPluginEvent.self)
+            #expect(event.payload == ["eventName": "current.connection", "params": [:]])
+            try await invoke(second.host, id: "second-marker", name: "echo")
+            #expect(try await result(second.host).requestID == "second-marker")
+        }
+        second.host.close()
+        await second.worker.value
+    }
+
+    @Test("unregistering retires a logger before the same ID is registered again")
+    func staleLogger() async throws {
+        let harness = SessionHarness()
+        let original = LoggingPlugin()
+        #expect(harness.runtime.register(original))
+        let oldLogger = try #require(original.logger)
+        let (host, worker) = try await harness.connect()
+        defer { host.close(); harness.runtime.stop(); worker.cancel() }
+        try await host.handshake(timeout: .seconds(3)) {
+            _ = try await host.receive(NectoEnvelope.self)
+            harness.runtime.unregister(id: original.id)
+            oldLogger.log("after.removal")
+            let removed = try await host.receive(NectoEnvelope.self).decode(NectoPluginRegistration.self)
+            #expect(removed.pluginID == original.id)
+            #expect(removed.isRegistered == false)
+            #expect(!removed.isActive)
+
+            let replacement = LoggingPlugin()
+            #expect(harness.runtime.register(replacement))
+            let added = try await host.receive(NectoEnvelope.self).decode(NectoPluginRegistration.self)
+            #expect(added.isRegistered == true)
+            oldLogger.log("after.replacement")
+            let currentLogger = try #require(replacement.logger)
+            currentLogger.log("replacement.called")
+            let event = try await host.receive(NectoEnvelope.self).decode(NectoPluginEvent.self)
+            #expect(event.pluginID == replacement.id)
+            #expect(event.payload == ["eventName": "replacement.called", "params": [:]])
+            try await invoke(host, id: "after-replacement", name: "echo")
+            #expect(try await result(host).requestID == "after-replacement")
+        }
+        host.close()
+        await worker.value
+    }
+
     @Test("catalog overflow closes a stalled session and reconnect restores the latest snapshot")
     func stalledCatalog() async throws {
         let harness = SessionHarness()

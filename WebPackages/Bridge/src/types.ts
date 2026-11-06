@@ -88,7 +88,8 @@ interface NectoEventEnvelope {
 
 /** Usage data delivered to an exporter, with identity established by the host. */
 export type NectoEvent = NectoEventEnvelope & (
-  | { origin: "device" | "desktop"; pluginId: string; pluginVersion: string }
+  | { origin: "device"; pluginId: string; pluginVersion?: string }
+  | { origin: "desktop"; pluginId: string; pluginVersion: string }
   | { origin: "necto"; relatedPluginId?: string }
 );
 

@@ -14,7 +14,7 @@ public struct NectoEvent: Sendable, Equatable {
 
     /// Established by the host, never read from plugin-supplied event properties.
     public enum Source: Sendable, Equatable {
-        case device(id: String, version: String)
+        case device(id: String, version: String?)
         case desktop(id: String, version: String)
         case necto(relatedPluginID: String? = nil)
 
@@ -88,7 +88,7 @@ public struct NectoEvent: Sendable, Equatable {
         case let .device(id, version):
             fields["origin"] = "device"
             fields["pluginId"] = .string(id)
-            fields["pluginVersion"] = .string(version)
+            if let version { fields["pluginVersion"] = .string(version) }
         case let .desktop(id, version):
             fields["origin"] = "desktop"
             fields["pluginId"] = .string(id)
