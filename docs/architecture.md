@@ -149,7 +149,10 @@ Usage events use a host-side dispatcher, separate from diagnostic logs and ordin
 operation execution. An installed desktop event exporter receives events through its hidden WebView.
 Web plugins can record explicit events with `necto.log(eventName, params?)`.
 App plugins record through `NectoRegistrar.logger` over the existing `plugin.event`
-transport. Host instrumentation and HTTP delivery are separate follow-up work.
+transport. Exporters can send HTTPS requests through the ordinary
+`necto.desktop.http.request` bridge. The native provider executes requests;
+the exporter owns serialization, batching, retry and persistence. Host
+instrumentation and the default HTTP exporter are separate follow-up work.
 
 ```text
 Host recording entry -> Registry.recordEvent -> EventDispatcher -> registered exporter

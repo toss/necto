@@ -870,6 +870,7 @@ final class NectoAppModel {
         }
         await registry.registerHostProvider(NectoBackgroundProvider())
         await registry.registerHostProvider(NectoHostInfoProvider(nectoVersion: Self.nectoVersion))
+        await registry.registerHostProvider(NectoHTTPRequestProvider())
         await registry.registerHostProvider(NectoFileSaveProvider())
         await registry.registerHostProvider(NectoFileRevealProvider())
         await registry.registerHostProvider(NectoHostTicksProvider())
