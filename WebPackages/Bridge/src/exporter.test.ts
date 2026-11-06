@@ -31,6 +31,7 @@ const event = {
   eventName: "note.opened",
   params: { source: "sidebar" },
 };
+const shutdownContext = { deadlineAt: 1_793_750_405_000 };
 
 beforeEach(() => {
   delete (globalThis as any).window;
@@ -40,8 +41,10 @@ describe("registerExporter", () => {
   it("receives events while registration is still pending", async () => {
     const onEvent = vi.fn();
     let complete!: (reply: Reply) => void;
+    let shutdownAtRegistration: Window["__nectoExporterShutdown"];
     const postMessage = installHost(() => {
       window.__nectoExporterReceive!(event);
+      shutdownAtRegistration = window.__nectoExporterShutdown;
       return new Promise<Reply>((resolve) => { complete = resolve; });
     });
     const { necto } = await loadBridge();
@@ -51,6 +54,7 @@ describe("registerExporter", () => {
     expect(postMessage).toHaveBeenCalledWith({ type: "registerExporter" });
     complete({ ok: true, value: null });
     await expect(registration).resolves.toBeUndefined();
+    expect(shutdownAtRegistration).toBeTypeOf("function");
     window.__nectoExporterReceive!(event);
     expect(onEvent).toHaveBeenCalledTimes(2);
   });
@@ -66,12 +70,14 @@ describe("registerExporter", () => {
       code: "PERMISSION_DENIED",
     });
     expect(window.__nectoExporterReceive).toBeUndefined();
+    expect(window.__nectoExporterShutdown).toBeUndefined();
 
     allowed = true;
     const onEvent = vi.fn();
     await necto.registerExporter({ onEvent });
     window.__nectoExporterReceive!(event);
     expect(onEvent).toHaveBeenCalledWith(event);
+    await expect(window.__nectoExporterShutdown!(shutdownContext)).resolves.toBeUndefined();
     expect(rejectedHandler).not.toHaveBeenCalled();
   });
 
@@ -106,6 +112,7 @@ describe("registerExporter", () => {
     const { necto } = await loadBridge();
     await expect(necto.registerExporter({ onEvent: vi.fn() })).rejects.toThrow("Host stopped");
     expect(window.__nectoExporterReceive).toBeUndefined();
+    expect(window.__nectoExporterShutdown).toBeUndefined();
   });
 
   it("rejects outside Necto", async () => {
@@ -144,6 +151,85 @@ describe("registerExporter", () => {
     expect(() => window.__nectoExporterReceive!(event)).not.toThrow();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(postMessage).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("exporter shutdown", () => {
+  it("resolves without a hook or waiting for an accepted event", async () => {
+    installHost(() => ({ ok: true, value: null }));
+    const { necto } = await loadBridge();
+    let finishEvent!: () => void;
+    const onEvent = vi.fn(() => new Promise<void>((resolve) => { finishEvent = resolve; }));
+    await necto.registerExporter({ onEvent });
+    window.__nectoExporterReceive!(event);
+
+    const shutdown = window.__nectoExporterShutdown!(shutdownContext);
+    window.__nectoExporterReceive!(event);
+    await expect(shutdown).resolves.toBeUndefined();
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    finishEvent();
+  });
+
+  it("waits for one hook invocation with the original deadline and stops accepting events immediately", async () => {
+    installHost(() => ({ ok: true, value: null }));
+    const { necto } = await loadBridge();
+    const onEvent = vi.fn();
+    let finishShutdown!: () => void;
+    const onShutdown = vi.fn(() => new Promise<void>((resolve) => { finishShutdown = resolve; }));
+    await necto.registerExporter({ onEvent, onShutdown });
+
+    const shutdown = window.__nectoExporterShutdown!(shutdownContext);
+    const settled = vi.fn();
+    void shutdown.then(settled, settled);
+    window.__nectoExporterReceive!(event);
+    expect(window.__nectoExporterShutdown!({ deadlineAt: shutdownContext.deadlineAt + 1 })).toBe(shutdown);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(onShutdown).toHaveBeenCalledExactlyOnceWith(shutdownContext);
+    expect(settled).not.toHaveBeenCalled();
+    finishShutdown();
+    await expect(shutdown).resolves.toBeUndefined();
+    expect(settled).toHaveBeenCalledOnce();
+  });
+
+  it.each(["throw", "reject"])("propagates a hook %s on every shutdown call", async (mode) => {
+    installHost(() => ({ ok: true, value: null }));
+    const { necto } = await loadBridge();
+    const error = new Error("Failed to flush");
+    const onShutdown = vi.fn(() => {
+      if (mode === "throw") throw error;
+      return Promise.reject(error);
+    });
+    await necto.registerExporter({ onEvent: vi.fn(), onShutdown });
+
+    const shutdown = window.__nectoExporterShutdown!(shutdownContext);
+    await expect(shutdown).rejects.toBe(error);
+    expect(window.__nectoExporterShutdown!(shutdownContext)).toBe(shutdown);
+    expect(onShutdown).toHaveBeenCalledOnce();
+  });
+
+  it("keeps desktop operations and diagnostics usable during the hook", async () => {
+    const postMessage = installHost(() => ({ ok: true, value: {} }));
+    const { necto } = await loadBridge();
+    const request = { url: "https://collector.example.com/events", method: "POST" };
+    const storedBatch = { key: "pending-events", value: [event] };
+    await necto.registerExporter({
+      onEvent: vi.fn(),
+      async onShutdown() {
+        await necto.desktop.send("events.send", request);
+        await necto.desktop.send("events.store", storedBatch);
+        await necto.diagnostics.log("info", "Shutdown complete");
+      },
+    });
+
+    await window.__nectoExporterShutdown!(shutdownContext);
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      { type: "registerExporter" },
+      { type: "invoke", operationID: "events.send", input: request },
+      { type: "invoke", operationID: "events.store", input: storedBatch },
+      { type: "diagnostic", level: "info", message: "Shutdown complete" },
+    ]);
   });
 });
 

@@ -90,12 +90,17 @@ final class NectoAppModel {
 
     let backgroundPanels = NectoBackgroundPanels()
     private let exporterRuntime = NectoExporterRuntime()
+
     let cliInstaller = NectoCLIInstaller()
     let agentSkills = NectoAgentSkills()
     private(set) var presentationWindowID: UUID?
     @ObservationIgnored private var windows: [UUID: WeakWindow] = [:]
 
     private struct WeakWindow { weak var value: NectoWindowState? }
+
+    func prepareForTermination() async {
+        await exporterRuntime.shutdown()
+    }
 
     func registerWindow(_ state: NectoWindowState) { windows[state.id] = WeakWindow(value: state) }
 

@@ -93,9 +93,16 @@ export type NectoEvent = NectoEventEnvelope & (
   | { origin: "necto"; relatedPluginId?: string }
 );
 
+export interface NectoExporterShutdownContext {
+  /** Host deadline for normal app shutdown, in milliseconds since the Unix epoch. */
+  deadlineAt: number;
+}
+
 export interface NectoExporterOptions {
   /** Handle a newly accepted event. Persistence and external delivery belong to the exporter. */
   onEvent: (event: NectoEvent) => void | Promise<void>;
+  /** Finish work the exporter owns during normal app shutdown. The host waits up to five seconds. */
+  onShutdown?: (context: NectoExporterShutdownContext) => void | Promise<void>;
 }
 
 export type NectoDiagnosticLevel = "info" | "warning" | "failure";

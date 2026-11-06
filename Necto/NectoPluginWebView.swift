@@ -7,6 +7,7 @@ import NectoMacService
 import Foundation
 import SwiftUI
 import WebKit
+import os
 
 /// Loads a plugin's web assets and forwards its `NectoBridge` requests to the registry.
 struct NectoPluginWebView: NSViewRepresentable {
@@ -119,6 +120,11 @@ final class NectoWebPage {
         webView.loadHTMLString("", baseURL: nil)
         webView.removeFromSuperview()
     }
+
+    func shutdownExporter(deadlineAt: Date) async throws {
+        guard !invalidated else { return }
+        try await bridge.shutdownExporter(deadlineAt: deadlineAt)
+    }
 }
 
 @MainActor
@@ -132,6 +138,8 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
     private let diagnostics: NectoDiagnosticsLog?
     private var exporterRegistrationID: UUID?
     private var exporterRegistrationPending = false
+    private let exporterShutdown = OSAllocatedUnfairLock(initialState: false)
+    private var exporterShuttingDown: Bool { exporterShutdown.withLock { $0 } }
     private var documentID = UUID()
     private var exporterCleanup: Task<Void, Never>?
     weak var find: NectoFindSession?
@@ -237,6 +245,7 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         resetPage()
         recoveryTask?.cancel()
         recoveryTask = nil
+        guard !exporterShuttingDown else { return }
         let now = ContinuousClock().now
         if let lastTermination, now - lastTermination >= .seconds(60) {
             recentTerminations = 0
@@ -306,6 +315,32 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         invokeTasks.removeAll()
         for task in streamTasks.values { task.cancel() }
         streamTasks.removeAll()
+    }
+
+    func shutdownExporter(deadlineAt: Date) async throws {
+        guard !exporterShuttingDown else { return }
+        exporterShutdown.withLock { $0 = true }
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        let document = documentID
+        if let registrationID = exporterRegistrationID, let eventDispatcher {
+            exporterRegistrationID = nil
+            await eventDispatcher.unregisterExporter(registrationID: registrationID)
+        }
+        await exporterCleanup?.value
+        // The receiver enqueues accepted events on this queue. Submit their JS
+        // deliveries before submitting the shutdown callback, without a replay queue.
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        try Task.checkCancellation()
+        guard documentID == document, let webView else { return }
+        _ = try await webView.callAsyncJavaScript(
+            "await window.__nectoExporterShutdown?.({ deadlineAt }); return null;",
+            arguments: ["deadlineAt": deadlineAt.timeIntervalSince1970 * 1000],
+            in: nil,
+            contentWorld: .page
+        )
     }
 
     /// A device plugin carries the stylesheet from the app that built it. Reasserting
@@ -465,6 +500,14 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
             return Self.failureReply(.init(code: .operationUnavailable,
                 message: "Only an installed event exporter can receive usage events"))
         }
+        guard !exporterShuttingDown else {
+            return Self.failureReply(
+                .init(
+                    code: .operationUnavailable,
+                    message: "The exporter is shutting down"
+                )
+            )
+        }
         guard exporterRegistrationID == nil, !exporterRegistrationPending else {
             return Self.failureReply(.init(code: .operationUnavailable,
                 message: "This exporter is already registered"))
@@ -472,18 +515,24 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         exporterRegistrationPending = true
         let document = documentID
         await exporterCleanup?.value
-        guard documentID == document, !Task.isCancelled else {
+        guard documentID == document, !exporterShuttingDown, !Task.isCancelled else {
             return Self.failureReply(.init(code: .operationUnavailable, message: "The exporter document was closed"))
         }
         do {
-            let registrationID = try await eventDispatcher.registerExporter { [weak self] event in
-                // A serial main queue preserves acceptance order without a replay buffer.
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, self.documentID == document else { return }
-                    self.evaluate("window.__nectoExporterReceive?.(\(Self.jsObject(event.jsonValue)))")
+            let registrationID = try await eventDispatcher.registerExporter { [weak self, exporterShutdown] event in
+                guard let self else { return }
+                // Close delivery even if shutdown starts before registration returns.
+                // Holding the lock through enqueue also makes the shutdown barrier
+                // follow every accepted delivery on the serial main queue.
+                exporterShutdown.withLock { shuttingDown in
+                    guard !shuttingDown else { return }
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.documentID == document else { return }
+                        self.evaluate("window.__nectoExporterReceive?.(\(Self.jsObject(event.jsonValue)))")
+                    }
                 }
             }
-            guard documentID == document, !Task.isCancelled else {
+            guard documentID == document, !exporterShuttingDown, !Task.isCancelled else {
                 await eventDispatcher.unregisterExporter(registrationID: registrationID)
                 return Self.failureReply(.init(code: .operationUnavailable, message: "The exporter document was closed"))
             }

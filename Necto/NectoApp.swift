@@ -20,6 +20,11 @@ struct NectoApp: App {
         WindowGroup("Necto") {
             ContentView(model: model)
                 .environment(\.locale, selectedLanguage.locale)
+                .onAppear {
+                    delegate.prepareForTermination = { [model] in
+                        await model.prepareForTermination()
+                    }
+                }
         }
         .defaultSize(width: 1100, height: 720)
         // No title bar of its own. The toolbar carries the plugin's identity, and AppKit
@@ -74,7 +79,11 @@ extension Notification.Name {
 }
 
 /// Brings the window to the front even when launched outside an app bundle.
+@MainActor
 final class NectoAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    var prepareForTermination: (@MainActor () async -> Void)?
+    private var terminationTask: Task<Void, Never>?
+
     func applicationDidFinishLaunching(_: Notification) {
         UNUserNotificationCenter.current().delegate = self
         NSApplication.shared.setActivationPolicy(.regular)
@@ -83,6 +92,17 @@ final class NectoAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificatio
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         true
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let prepareForTermination else { return .terminateNow }
+        if terminationTask == nil {
+            terminationTask = Task {
+                await prepareForTermination()
+                sender.reply(toApplicationShouldTerminate: true)
+            }
+        }
+        return .terminateLater
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,

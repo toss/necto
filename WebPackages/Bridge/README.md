@@ -100,11 +100,19 @@ await necto.registerExporter({
 });
 ```
 
-The callback is installed before the registration request, so events can arrive
+The callbacks are installed before the registration request, so events can arrive
 before the promise resolves. This API does not require `necto.ready()`. Register
-once per page: a duplicate rejects without replacing the callback, and a failed
-registration removes its callback so it can be retried. The host unregisters the
-exporter when the page ends or the plugin is removed.
+once per page. A duplicate rejects without replacing the callbacks, and a failed
+registration removes them so it can be retried. The host unregisters the exporter
+when the page ends or the plugin is removed.
+
+Pass an optional `onShutdown({ deadlineAt })` callback to finish accepted work
+during normal app shutdown. New `onEvent` calls stop before the hook runs. The
+host waits up to five seconds for the hook's returned promise, and `deadlineAt`
+gives the absolute deadline in Unix epoch milliseconds. HTTP, storage and
+diagnostics remain available during the hook. The exporter owns any pending
+asynchronous `onEvent` work and can use the hook to flush or persist it. A thrown
+or rejected hook is reported as a local diagnostic.
 
 `NectoEvent` includes `eventId`, `occurredAt` (Unix milliseconds), `installationId`,
 `nectoVersion`, `eventName`, `params`, and an optional `channel` (`web` or `cli`).

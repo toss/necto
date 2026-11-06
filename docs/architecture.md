@@ -190,6 +190,22 @@ The registration token prevents an old runtime's cleanup from disconnecting a ne
 registration. Navigation and removal unregister the old document; a reloaded document
 must register again. No events from the gap are replayed.
 
+For normal app termination, an exporter may register
+`onShutdown({ deadlineAt })` alongside `onEvent`. `deadlineAt` is an absolute Unix
+timestamp in milliseconds. AppKit termination is deferred while the exporter
+runtime waits for the callback, up to five seconds in total. It stops delivery of
+new events first and submits already accepted deliveries before the shutdown
+callback. The page and ordinary HTTP, storage and diagnostic bridges remain usable
+until the callback completes, fails or the deadline expires. The runtime then
+invalidates the page and lets the app terminate, without waiting indefinitely for
+an unresolved JavaScript promise. Repeated quit requests do not restart the deadline.
+
+The exporter owns work it already accepted, including asynchronous `onEvent` work;
+the host does not drain a separate event queue or choose between sending and saving.
+An exporter without this optional hook finishes promptly. Removal, replacement and
+WebKit process crashes keep their existing immediate teardown behavior; the normal
+shutdown hook is not a crash-recovery guarantee.
+
 A dedicated Event Exporter page in native Settings shows installation information,
 plugin-ID exclusions and exporter diagnostics. It reads only the exporter source
 from the existing diagnostic log; copying from this page includes only that source.
