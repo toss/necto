@@ -234,9 +234,12 @@ are dropped and are not replayed after reconnection. A removed plugin's logger c
 be reused by a replacement registration with the same ID. A plugin without a panel
 can log too; Necto omits its version when no manifest is available.
 
-App logs currently omit the optional web/CLI `channel`: that invocation context is
-not yet propagated to app handlers. See [usage event delivery](architecture.md#usage-event-delivery)
-for the transport, registration and metadata rules.
+Logs inside a handler automatically retain the caller's `web` or `cli` channel.
+Awaited work and child tasks that inherit the handler's task context keep it too.
+A retained logger used independently, a detached task, or an unrelated callback
+omits the channel. You do not pass a channel to `logger.log()`.
+See [usage event delivery](architecture.md#usage-event-delivery) for transport,
+registration and metadata rules.
 
 ## The panel
 

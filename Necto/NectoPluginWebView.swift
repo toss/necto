@@ -409,7 +409,8 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
                     operationID: operationID,
                     input: Self.jsonValue(from: body["input"]),
                     target: target,
-                    expectedPrincipal: package.principal
+                    expectedPrincipal: package.principal,
+                    channel: .web
                 )
                 return Self.successReply(output)
             } catch {
@@ -533,7 +534,8 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
                 operationID: operationID,
                 input: Self.jsonValue(from: body["input"]),
                 target: target,
-                expectedPrincipal: package.principal
+                expectedPrincipal: package.principal,
+                channel: .web
             )
 
             streamTasks[subscriptionID] = Task { [weak self] in

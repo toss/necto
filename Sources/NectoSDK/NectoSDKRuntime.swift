@@ -16,6 +16,8 @@ import UIKit
 /// and handed the payload untouched, so adding a permission to an app never means
 /// changing this file.
 final class NectoSDKRuntime: @unchecked Sendable {
+    @TaskLocal private static var invocationChannel: NectoInvocationChannel?
+
     private let lock = NSLock()
     private var listener: NectoDeviceListener?
     private var task: Task<Void, Never>?
@@ -366,7 +368,10 @@ final class NectoSDKRuntime: @unchecked Sendable {
         switch registration.body {
         case let .once(body):
             do {
-                await send(NectoPluginResult(requestID: invocation.requestID, output: try await body(invocation.input)))
+                let output = try await Self.$invocationChannel.withValue(invocation.invocationChannel) {
+                    try await body(invocation.input)
+                }
+                await send(NectoPluginResult(requestID: invocation.requestID, output: output))
             } catch {
                 await send(NectoPluginResult(requestID: invocation.requestID, error: bridgeError(from: error)))
             }
@@ -381,7 +386,9 @@ final class NectoSDKRuntime: @unchecked Sendable {
                 }
 
                 do {
-                    try await body(invocation.input, out)
+                    try await Self.$invocationChannel.withValue(invocation.invocationChannel) {
+                        try await body(invocation.input, out)
+                    }
                     await send(NectoPluginResult(requestID: invocation.requestID))
                 } catch is CancellationError {
                     // The caller stopped listening. Nothing to report.
@@ -467,7 +474,8 @@ final class NectoSDKRuntime: @unchecked Sendable {
         let event = NectoPluginEvent(
             pluginID: pluginID,
             channel: "necto.usage",
-            payload: ["eventName": .string(eventName), "params": .object(params)]
+            payload: ["eventName": .string(eventName), "params": .object(params)],
+            invocationChannel: Self.invocationChannel
         )
         Task { [weak self] in
             guard let self,

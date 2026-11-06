@@ -37,6 +37,12 @@ public struct NectoPluginRegistration: Sendable, Hashable, Codable {
     }
 }
 
+/// Where a host invocation originated.
+public enum NectoInvocationChannel: String, Sendable, Hashable, Codable {
+    case web
+    case cli
+}
+
 /// App to host. An SDK plugin pushing data that a host adapter accumulates.
 ///
 /// `channel` is what a host adapter subscribes to. The transport never looks inside
@@ -45,11 +51,19 @@ public struct NectoPluginEvent: Sendable, Hashable, Codable {
     public let pluginID: String
     public let channel: String
     public let payload: NectoJSONValue
+    /// The host channel, if the event was logged in an invocation's execution context.
+    public let invocationChannel: NectoInvocationChannel?
 
-    public init(pluginID: String, channel: String, payload: NectoJSONValue) {
+    public init(
+        pluginID: String,
+        channel: String,
+        payload: NectoJSONValue,
+        invocationChannel: NectoInvocationChannel? = nil
+    ) {
         self.pluginID = pluginID
         self.channel = channel
         self.payload = payload
+        self.invocationChannel = invocationChannel
     }
 }
 
@@ -60,19 +74,22 @@ public struct NectoPluginInvocation: Sendable, Hashable, Codable {
     public let version: Int
     public let kind: NectoOperationKind
     public let input: NectoJSONValue
+    public let invocationChannel: NectoInvocationChannel?
 
     public init(
         requestID: String,
         name: String,
         version: Int,
         kind: NectoOperationKind,
-        input: NectoJSONValue
+        input: NectoJSONValue,
+        invocationChannel: NectoInvocationChannel? = nil
     ) {
         self.requestID = requestID
         self.name = name
         self.version = version
         self.kind = kind
         self.input = input
+        self.invocationChannel = invocationChannel
     }
 }
 

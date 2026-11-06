@@ -8,16 +8,40 @@ import NectoModel
 import Testing
 import WebKit
 
+private actor WebInvocationContextProbe: NectoOperationProvider {
+    nonisolated let descriptor: NectoBridgeDescriptor
+    private(set) var channels: [NectoInvocationChannel?] = []
+
+    init(kind: NectoOperationKind) {
+        descriptor = .init(binding: .init(name: "necto.desktop.context.\(kind.rawValue)", version: 1), kind: kind)
+    }
+
+    func invoke(input: NectoJSONValue, context: NectoInvocationContext) async throws -> NectoJSONValue {
+        channels.append(context.channel)
+        return ["ok": true]
+    }
+
+    func subscribe(input: NectoJSONValue, context: NectoInvocationContext) async throws
+        -> AsyncThrowingStream<NectoJSONValue, any Error> {
+        channels.append(context.channel)
+        return AsyncThrowingStream { continuation in
+            continuation.yield(["ok": true])
+            continuation.finish()
+        }
+    }
+}
+
 @Suite("Web event logging", .serialized, .timeLimit(.minutes(1)))
 @MainActor
 struct NectoWebLogTests {
     private func fixture(id: String = "com.example.web-log", version: String = "2.3.4",
                          source: NectoInstalledPackage.Source = .installed,
-                         exporter: Bool = false, installed: Bool = true) -> NectoInstalledPackage {
+                         exporter: Bool = false, installed: Bool = true,
+                         operations: [NectoOperation] = []) -> NectoInstalledPackage {
         let manifest = NectoPluginManifest(type: exporter ? .eventExporter : nil,
             id: id, name: "Web log fixture", description: "Synthetic web log test",
             version: version, author: "Example", icon: .init(systemName: "testtube.2"),
-            assets: ["index.html"], allowedOrigins: ["self"], operations: [])
+            assets: ["index.html"], allowedOrigins: ["self"], operations: operations)
         let archive = NectoPanelArchive(files: [.init(path: "index.html", data: Data("""
         <html><script>
         window.events = [];
@@ -88,6 +112,34 @@ struct NectoWebLogTests {
             page.invalidate()
             throw error
         }
+    }
+
+    @Test("Web invoke and subscribe establish channel without trusting payload metadata")
+    func webInvocationContext() async throws {
+        let registry = NectoPluginRegistry()
+        let once = WebInvocationContextProbe(kind: .once)
+        let stream = WebInvocationContextProbe(kind: .stream)
+        let probes = [once, stream]
+        for probe in probes { await registry.registerHostProvider(probe) }
+        let package = fixture(operations: probes.map { probe in
+            NectoOperation(
+                id: probe.descriptor.kind.rawValue,
+                title: "Context fixture",
+                description: "Records host-established invocation context",
+                kind: probe.descriptor.kind,
+                binding: probe.descriptor.binding,
+                inputSchema: [:],
+                outputSchema: [:],
+                timeoutMs: 1000
+            )
+        })
+        try await install(package, registry: registry)
+        let page = try await open(package, registry: registry)
+        defer { page.invalidate() }
+        try await expectSuccess(page, "{type:'invoke',operationID:'once',channel:'cli',input:{invocationChannel:'cli'}}")
+        try await expectSuccess(page, "{type:'subscribe',operationID:'stream',channel:'cli',input:{invocationChannel:'cli'}}")
+        #expect(await once.channels == [.web])
+        #expect(await stream.channels == [.web])
     }
 
     @Test("Device and desktop documents use host metadata and the web channel even when hidden")

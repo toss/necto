@@ -149,8 +149,7 @@ Usage events use a host-side dispatcher, separate from diagnostic logs and ordin
 operation execution. An installed desktop event exporter receives events through its hidden WebView.
 Web plugins can record explicit events with `necto.log(eventName, params?)`.
 App plugins record through `NectoRegistrar.logger` over the existing `plugin.event`
-transport. Host instrumentation, invocation-channel propagation and HTTP delivery
-are separate follow-up work.
+transport. Host instrumentation and HTTP delivery are separate follow-up work.
 
 ```text
 Host recording entry -> Registry.recordEvent -> EventDispatcher -> registered exporter
@@ -257,9 +256,21 @@ stop working after their registration is removed, including after the same ID is
 registered again. Events emitted before the host receives registration may also be
 dropped. The host's collection policy and exporter registration still decide delivery.
 
-App handler invocations do not yet carry their web/CLI origin. App logs therefore
-omit exported `channel` in this implementation, even when an existing handler was
-called through those surfaces. No handler is automatically instrumented.
+WebView invoke/subscribe calls establish `web`; control-socket calls establish `cli`.
+The registry passes this through `NectoInvocationContext` and the device bridge.
+The generic invocation and event messages carry an optional `invocationChannel`,
+using the shared `NectoInvocationChannel` enum. This metadata is separate from
+operation input, event parameters and the event's routing `channel` string.
+Older messages without the optional field still decode and leave it absent.
+
+The SDK scopes the channel to each once or stream handler using a task-local value.
+`logger.log()` captures that value before scheduling its asynchronous send. Concurrent
+requests remain isolated. Awaited work and inheriting child tasks keep their channel,
+including a child task that continues after the handler returns. Detached tasks and
+callbacks outside an inherited invocation context omit it; the SDK does not guess
+from a thread, time or retained logger. The host copies the returned invocation
+channel into the exported event. The logger API is unchanged and no handler is
+automatically instrumented.
 
 ### Event envelope
 

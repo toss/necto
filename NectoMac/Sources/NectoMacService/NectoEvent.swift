@@ -7,11 +7,6 @@ import NectoModel
 
 /// Usage data handed to an exporter, separate from the host's diagnostic log.
 public struct NectoEvent: Sendable, Equatable {
-    public enum Channel: String, Sendable {
-        case web
-        case cli
-    }
-
     /// Established by the host, never read from plugin-supplied event properties.
     public enum Source: Sendable, Equatable {
         case device(id: String, version: String?)
@@ -70,8 +65,8 @@ public struct NectoEvent: Sendable, Equatable {
     public let installationID: String
     public let nectoVersion: String
     public let source: Source
-    /// The recording path, not proof of a user gesture. Nil outside web or CLI paths.
-    public let channel: Channel?
+    /// The originating web or CLI path, not proof of a user gesture.
+    public let channel: NectoInvocationChannel?
     public let input: Input
 
     public var jsonValue: NectoJSONValue {

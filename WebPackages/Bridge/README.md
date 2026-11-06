@@ -84,7 +84,8 @@ The host supplies event identity, timestamps, installation and plugin metadata.
 Events from the WebView have `channel: "web"`, including timers and background
 callbacks. Use the same event name for the same meaning across web and CLI entry
 points; the channel distinguishes where it came from. This API records web-plugin
-events; CLI and app logging APIs are separate work.
+events. App plugins use `NectoRegistrar.logger`; calls originating in web or CLI
+handlers carry that channel automatically.
 
 ## Event exporters and diagnostics
 

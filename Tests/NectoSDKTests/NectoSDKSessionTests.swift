@@ -45,23 +45,19 @@ private struct CatalogPlugin: NectoPlugin {
 
 private final class LoggingPlugin: NectoPlugin, @unchecked Sendable {
     let id = "com.example.app-logger"
-    let hasHandler: Bool
+    private let registerHandlers: @Sendable (NectoRegistrar) -> Void
     private let lock = NSLock()
     private var storedLogger: NectoPluginLogger?
 
-    init(hasHandler: Bool = false) { self.hasHandler = hasHandler }
+    init(registerHandlers: @escaping @Sendable (NectoRegistrar) -> Void = { _ in }) {
+        self.registerHandlers = registerHandlers
+    }
 
     var logger: NectoPluginLogger? { lock.withLock { storedLogger } }
 
     func register(_ necto: NectoRegistrar) {
         lock.withLock { storedLogger = necto.logger }
-        if hasHandler {
-            let logger = necto.logger
-            necto.handle("logger.echo") { input in
-                logger.log("handler.called", params: ["input": input])
-                return input
-            }
-        }
+        registerHandlers(necto)
     }
 }
 
@@ -133,10 +129,22 @@ private struct SessionHarness: Sendable {
     }
 }
 
-private func invoke(_ host: NectoMessageSession, id: String, name: String, kind: NectoOperationKind = .once) async throws {
-    try await host.send(NectoEnvelope(type: .pluginInvoke, encoding: NectoPluginInvocation(
-        requestID: id, name: "necto.device.session." + name, version: 1, kind: kind, input: ["id": .string(id)]
-    )))
+private func invoke(
+    _ host: NectoMessageSession,
+    id: String,
+    name: String,
+    kind: NectoOperationKind = .once,
+    invocationChannel: NectoInvocationChannel? = nil
+) async throws {
+    let invocation = NectoPluginInvocation(
+        requestID: id,
+        name: "necto.device.session." + name,
+        version: 1,
+        kind: kind,
+        input: ["id": .string(id)],
+        invocationChannel: invocationChannel
+    )
+    try await host.send(NectoEnvelope(type: .pluginInvoke, encoding: invocation))
 }
 
 private func result(_ host: NectoMessageSession) async throws -> NectoPluginResult {
@@ -147,10 +155,19 @@ private func result(_ host: NectoMessageSession) async throws -> NectoPluginResu
 
 @Suite("SDK session ownership", .timeLimit(.minutes(1)))
 struct NectoSDKSessionTests {
-    @Test("a retained logger sends its bound plugin identity and payload alongside handler results")
-    func pluginLogger() async throws {
+    @Test(
+        "retained and handler logs carry their own context alongside handler results",
+        arguments: [nil, .web, .cli] as [NectoInvocationChannel?]
+    )
+    func pluginLogger(invocationChannel: NectoInvocationChannel?) async throws {
         let harness = SessionHarness()
-        let plugin = LoggingPlugin(hasHandler: true)
+        let plugin = LoggingPlugin { necto in
+            let logger = necto.logger
+            necto.handle("logger.echo") { input in
+                logger.log("handler.called", params: input.objectValue ?? [:])
+                return input
+            }
+        }
         #expect(harness.runtime.register(plugin))
         let logger = try #require(plugin.logger)
         let (host, worker) = try await harness.connect()
@@ -166,23 +183,128 @@ struct NectoSDKSessionTests {
             let event = try envelope.decode(NectoPluginEvent.self)
             #expect(event.pluginID == plugin.id)
             #expect(event.channel == "necto.usage")
+            #expect(event.invocationChannel == nil)
             #expect(event.payload == [
                 "eventName": "callback.finished",
                 "params": ["count": 2, "nested": ["ok": true]],
             ])
 
-            try await host.send(NectoEnvelope(type: .pluginInvoke, encoding: NectoPluginInvocation(
-                requestID: "logged-handler", name: "necto.device.logger.echo", version: 1,
-                kind: .once, input: ["value": true]
-            )))
+            let spoofedChannel: NectoInvocationChannel = invocationChannel == .cli ? .web : .cli
+            let input: NectoJSONValue = [
+                "value": true,
+                "channel": "example",
+                "invocationChannel": .string(spoofedChannel.rawValue),
+            ]
+            let invocation = NectoPluginInvocation(
+                requestID: "logged-handler",
+                name: "necto.device.logger.echo",
+                version: 1,
+                kind: .once,
+                input: input,
+                invocationChannel: invocationChannel
+            )
+            try await host.send(NectoEnvelope(type: .pluginInvoke, encoding: invocation))
             let replies = [try await host.receive(NectoEnvelope.self), try await host.receive(NectoEnvelope.self)]
             let logged = try #require(replies.first { $0.type == .pluginEvent }).decode(NectoPluginEvent.self)
             #expect(logged.pluginID == plugin.id)
-            #expect(logged.payload == ["eventName": "handler.called", "params": ["input": ["value": true]]])
+            #expect(logged.channel == "necto.usage")
+            #expect(logged.invocationChannel == invocationChannel)
+            #expect(logged.payload == ["eventName": "handler.called", "params": input])
             let reply = try #require(replies.first { $0.type == .pluginResult }).decode(NectoPluginResult.self)
             #expect(reply.requestID == "logged-handler")
-            #expect(reply.output == ["value": true])
+            #expect(reply.output == input)
             #expect(reply.isFinal)
+        }
+        host.close()
+        await worker.value
+    }
+
+    @Test("overlapping once and stream requests isolate their channel and child tasks inherit it")
+    func invocationLoggerContext() async throws {
+        let harness = SessionHarness()
+        let webStarted = AsyncStream<Void>.makeStream()
+        let releaseWeb = AsyncStream<Void>.makeStream()
+        let releaseChild = AsyncStream<Void>.makeStream()
+        defer {
+            releaseWeb.continuation.finish()
+            releaseChild.continuation.finish()
+        }
+        let plugin = LoggingPlugin { necto in
+            let logger = necto.logger
+            necto.handle("session.logOnce") { input in
+                webStarted.continuation.yield(())
+                for await _ in releaseWeb.stream {}
+                Task {
+                    for await _ in releaseChild.stream {}
+                    logger.log("child.after.return")
+                }
+                await Task.detached {
+                    logger.log("detached")
+                }.value
+                logger.log("once.handler")
+                return input
+            }
+            necto.handle("session.logStream") { input, out in
+                await out.send(input)
+                logger.log("stream.handler")
+            }
+        }
+        #expect(harness.runtime.register(plugin))
+        let logger = try #require(plugin.logger)
+        let (host, worker) = try await harness.connect()
+        defer { host.close(); harness.runtime.stop(); worker.cancel() }
+        try await host.handshake(timeout: .seconds(3)) {
+            _ = try await host.receive(NectoEnvelope.self)
+            try await invoke(host, id: "web-request", name: "logOnce", invocationChannel: .web)
+            var started = webStarted.stream.makeAsyncIterator()
+            try #require(await started.next() != nil)
+
+            logger.log("unrelated")
+            let unrelated = try await host.receive(NectoEnvelope.self).decode(NectoPluginEvent.self)
+            #expect(unrelated.payload["eventName"] == "unrelated")
+            #expect(unrelated.invocationChannel == nil)
+
+            try await invoke(host, id: "cli-request", name: "logStream", kind: .stream, invocationChannel: .cli)
+            var streamResults: [NectoPluginResult] = []
+            var streamEvents: [NectoPluginEvent] = []
+            for _ in 0..<3 {
+                let envelope = try await host.receive(NectoEnvelope.self)
+                if envelope.type == .pluginResult {
+                    streamResults.append(try envelope.decode(NectoPluginResult.self))
+                } else {
+                    streamEvents.append(try envelope.decode(NectoPluginEvent.self))
+                }
+            }
+            #expect(streamResults == [
+                NectoPluginResult(requestID: "cli-request", output: ["id": "cli-request"], isFinal: false),
+                NectoPluginResult(requestID: "cli-request"),
+            ])
+            let streamEvent = try #require(streamEvents.first)
+            #expect(streamEvents.count == 1)
+            #expect(streamEvent.payload["eventName"] == "stream.handler")
+            #expect(streamEvent.invocationChannel == .cli)
+
+            releaseWeb.continuation.finish()
+            let onceMessages = try await [
+                host.receive(NectoEnvelope.self),
+                host.receive(NectoEnvelope.self),
+                host.receive(NectoEnvelope.self),
+            ]
+            let onceResult = try #require(onceMessages.first { $0.type == .pluginResult })
+                .decode(NectoPluginResult.self)
+            #expect(onceResult == NectoPluginResult(requestID: "web-request", output: ["id": "web-request"]))
+            let onceEvents = try onceMessages.filter { $0.type == .pluginEvent }.map { envelope in
+                try envelope.decode(NectoPluginEvent.self)
+            }
+            let web = try #require(onceEvents.first { $0.payload["eventName"] == "once.handler" })
+            let detached = try #require(onceEvents.first { $0.payload["eventName"] == "detached" })
+            #expect(web.invocationChannel == .web)
+            #expect(detached.invocationChannel == nil)
+
+            releaseChild.continuation.finish()
+            let child = try await host.receive(NectoEnvelope.self).decode(NectoPluginEvent.self)
+            #expect(child.payload["eventName"] == "child.after.return")
+            #expect(child.invocationChannel == .web)
         }
         host.close()
         await worker.value

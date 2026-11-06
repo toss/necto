@@ -34,6 +34,23 @@ struct NectoEventRegistryTests {
         #expect(event.occurredAt == Date(timeIntervalSince1970: 123))
     }
 
+    @Test("app usage exports the channel from invocation metadata", arguments: [NectoInvocationChannel.web, .cli])
+    func appUsageWithInvocationChannel(channel: NectoInvocationChannel) async throws {
+        let fixture = try await EventRegistryFixture.make()
+        let target = NectoTarget(deviceID: "device", appBundleID: "com.example.app")
+        await fixture.registry.setDeviceProviders([], for: target, pluginID: "app-logger", isRegistered: true)
+        try await fixture.registry.recordDeviceEvent(
+            NectoPluginEvent(
+                pluginID: "app-logger", channel: "necto.usage", payload: eventInput, invocationChannel: channel
+            ),
+            from: target
+        )
+
+        let event = try #require(fixture.receiver.events.first)
+        #expect(event.channel == channel)
+        #expect(event.jsonValue["channel"] == .string(channel.rawValue))
+    }
+
     @Test("app usage derives versions only from its own target's carried manifest")
     func appUsageVersionsStayTargetScoped() async throws {
         let fixture = try await EventRegistryFixture.make()
@@ -89,7 +106,7 @@ struct NectoEventRegistryTests {
             ["eventName": "app.started", "params": ["value": .number(.infinity)]],
         ]
         for field in ["eventId", "occurredAt", "installationId", "nectoVersion", "origin",
-                      "pluginId", "pluginVersion", "relatedPluginId", "source", "channel"] {
+                      "pluginId", "pluginVersion", "relatedPluginId", "source", "channel", "invocationChannel"] {
             invalid.append(.object(["eventName": "app.started", field: "spoofed"]))
         }
         for payload in invalid {

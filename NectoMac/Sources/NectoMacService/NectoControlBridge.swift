@@ -105,7 +105,7 @@ public struct NectoControlBridge: NectoControlHandling {
         let plugin = try await requirePlugin(pluginID, in: registry.installedPlugins(for: target))
         return try await registry.invoke(
             pluginID: pluginID, operationID: operationID, input: input,
-            target: target, expectedPrincipal: plugin.principal
+            target: target, expectedPrincipal: plugin.principal, channel: .cli
         )
     }
 
@@ -118,7 +118,7 @@ public struct NectoControlBridge: NectoControlHandling {
         let plugin = try await requirePlugin(pluginID, in: registry.installedPlugins(for: target))
         let stream = try await registry.subscribe(
             pluginID: pluginID, operationID: operationID, input: input,
-            target: target, expectedPrincipal: plugin.principal
+            target: target, expectedPrincipal: plugin.principal, channel: .cli
         )
         for try await event in stream { onEvent(event) }
     }

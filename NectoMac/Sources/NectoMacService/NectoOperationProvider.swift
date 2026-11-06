@@ -21,15 +21,18 @@ public struct NectoInvocationContext: Sendable {
     public let principal: NectoPluginPrincipal
     public let target: NectoTarget?
     public let requestID: String
+    public let channel: NectoInvocationChannel?
 
     public init(
         principal: NectoPluginPrincipal,
         target: NectoTarget?,
-        requestID: String = UUID().uuidString
+        requestID: String = UUID().uuidString,
+        channel: NectoInvocationChannel? = nil
     ) {
         self.principal = principal
         self.target = target
         self.requestID = requestID
+        self.channel = channel
     }
 }
 

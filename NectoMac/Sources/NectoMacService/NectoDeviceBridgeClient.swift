@@ -35,7 +35,8 @@ public actor NectoDeviceBridgeClient {
         version: Int,
         kind: NectoOperationKind,
         input: NectoJSONValue,
-        target: NectoTarget
+        target: NectoTarget,
+        channel: NectoInvocationChannel? = nil
     ) async throws -> NectoJSONValue {
         let requestID = UUID().uuidString
 
@@ -50,7 +51,10 @@ public actor NectoDeviceBridgeClient {
                 begin(requestID: requestID, continuation: continuation, target: target)
                 Task {
                     do {
-                        try await self.send(requestID: requestID, name: name, version: version, kind: kind, input: input, target: target)
+                        try await self.send(
+                            requestID: requestID, name: name, version: version, kind: kind,
+                            input: input, target: target, channel: channel
+                        )
                     } catch {
                         self.resume(requestID: requestID, throwing: error)
                     }
@@ -94,7 +98,8 @@ public actor NectoDeviceBridgeClient {
         name: String,
         version: Int,
         input: NectoJSONValue,
-        target: NectoTarget
+        target: NectoTarget,
+        channel: NectoInvocationChannel? = nil
     ) async throws -> AsyncThrowingStream<NectoJSONValue, any Error> {
         let requestID = UUID().uuidString
 
@@ -107,7 +112,10 @@ public actor NectoDeviceBridgeClient {
             }
         }
 
-        try await send(requestID: requestID, name: name, version: version, kind: .stream, input: input, target: target)
+        try await send(
+            requestID: requestID, name: name, version: version, kind: .stream,
+            input: input, target: target, channel: channel
+        )
         return stream
     }
 
@@ -154,14 +162,16 @@ public actor NectoDeviceBridgeClient {
         version: Int,
         kind: NectoOperationKind,
         input: NectoJSONValue,
-        target: NectoTarget
+        target: NectoTarget,
+        channel: NectoInvocationChannel?
     ) async throws {
         let invocation = NectoPluginInvocation(
             requestID: requestID,
             name: name,
             version: version,
             kind: kind,
-            input: input
+            input: input,
+            invocationChannel: channel
         )
         try await messenger.send(NectoEnvelope(type: .pluginInvoke, encoding: invocation), to: target)
     }
@@ -206,20 +216,23 @@ public struct NectoDeviceBridgeProvider: NectoOperationProvider {
         descriptor = contract
     }
 
-    public func invoke(input: NectoJSONValue, context _: NectoInvocationContext) async throws -> NectoJSONValue {
+    public func invoke(input: NectoJSONValue, context: NectoInvocationContext) async throws -> NectoJSONValue {
         try await appBridge.invoke(
             name: name,
             version: version,
             kind: descriptor.kind,
             input: input,
-            target: target
+            target: target,
+            channel: context.channel
         )
     }
 
     public func subscribe(
         input: NectoJSONValue,
-        context _: NectoInvocationContext
+        context: NectoInvocationContext
     ) async throws -> AsyncThrowingStream<NectoJSONValue, any Error> {
-        try await appBridge.subscribe(name: name, version: version, input: input, target: target)
+        try await appBridge.subscribe(
+            name: name, version: version, input: input, target: target, channel: context.channel
+        )
     }
 }

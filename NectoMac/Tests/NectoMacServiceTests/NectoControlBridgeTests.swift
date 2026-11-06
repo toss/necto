@@ -12,7 +12,8 @@ private struct ScopeProvider: NectoOperationProvider {
     func invoke(input: NectoJSONValue, context: NectoInvocationContext) async throws -> NectoJSONValue {
         ["source": .string(context.principal.sourceIdentity),
          "device": context.target.map { .string($0.deviceID) } ?? .null,
-         "app": context.target.map { .string($0.appBundleID) } ?? .null]
+         "app": context.target.map { .string($0.appBundleID) } ?? .null,
+         "channel": context.channel.map { .string($0.rawValue) } ?? .null]
     }
     func subscribe(input: NectoJSONValue, context: NectoInvocationContext) async throws -> AsyncThrowingStream<NectoJSONValue, any Error> {
         let value = try await invoke(input: input, context: context)
@@ -69,6 +70,7 @@ struct NectoControlBridgeTests {
             #expect(result["source"] == .string("owner-\(index)"))
             #expect(result["app"] == .string(target.appBundleID))
             #expect(result["device"] == .string(target.deviceID))
+            #expect(result["channel"] == "cli")
             await #expect(throws: NectoBridgeError.self) {
                 try await bridge.invoke(pluginID: "shared", operationID: "read", input: ["unexpected": true],
                     app: target.appBundleID, device: target.deviceID, desktop: false)

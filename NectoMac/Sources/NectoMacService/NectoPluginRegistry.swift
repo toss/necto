@@ -274,7 +274,7 @@ public actor NectoPluginRegistry {
         input: NectoJSONValue,
         target: NectoTarget?,
         expectedPrincipal: NectoPluginPrincipal,
-        channel: NectoEvent.Channel? = nil
+        channel: NectoInvocationChannel? = nil
     ) async throws {
         guard let plugin = plugin(id: pluginID, target: target) else {
             throw NectoBridgeError(code: .operationNotFound, message: "The recording plugin is not installed")
@@ -304,7 +304,9 @@ public actor NectoPluginRegistry {
         }
         let input = try NectoEvent.Input(jsonValue: event.payload)
         let version = deviceInstalled[target]?[event.pluginID]?.manifest.version
-        await eventDispatcher?.record(input, source: .device(id: event.pluginID, version: version))
+        await eventDispatcher?.record(
+            input, source: .device(id: event.pluginID, version: version), channel: event.invocationChannel
+        )
     }
 
     public func invoke(
@@ -312,7 +314,8 @@ public actor NectoPluginRegistry {
         operationID: String,
         input: NectoJSONValue = .object([:]),
         target: NectoTarget?,
-        expectedPrincipal: NectoPluginPrincipal? = nil
+        expectedPrincipal: NectoPluginPrincipal? = nil,
+        channel: NectoInvocationChannel? = nil
     ) async throws -> NectoJSONValue {
         let resolved = try resolve(
             pluginID: pluginID,
@@ -325,7 +328,8 @@ public actor NectoPluginRegistry {
 
         let context = NectoInvocationContext(
             principal: resolved.plugin.principal,
-            target: target
+            target: target,
+            channel: channel
         )
 
         let output: NectoJSONValue
@@ -362,7 +366,8 @@ public actor NectoPluginRegistry {
         operationID: String,
         input: NectoJSONValue = .object([:]),
         target: NectoTarget?,
-        expectedPrincipal: NectoPluginPrincipal? = nil
+        expectedPrincipal: NectoPluginPrincipal? = nil,
+        channel: NectoInvocationChannel? = nil
     ) async throws -> AsyncThrowingStream<NectoJSONValue, any Error> {
         let resolved = try resolve(
             pluginID: pluginID,
@@ -375,7 +380,8 @@ public actor NectoPluginRegistry {
 
         let context = NectoInvocationContext(
             principal: resolved.plugin.principal,
-            target: target
+            target: target,
+            channel: channel
         )
         try Task.checkCancellation()
         let id = UUID()

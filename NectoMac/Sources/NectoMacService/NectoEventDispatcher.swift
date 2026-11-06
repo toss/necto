@@ -61,7 +61,7 @@ public actor NectoEventDispatcher {
     public func record(
         _ input: NectoEvent.Input,
         source: NectoEvent.Source,
-        channel: NectoEvent.Channel? = nil
+        channel: NectoInvocationChannel? = nil
     ) {
         let event = NectoEvent(
             eventID: UUID(), occurredAt: now(), installationID: installationID,

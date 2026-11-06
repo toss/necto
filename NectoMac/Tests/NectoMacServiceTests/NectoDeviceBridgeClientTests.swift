@@ -9,6 +9,7 @@ import Testing
 @testable import NectoMacService
 
 private let target = NectoTarget(deviceID: "device-1", appBundleID: "com.example.app")
+private let principal = NectoPluginPrincipal(pluginID: "variables", sourceIdentity: "test")
 
 /// Stands in for a connected app: records what the host sent and lets a test answer
 /// as the app would.
@@ -46,22 +47,25 @@ private final class FakeApp: NectoDeviceMessenger, @unchecked Sendable {
     }
 }
 
-@Test func invokeTravelsToTheAppAndComesBack() async throws {
+@Test(arguments: [nil, .web, .cli] as [NectoInvocationChannel?])
+func invokeTravelsToTheAppAndComesBack(channel: NectoInvocationChannel?) async throws {
     let app = FakeApp()
     let client = NectoDeviceBridgeClient(messenger: app)
+    let provider = NectoDeviceBridgeProvider(
+        contract: NectoBridgeDescriptor(binding: .init(name: "com.example.variables", version: 1), kind: .once),
+        target: target, appBridge: client
+    )
 
-    async let output = client.invoke(
-        name: "com.example.variables",
-        version: 1,
-        kind: .once,
+    async let output = provider.invoke(
         input: ["scope": "all"],
-        target: target
+        context: NectoInvocationContext(principal: principal, target: target, channel: channel)
     )
 
     let invocation = try await app.firstInvocation()
     #expect(invocation.name == "com.example.variables")
     #expect(invocation.version == 1)
     #expect(invocation.input["scope"]?.stringValue == "all")
+    #expect(app.envelopes.first?.payload["invocationChannel"] == channel.map { .string($0.rawValue) })
 
     await client.receive(NectoPluginResult(requestID: invocation.requestID, output: ["count": 3]))
     #expect(try await output == ["count": 3])
@@ -90,18 +94,22 @@ private final class FakeApp: NectoDeviceMessenger, @unchecked Sendable {
     await #expect(throws: NectoBridgeError.self) { try await output.value }
 }
 
-@Test func streamYieldsEventsUntilTheFinalResult() async throws {
+@Test(arguments: [nil, .web, .cli] as [NectoInvocationChannel?])
+func streamYieldsEventsUntilTheFinalResult(channel: NectoInvocationChannel?) async throws {
     let app = FakeApp()
     let client = NectoDeviceBridgeClient(messenger: app)
+    let provider = NectoDeviceBridgeProvider(
+        contract: NectoBridgeDescriptor(binding: .init(name: "com.example.variables.stream", version: 1), kind: .stream),
+        target: target, appBridge: client
+    )
 
-    let stream = try await client.subscribe(
-        name: "com.example.variables.stream",
-        version: 1,
+    let stream = try await provider.subscribe(
         input: .object([:]),
-        target: target
+        context: NectoInvocationContext(principal: principal, target: target, channel: channel)
     )
     let invocation = try await app.firstInvocation()
     #expect(invocation.kind == .stream)
+    #expect(app.envelopes.first?.payload["invocationChannel"] == channel.map { .string($0.rawValue) })
 
     await client.receive(NectoPluginResult(requestID: invocation.requestID, output: ["n": 1], isFinal: false))
     await client.receive(NectoPluginResult(requestID: invocation.requestID, output: ["n": 2], isFinal: false))
