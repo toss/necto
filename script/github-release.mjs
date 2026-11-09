@@ -65,6 +65,9 @@ export function release(mode, version, commit, {
   if (mode === "prepare") return target;
 
   const names = [`Necto-${version}.dmg`, `Necto-${version}.dmg.sha256`, `necto-bridge-${version}.tgz`, `create-necto-plugin-${version}.tgz`];
+  if (command("git", ["ls-tree", "--name-only", target, "--", "WebPackages/HTTPExporter/package.json"])) {
+    names.push(`necto-http-exporter-${version}.tgz`);
+  }
   const files = names.map((name) => {
     const data = readFileSync(join(directory, name));
     if (!data.length) throw new Error(`Empty release artifact: ${name}`);

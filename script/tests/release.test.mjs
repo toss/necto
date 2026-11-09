@@ -16,6 +16,7 @@ const artifacts = [
   `Necto-${version}.dmg.sha256`,
   `necto-bridge-${version}.tgz`,
   `create-necto-plugin-${version}.tgz`,
+  `necto-http-exporter-${version}.tgz`,
 ];
 
 // Run the real release script, but never build, sign, tag, push or contact GitHub.
@@ -63,14 +64,19 @@ function fakeTool() {
     case "hdiutil":
       return fs.writeFileSync(args.at(-1), "fixture disk image\n");
     case "pack-web-package.mjs": {
-      const prefix = args[0] === "WebPackages/Bridge" ? "necto-bridge" : "create-necto-plugin";
+      const prefix = {
+        "WebPackages/Bridge": "necto-bridge",
+        "WebPackages/CreateNectoPlugin": "create-necto-plugin",
+        "WebPackages/HTTPExporter": "necto-http-exporter",
+      }[args[0]];
+      if (!prefix) throw new Error(`Unexpected web package: ${args[0]}`);
       return fs.writeFileSync(join(args[2], `${prefix}-${args[1]}.tgz`), `fixture ${prefix}\n`);
     }
   }
   throw new Error(`Unexpected release command: ${name} ${args.join(" ")}`);
 }
 
-function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScript = false } = {}) {
+function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScript = false, olderSource = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), "necto-release test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   for (const path of ["script", "bin", "tmp", "Build/bin", "Build/Products/Necto.app/Contents/MacOS"]) {
@@ -92,6 +98,10 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScrip
   writeFileSync(join(root, "publications.jsonl"), "");
   writeFileSync(join(root, "commands.jsonl"), "");
   writeFileSync(join(root, "xcodebuild.jsonl"), "");
+  if (!olderSource) {
+    mkdirSync(join(root, "WebPackages/HTTPExporter"), { recursive: true });
+    writeFileSync(join(root, "WebPackages/HTTPExporter/package.json"), "{}");
+  }
   const tool = join(root, "fake-tool.cjs");
   writeFileSync(tool, `#!/usr/bin/env node\n(${fakeTool.toString()})();\n`, { mode: 0o755 });
   for (const name of ["git", "gh", "xcodebuild", "swift", "codesign", "yarn", "hdiutil", "plutil", "xcrun"]) {
@@ -123,9 +133,9 @@ function runRelease(t, { flags = [], env = {}, expectedStatus = 0, externalScrip
   return root;
 }
 
-function verifyArtifacts(root) {
+function verifyArtifacts(root, expected = artifacts) {
   assert.equal(readFileSync(join(root, "Build/Products/Necto.app/Contents/Resources/NectoMac_necto-cli.bundle/Skills/necto/SKILL.md"), "utf8"), "fixture skill\n");
-  for (const name of artifacts) assert.ok(readFileSync(join(root, "Build", name)).length > 0);
+  for (const name of expected) assert.ok(readFileSync(join(root, "Build", name)).length > 0);
   const hash = createHash("sha256").update(readFileSync(join(root, "Build", artifacts[0]))).digest("hex");
   assert.equal(readFileSync(join(root, "Build", `${artifacts[0]}.sha256`), "utf8"), `${hash}  ${artifacts[0]}\n`);
   assert.equal(existsSync(join(root, "Build", `Necto-${version}-SHA256SUMS`)), false);
@@ -172,6 +182,14 @@ test("a dry run can rebuild an existing tag only at its original commit", (t) =>
   });
   verifyArtifacts(root);
   assert.equal(readFileSync(join(root, "publications.jsonl"), "utf8"), "");
+});
+
+test("an older tagged checkout packages only the web packages it contains", (t) => {
+  const root = runRelease(t, {
+    flags: ["--dry-run"], env: { NECTO_RELEASE_EXISTING_TAG: "fixture-head" }, externalScript: true, olderSource: true,
+  });
+  verifyArtifacts(root, artifacts.slice(0, -1));
+  assert.equal(existsSync(join(root, "Build", artifacts.at(-1))), false);
 });
 
 test("publishing ad-hoc signs and verifies the embedded CLI and app without credentials", (t) => {

@@ -1,0 +1,49 @@
+{
+  "name": "@necto/http-exporter",
+  "version": "0.1.0",
+  "description": "Batch and send Necto events to an HTTPS endpoint.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/toss/necto.git",
+    "directory": "WebPackages/HTTPExporter"
+  },
+  "homepage": "https://github.com/toss/necto/tree/main/WebPackages/HTTPExporter#readme",
+  "bugs": "https://github.com/toss/necto/issues",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "prepack": "yarn build",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@necto/bridge": "*"
+  },
+  "devDependencies": {
+    "@necto/bridge": "workspace:*",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.7"
+  }
+}

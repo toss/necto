@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "type": "event-exporter",
+  "id": "com.example.http-exporter",
+  "name": "HTTP Exporter Example",
+  "description": "Sends Necto events to the configured HTTPS endpoint.",
+  "version": "0.1.0",
+  "author": "Necto",
+  "icon": { "systemName": "network" },
+  "assets": ["index.html", "assets"],
+  "allowedOrigins": ["self"],
+  "operations": [
+    {
+      "id": "exporter.http.request",
+      "title": "Send events",
+      "description": "Send a batch to the configured HTTPS endpoint.",
+      "kind": "once",
+      "binding": { "name": "necto.desktop.http.request", "version": 1 },
+      "inputSchema": {
+        "type": "object",
+        "required": ["url", "method"],
+        "properties": {
+          "url": { "type": "string" },
+          "method": { "type": "string", "enum": ["POST"] },
+          "headers": { "type": "object" },
+          "bodyBase64": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["status", "headers", "bodyBase64"],
+        "properties": {
+          "status": { "type": "integer" },
+          "headers": { "type": "object" },
+          "bodyBase64": { "type": "string" }
+        }
+      },
+      "timeoutMs": 30000
+    },
+    {
+      "id": "exporter.storage.get",
+      "title": "Read pending events",
+      "description": "Restore events saved by this exporter.",
+      "kind": "once",
+      "binding": { "name": "necto.desktop.storage.get", "version": 1 },
+      "inputSchema": {
+        "type": "object",
+        "required": ["scope", "key"],
+        "properties": {
+          "scope": { "enum": ["plugin"] },
+          "key": { "enum": ["http-exporter.pending"] }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["found"],
+        "properties": { "found": { "type": "boolean" } }
+      },
+      "timeoutMs": 3000
+    },
+    {
+      "id": "exporter.storage.set",
+      "title": "Save pending events",
+      "description": "Save a pending event queue for later delivery.",
+      "kind": "once",
+      "binding": { "name": "necto.desktop.storage.set", "version": 1 },
+      "inputSchema": {
+        "type": "object",
+        "required": ["scope", "key", "value"],
+        "properties": {
+          "scope": { "enum": ["plugin"] },
+          "key": { "enum": ["http-exporter.pending"] },
+          "value": {
+            "type": "object",
+            "required": ["version", "events"],
+            "properties": {
+              "version": { "type": "integer", "enum": [1] },
+              "events": { "type": "array", "items": { "type": "object" } }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["success"],
+        "properties": { "success": { "type": "boolean" } }
+      },
+      "timeoutMs": 3000
+    },
+    {
+      "id": "exporter.storage.remove",
+      "title": "Clear pending events",
+      "description": "Remove the stored queue when its events are resolved.",
+      "kind": "once",
+      "binding": { "name": "necto.desktop.storage.remove", "version": 1 },
+      "inputSchema": {
+        "type": "object",
+        "required": ["scope", "key"],
+        "properties": {
+          "scope": { "enum": ["plugin"] },
+          "key": { "enum": ["http-exporter.pending"] }
+        },
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "required": ["success"],
+        "properties": { "success": { "type": "boolean" } }
+      },
+      "timeoutMs": 3000
+    }
+  ]
+}

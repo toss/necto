@@ -30,6 +30,7 @@ try {
   const manifestPath = resolve(staged, "package.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   manifest.version = version;
+  if (manifest.name === "@necto/http-exporter") manifest.peerDependencies["@necto/bridge"] = version;
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
   const packed = spawnSync("npm", [
