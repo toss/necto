@@ -102,3 +102,136 @@ struct NectoShellPolicyTests {
         #expect(await policy.allows("anything", for: other) == false)
     }
 }
+
+@Suite("Shell policy review")
+struct NectoShellPolicyReviewTests {
+    @Test("authorization alone requests shell access without offering command approval")
+    func reviewsAuthorizationWithoutExecution() async {
+        let policy = NectoShellPolicy()
+        let authorization = NectoShellOperationInterpreter.Operation(
+            operationID: "shell.request",
+            description: "Ask for shell access",
+            binding: .init(name: "necto.desktop.shell.authorization.request", version: 1),
+            kind: .once,
+            interpretation: .authorizationRequest
+        )
+
+        let noShell = await policy.review(interpretedOperations: [])
+        #expect(!noShell.requestsShellAccess)
+        #expect(!noShell.canApproveDeclaredCommands)
+
+        let authorizationOnly = await policy.review(interpretedOperations: [authorization])
+        #expect(authorizationOnly.requestsShellAccess)
+        #expect(authorizationOnly.requestedOperations == [authorization])
+        #expect(!authorizationOnly.canApproveDeclaredCommands)
+
+        let withExecution = await policy.review(interpretedOperations: [authorization, execution()])
+        #expect(withExecution.canApproveDeclaredCommands)
+    }
+
+    @Test("incomplete execution declarations stay visible but disable command approval")
+    func requiresCompleteExecutionDeclarations() async {
+        let policy = NectoShellPolicy()
+        let incompleteOperations = [
+            execution(id: "shell.dynamic", interpretation: .execute(.unavailable(.enumNotDeclared))),
+            execution(id: "shell.undocumented", description: " \n\t"),
+            execution(id: "shell.empty-enum", interpretation: .execute(.values([]))),
+        ]
+
+        for incomplete in incompleteOperations {
+            let operations = [execution(), incomplete]
+            let review = await policy.review(interpretedOperations: operations)
+            #expect(review.requestsShellAccess)
+            #expect(review.requestedOperations == operations)
+            #expect(!review.canApproveDeclaredCommands)
+        }
+    }
+
+    @Test("invalid commands stay visible but disable command approval", arguments: [" \n\t", "git\0status"])
+    func rejectsInvalidCommands(command: String) async {
+        let policy = NectoShellPolicy()
+        let operation = execution(interpretation: .execute(.values(["pwd", command])))
+        let review = await policy.review(interpretedOperations: [operation])
+
+        #expect(review.requestsShellAccess)
+        #expect(review.requestedOperations == [operation])
+        #expect(!review.canApproveDeclaredCommands)
+    }
+
+    @Test("an unsupported contract stays visible and blocks approval beside a valid declaration")
+    func refusesMixedSupportedAndUnsupportedContracts() async {
+        let policy = NectoShellPolicy()
+        let supported = execution()
+        let unsupported = execution(id: "shell.future", version: 3, interpretation: .unsupportedContract)
+        let operations = [supported, unsupported]
+
+        let review = await policy.review(interpretedOperations: operations)
+
+        #expect(review.requestsShellAccess)
+        #expect(review.requestedOperations == operations)
+        #expect(!review.canApproveDeclaredCommands)
+    }
+
+    @Test("review reports only the matching saved grant and leaves shell decisions unchanged")
+    func readsGrantWithoutChangingPolicy() async {
+        let grant = NectoShellGrant(
+            principal: notes, level: .commandApproval, approvedCommands: ["git status"], contentIdentity: "previous"
+        )
+        let policy = NectoShellPolicy(snapshot: .init(grants: [grant]))
+        let snapshot = await policy.snapshot()
+        let operations = [execution()]
+        let replacement = NectoPluginPrincipal(pluginID: notes.pluginID, sourceIdentity: "/plugins/replacement")
+
+        let existing = await policy.review(interpretedOperations: operations, for: notes)
+        let differentSource = await policy.review(interpretedOperations: operations, for: replacement)
+        let newCandidate = await policy.review(interpretedOperations: operations)
+
+        #expect(existing.currentGrant == grant)
+        #expect(existing.effectiveAccessLevel == .commandApproval)
+        #expect(!existing.isFullAccessEnabled)
+        #expect(differentSource.currentGrant == nil)
+        #expect(differentSource.effectiveAccessLevel == .protected)
+        #expect(newCandidate.currentGrant == nil)
+        #expect(newCandidate.effectiveAccessLevel == .protected)
+        #expect(newCandidate.canApproveDeclaredCommands)
+        let afterReview = await policy.snapshot()
+        #expect(afterReview.grants == snapshot.grants)
+        #expect(afterReview.isFullAccessEnabled == snapshot.isFullAccessEnabled)
+        #expect(await policy.allows("git status", for: notes))
+        #expect(await policy.allows("pwd", for: notes) == false)
+        #expect(await policy.allows("git status", for: replacement) == false)
+    }
+
+    @Test("global full access overrides the effective level while preserving the saved grant")
+    func reportsGlobalOverride() async {
+        let grant = NectoShellGrant(principal: notes, level: .commandApproval, approvedCommands: ["git status"])
+        let policy = NectoShellPolicy(snapshot: .init(isFullAccessEnabled: true, grants: [grant]))
+        let operations = [execution()]
+
+        let existing = await policy.review(interpretedOperations: operations, for: notes)
+        let newCandidate = await policy.review(interpretedOperations: operations)
+
+        #expect(existing.isFullAccessEnabled)
+        #expect(existing.effectiveAccessLevel == .fullAccess)
+        #expect(existing.currentGrant == grant)
+        #expect(newCandidate.isFullAccessEnabled)
+        #expect(newCandidate.effectiveAccessLevel == .fullAccess)
+        #expect(newCandidate.currentGrant == nil)
+        #expect(await policy.snapshot() == .init(isFullAccessEnabled: true, grants: [grant]))
+    }
+
+    private func execution(
+        id: String = "shell.run",
+        version: Int = 1,
+        description: String = "Read local diagnostics",
+        interpretation: NectoShellOperationInterpreter.Interpretation = .execute(.values(["pwd"]))
+    ) -> NectoShellOperationInterpreter.Operation {
+        NectoShellOperationInterpreter.Operation(
+            operationID: id,
+            description: description,
+            binding: .init(name: "necto.desktop.shell.execute", version: version),
+            kind: .once,
+            interpretation: interpretation
+        )
+    }
+}

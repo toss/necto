@@ -54,6 +54,20 @@ public struct NectoShellPolicySnapshot: Sendable, Codable, Equatable {
 /// Keeping the two decisions separate prevents an install-time bridge approval from
 /// silently becoming approval for every command a plugin can construct later.
 public actor NectoShellPolicy {
+    /// Combines interpreted declarations with current policy without granting access.
+    public struct Review: Sendable, Equatable {
+        public let requestedOperations: [NectoShellOperationInterpreter.Operation]
+        public let canApproveDeclaredCommands: Bool
+        public let currentGrant: NectoShellGrant?
+        public let isFullAccessEnabled: Bool
+
+        public var requestsShellAccess: Bool { !requestedOperations.isEmpty }
+
+        public var effectiveAccessLevel: NectoShellAccessLevel {
+            isFullAccessEnabled ? .fullAccess : currentGrant?.level ?? .protected
+        }
+    }
+
     private var isFullAccessEnabled: Bool
     private var grants: [NectoPluginPrincipal: NectoShellGrant]
 
@@ -77,6 +91,40 @@ public actor NectoShellPolicy {
 
     public func access(for principal: NectoPluginPrincipal) -> NectoShellGrant {
         grants[principal] ?? NectoShellGrant(principal: principal)
+    }
+
+    /// The caller interprets the staged declarations first. Pass the verified
+    /// existing installation principal for updates; new candidates have no grant.
+    public func review(
+        interpretedOperations: [NectoShellOperationInterpreter.Operation],
+        for principal: NectoPluginPrincipal? = nil
+    ) -> Review {
+        Review(
+            requestedOperations: interpretedOperations,
+            canApproveDeclaredCommands: Self.canApproveDeclaredCommands(in: interpretedOperations),
+            currentGrant: principal.flatMap { grants[$0] },
+            isFullAccessEnabled: isFullAccessEnabled
+        )
+    }
+
+    private static func canApproveDeclaredCommands(
+        in operations: [NectoShellOperationInterpreter.Operation]
+    ) -> Bool {
+        var hasExecution = false
+        for operation in operations {
+            switch operation.interpretation {
+            case let .execute(.values(commands)):
+                guard !operation.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                      !commands.isEmpty,
+                      commands.allSatisfy({ (try? validated($0)) != nil }) else { return false }
+                hasExecution = true
+            case .execute(.unavailable), .unsupportedContract:
+                return false
+            case .authorizationRequest:
+                continue
+            }
+        }
+        return hasExecution
     }
 
     public func allows(_ command: String, for principal: NectoPluginPrincipal) -> Bool {

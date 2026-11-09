@@ -93,6 +93,91 @@ The plugins folder also supports development overrides. An approved folder takes
 precedence over a panel with the same id from a connected app, allowing panel changes
 without rebuilding the app.
 
+### Shell commands available for approval review
+
+Shell permissions are described by existing operations. There is no separate
+`shellAccess` field. A `necto.desktop.shell.execute` binding requests execution;
+the operation's `description` explains its purpose. When its
+`inputSchema.properties.command.enum` lists exact commands, the host can read and
+review those commands before running any plugin code.
+
+For example, the relevant fields of an exporter manifest could be:
+
+```json
+{
+  "type": "event-exporter",
+  "operations": [
+    {
+      "id": "environment.read",
+      "title": "Read environment",
+      "description": "Attach the operating system name to exported events.",
+      "kind": "once",
+      "binding": { "name": "necto.desktop.shell.execute", "version": 1 },
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string", "enum": ["uname -s"] }
+        },
+        "required": ["command"]
+      },
+      "outputSchema": { "type": "object" },
+      "timeoutMs": 30000
+    }
+  ]
+}
+```
+
+A command enum is optional for both ordinary plugins and exporters. An operation
+with `"command": { "type": "string" }` remains valid; it just does not supply an
+exact list for approval before execution. When present, the enum already limits
+operation inputs through normal schema validation, even under Full Access.
+Neither the enum nor its description grants execution permission.
+
+`NectoShellOperationInterpreter.interpret(operations:)` performs installation-time
+interpretation without plugin execution or permission state. The interpreter and
+actual providers use `NectoShellContracts` for shell execution v1/v2 and authorization
+v1 descriptors. They do not keep separate supported-version lists. Matching uses
+`NectoBridgeDescriptor.mismatch(with:)`, the same name/version/kind comparison the
+registry uses at runtime. The execution contract also owns the command field name.
+
+The interpreter asks `NectoJSONSchema.declaredStringValues(for:in:)` for that
+property's directly declared string enum. This general query preserves strings,
+order and empty arrays. It distinguishes missing properties, absent enums,
+non-string enumerations and unsupported schema shapes; it knows nothing about
+shell permissions. It does not resolve references, combine schemas or replace
+normal input validation.
+
+Every operation naming a known shell bridge remains in the interpretation result,
+with its ID, description, binding and kind. A supported execution carries either
+its declared candidates or the lookup's unavailable reason. Authorization requests
+are identified separately. Unsupported versions and kinds remain explicitly
+unsupported instead of being interpreted with the current execution schema.
+The interpreter does not trim commands, parse Bash, query grants or approve a subset.
+
+`NectoShellPolicy.review(interpretedOperations:for:)` consumes these typed results;
+it does not read manifest JSON keys. It reports whether complete declared-command
+approval can be offered, the exact installation principal's saved grant (if any),
+and the global Full Access override. Command approval requires at least one
+supported execution, nonblank descriptions, nonempty candidate lists and commands
+accepted by the existing shell command check. Any incomplete or unsupported shell
+operation prevents that choice, while all interpretation results remain available
+for explanation. Missing declarations do not invalidate the manifest.
+
+A new candidate without a verified existing principal does not inherit a saved
+grant by plugin ID. Review does not change grants. The effective access level uses
+the global override, then the saved level, defaulting to Protected. Registry lookup,
+runtime schema validation and invocation routing remain unchanged.
+
+Write descriptions in English for publicly distributed exporters; each description
+is displayed as authored and other languages are allowed. It is an author-provided
+explanation, not a host-verified claim about the command's effects.
+
+The planned registration choices are Full Access, declared Command approval,
+Protected, or rejection. UI and CLI will share the review and installation path.
+AccessController will apply and persist the selected policy; Installer will own
+staging, revalidation and activation after approval. These installation choices,
+permission application, CLI approval and warnings are subsequent work.
+
 ### Identity and trust
 
 `id` identifies the plugin; `name` labels its UI and may change independently.

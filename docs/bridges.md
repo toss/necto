@@ -276,6 +276,17 @@ Protected mode refuses every command; per-plugin Full access accepts every comma
 that principal. The global Full Access switch temporarily accepts every caller without
 rewriting their saved settings.
 
+Before installation, the host can interpret operations with
+`NectoShellOperationInterpreter.interpret(operations:)` and pass the result to
+`NectoShellPolicy.review(interpretedOperations:for:)`. Interpreter and providers
+share `NectoShellContracts`; binding matching uses the existing descriptor comparison.
+The interpreter selects the contract's command field, and the general JSON Schema
+reader extracts its directly declared string enum. Dynamic, malformed or unsupported
+declarations remain explicit in the result. Policy decides whether complete
+command approval can be offered and reports existing access without changing it.
+These are host APIs, not new plugin bridges. They do not replace Registry routing,
+execute commands or grant permissions. UI and CLI integration is subsequent work.
+
 `authorization.request` uses a native Necto dialog when new approval is needed;
 already permitted requests can return without a dialog. JavaScript cannot add an
 approval itself. Necto owns the dialog title and shows the plugin ID and source.

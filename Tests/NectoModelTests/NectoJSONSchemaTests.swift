@@ -6,6 +6,49 @@ import Testing
 
 @testable import NectoModel
 
+@Test func readsDirectlyDeclaredStringEnumInOrder() {
+    let schema: NectoJSONValue = [
+        "properties": [
+            "method": ["enum": ["POST", " GET ", "", "\t", "\0"]],
+            "empty": ["enum": []],
+        ],
+    ]
+
+    #expect(NectoJSONSchema.declaredStringValues(for: "method", in: schema) == .values(["POST", " GET ", "", "\t", "\0"]))
+    #expect(NectoJSONSchema.declaredStringValues(for: "empty", in: schema) == .values([]))
+}
+
+@Test func distinguishesMissingDirectPropertyAndEnum() {
+    let schema: NectoJSONValue = [
+        "properties": ["method": ["type": "string"]],
+        "allOf": [["properties": ["fallback": ["enum": ["GET"]]]]],
+    ]
+
+    #expect(NectoJSONSchema.declaredStringValues(for: "method", in: [:]) == .unavailable(.propertyNotDeclared))
+    #expect(NectoJSONSchema.declaredStringValues(for: "fallback", in: schema) == .unavailable(.propertyNotDeclared))
+    #expect(NectoJSONSchema.declaredStringValues(for: "method", in: schema) == .unavailable(.enumNotDeclared))
+}
+
+@Test func reportsUnsupportedSchemaShapesForStringEnumLookup() {
+    #expect(NectoJSONSchema.declaredStringValues(for: "method", in: true) == .unavailable(.unsupportedSchema))
+    #expect(NectoJSONSchema.declaredStringValues(for: "method", in: ["properties": []]) == .unavailable(.unsupportedSchema))
+    #expect(NectoJSONSchema.declaredStringValues(for: "method", in: ["properties": ["method": true]]) == .unavailable(.unsupportedSchema))
+}
+
+@Test func stringEnumLookupLeavesMixedEnumValidationAvailable() {
+    let schema: NectoJSONValue = [
+        "properties": [
+            "method": ["enum": ["GET", 1]],
+            "mode": ["enum": "read"],
+        ],
+    ]
+
+    #expect(NectoJSONSchema.declaredStringValues(for: "method", in: schema) == .unavailable(.notStringEnum))
+    #expect(NectoJSONSchema.declaredStringValues(for: "mode", in: schema) == .unavailable(.notStringEnum))
+    #expect(NectoJSONSchema.validate(["method": 1], against: schema) == nil)
+    #expect(NectoJSONSchema.validate(["method": "POST"], against: schema)?.path == "method")
+}
+
 @Test func acceptsValueMatchingSchema() {
     let schema: NectoJSONValue = [
         "type": "object",

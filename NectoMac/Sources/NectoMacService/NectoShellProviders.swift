@@ -171,10 +171,11 @@ public protocol NectoShellApprovalRequesting: Sendable {
 }
 
 public struct NectoShellExecuteProvider: NectoOperationProvider {
-    public static let key = "necto.desktop.shell.execute"
+    public static let key = NectoShellContracts.execution.descriptor.binding.name
 
-    public let descriptor: NectoBridgeDescriptor
+    public var descriptor: NectoBridgeDescriptor { contract.descriptor }
 
+    private let contract: NectoShellContracts.Execution
     private let policy: NectoShellPolicy
     private let executor: any NectoShellExecuting
     private let limiter: NectoShellExecutionLimiter
@@ -192,28 +193,7 @@ public struct NectoShellExecuteProvider: NectoOperationProvider {
         self.policy = policy
         self.executor = executor
         self.limiter = limiter
-        self.descriptor = NectoBridgeDescriptor(
-            binding: NectoBridgeBinding(name: Self.key, version: standardInput ? 2 : 1),
-            kind: .once,
-            inputSchema: [
-                "type": "object",
-                "properties": standardInput
-                    ? ["command": ["type": "string"], "stdin": ["type": "string", "maxLength": .number(Double(NectoBashExecutor.maximumStandardInputBytes))]]
-                    : ["command": ["type": "string"]],
-                "required": ["command"],
-                "additionalProperties": false,
-            ],
-            outputSchema: [
-                "type": "object",
-                "properties": [
-                    "stdout": ["type": "string"],
-                    "stderr": ["type": "string"],
-                    "exitCode": ["type": "integer"],
-                ],
-                "required": ["stdout", "stderr", "exitCode"],
-                "additionalProperties": false,
-            ]
-        )
+        self.contract = standardInput ? NectoShellContracts.executionWithStandardInput : NectoShellContracts.execution
     }
 
     public func supportingStandardInput() -> NectoShellExecuteProvider {
@@ -224,7 +204,7 @@ public struct NectoShellExecuteProvider: NectoOperationProvider {
         input: NectoJSONValue,
         context: NectoInvocationContext
     ) async throws -> NectoJSONValue {
-        guard let raw = input["command"]?.stringValue else {
+        guard let raw = input[contract.commandField]?.stringValue else {
             throw NectoBridgeError(code: .invalidInput, message: "command is required")
         }
         let command = try NectoShellPolicy.validated(raw)
@@ -238,7 +218,8 @@ public struct NectoShellExecuteProvider: NectoOperationProvider {
 
         var standardInput: Data?
         if let inputValue = input["stdin"] {
-            guard descriptor.binding.version == 2, let text = inputValue.stringValue,
+            guard descriptor.binding == NectoShellContracts.executionWithStandardInput.descriptor.binding,
+                  let text = inputValue.stringValue,
                   text.utf8.count <= NectoBashExecutor.maximumStandardInputBytes else {
                 throw NectoBridgeError(code: .invalidInput, message: "stdin requires shell.execute v2 and must fit the supported byte limit.")
             }
@@ -262,32 +243,9 @@ public struct NectoShellExecuteProvider: NectoOperationProvider {
 }
 
 public struct NectoShellAuthorizationProvider: NectoOperationProvider {
-    public static let key = "necto.desktop.shell.authorization.request"
+    public static let key = NectoShellContracts.authorization.binding.name
 
-    public let descriptor = NectoBridgeDescriptor(
-        binding: NectoBridgeBinding(name: key, version: 1),
-        kind: .once,
-        inputSchema: [
-            "type": "object",
-            "properties": [
-                "commands": ["type": "array", "items": ["type": "string"]],
-                "access": ["type": "string", "enum": ["commandApproval", "fullAccess"]],
-                "title": ["type": "string", "maxLength": 80],
-                "message": ["type": "string", "maxLength": 500],
-                "reason": ["type": "string", "maxLength": 500],
-            ],
-            "additionalProperties": false,
-        ],
-        outputSchema: [
-            "type": "object",
-            "properties": [
-                "approved": ["type": "boolean"],
-                "approvedCommands": ["type": "array", "items": ["type": "string"]],
-            ],
-            "required": ["approved", "approvedCommands"],
-            "additionalProperties": false,
-        ]
-    )
+    public let descriptor = NectoShellContracts.authorization
 
     private let requester: any NectoShellApprovalRequesting
 

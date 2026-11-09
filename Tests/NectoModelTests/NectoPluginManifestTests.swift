@@ -18,6 +18,7 @@ private func makeOperation(
     id: String = "records.list",
     kind: NectoOperationKind = .once,
     binding: NectoBridgeBinding = makeBinding(),
+    inputSchema: NectoJSONValue = ["type": "object"],
     timeoutMs: Int = 5000
 ) -> NectoOperation {
     NectoOperation(
@@ -26,7 +27,7 @@ private func makeOperation(
         description: "Returns recorded requests",
         kind: kind,
         binding: binding,
-        inputSchema: ["type": "object"],
+        inputSchema: inputSchema,
         outputSchema: ["type": "object"],
         timeoutMs: timeoutMs
     )
@@ -62,6 +63,17 @@ private func makeManifest(
 @Test func acceptsDesktopEventExporters() throws {
     try makeManifest(type: .eventExporter).validate()
     try makeManifest(type: .eventExporter, operations: []).validate()
+}
+
+@Test func acceptsDynamicShellCommandsWithoutAnEnumForEitherPluginType() throws {
+    let operation = makeOperation(
+        id: "shell.run",
+        binding: makeBinding(name: "necto.desktop.shell.execute"),
+        inputSchema: ["type": "object", "properties": ["command": ["type": "string"]]]
+    )
+    for type in [nil, NectoPluginType.eventExporter] {
+        try makeManifest(type: type, operations: [operation]).validate()
+    }
 }
 
 @Test func rejectsEventExportersWithDeviceBindings() {
