@@ -51,7 +51,7 @@ struct NectoExporterShutdownTests {
         let latestDeadline = Date().addingTimeInterval(5).timeIntervalSince1970 * 1000
         let deadline = try #require(try await page.webView.evaluateJavaScript("window.shutdownDeadline") as? Double)
         #expect(deadline >= earliestDeadline - 1 && deadline <= latestDeadline + 1)
-        let accepted = "accepted.0,accepted.1,accepted.2,accepted.3,accepted.4"
+        let accepted = "necto.started,accepted.0,accepted.1,accepted.2,accepted.3,accepted.4"
         #expect(try await page.webView.evaluateJavaScript("window.acceptedAtShutdown") as? String == accepted)
 
         await fixture.dispatcher.record(try .init(eventName: "after.cutoff"), source: .necto())
@@ -192,6 +192,7 @@ struct NectoExporterShutdownTests {
         let registry = NectoPluginRegistry()
         let dispatcher = NectoEventDispatcher(installationID: "test-installation", nectoVersion: "1.0.0")
         let diagnostics = NectoDiagnosticsLog()
+        let usageLogger: NectoUsageLogger
         let exporter: NectoInstalledExporter
 
         init(operations: [NectoOperation] = [], script: String = "") {
@@ -213,10 +214,12 @@ struct NectoExporterShutdownTests {
                 approvedContentHash: archive.contentHash)
             exporter = NectoInstalledExporter(package: .init(manifest: manifest, rootURL: root, source: .installed,
                 archive: archive, contentIdentity: archive.contentHash, installation: installation))
+            usageLogger = NectoExporterWebViewTests.makeUsageLogger(dispatcher: dispatcher, diagnostics: diagnostics)
         }
 
         func synchronize(exporter: NectoInstalledExporter?) {
-            runtime.synchronize(exporter: exporter, registry: registry, eventDispatcher: dispatcher, diagnostics: diagnostics)
+            runtime.synchronize(exporter: exporter, registry: registry, eventDispatcher: dispatcher,
+                                diagnostics: diagnostics, usageLogger: usageLogger)
         }
 
         func open() async throws -> NectoWebPage {

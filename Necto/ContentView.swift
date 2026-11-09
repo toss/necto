@@ -43,6 +43,10 @@ struct ContentView: View {
         .onChange(of: window.selectedPluginID) { _, _ in claimBackgroundPanel() }
         .onChange(of: window.isShowingSettings) { _, _ in claimBackgroundPanel() }
         .onChange(of: model.enabledPlugins.map { "\($0.id)|\($0.contentIdentity)|\($0.principal?.sourceIdentity ?? "")" }) { _, _ in claimBackgroundPanel() }
+        .onChange(of: displayedPluginID, initial: true) { _, id in
+            guard id != nil, let plugin = window.selectedPlugin else { return }
+            model.usageLogger.pluginOpened(plugin)
+        }
         .onChange(of: model.prompt?.id) { _, _ in model.routePendingPrompt() }
         .onChange(of: model.shellAccess.pendingApproval?.id) { _, _ in model.routePendingPrompt() }
         .onReceive(NotificationCenter.default.publisher(for: .nectoShowSettings)) { _ in
@@ -102,6 +106,13 @@ struct ContentView: View {
                 )
             }
         }
+    }
+
+    /// A background page shown in another window is not an open panel here.
+    private var displayedPluginID: String? {
+        guard !window.isShowingSettings, let plugin = window.selectedPlugin else { return nil }
+        if plugin.runsInBackground, model.backgroundPanels.owner(of: plugin.id) != window.id { return nil }
+        return plugin.id
     }
 
     private func claimBackgroundPanel() {

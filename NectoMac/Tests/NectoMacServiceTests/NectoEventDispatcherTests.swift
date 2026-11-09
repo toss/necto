@@ -69,10 +69,11 @@ struct NectoEventDispatcherTests {
     func registrationControlsDelivery() async throws {
         let dispatcher = NectoEventDispatcher(installationID: "test-installation", nectoVersion: "1.0.0")
         let receiver = EventReceiver()
-        await dispatcher.record(try eventInput("before.registration"), source: recordingSource)
-        #expect(receiver.events.isEmpty)
+        let beforeRegistration = await dispatcher.record(try eventInput("before.registration"), source: recordingSource)
+        #expect(!beforeRegistration)
         let registration = try await dispatcher.registerExporter(receive: receiver.accept)
-        await dispatcher.record(try eventInput("after.registration"), source: recordingSource)
+        let afterRegistration = await dispatcher.record(try eventInput("after.registration"), source: recordingSource)
+        #expect(afterRegistration)
         #expect(receiver.events.map(\.input.eventName) == ["after.registration"])
         do {
             try await dispatcher.registerExporter(receive: receiver.accept)
@@ -81,8 +82,31 @@ struct NectoEventDispatcherTests {
             #expect(error.code == .operationUnavailable)
         }
         await dispatcher.unregisterExporter(registrationID: registration)
-        await dispatcher.record(try eventInput("after.removal"), source: recordingSource)
+        let afterRemoval = await dispatcher.record(try eventInput("after.removal"), source: recordingSource)
+        #expect(!afterRemoval)
         #expect(receiver.events.map(\.input.eventName) == ["after.registration"])
+    }
+
+    @Test("a record tied to a registration reaches only that receiver")
+    func recordRequiresMatchingRegistrationWhenSpecified() async throws {
+        let dispatcher = NectoEventDispatcher(installationID: "test-installation", nectoVersion: "1.0.0")
+        let old = EventReceiver()
+        let oldID = try await dispatcher.registerExporter(receive: old.accept)
+        await dispatcher.unregisterExporter(registrationID: oldID)
+
+        let current = EventReceiver()
+        let currentID = try await dispatcher.registerExporter(receive: current.accept)
+        let rejected = await dispatcher.record(
+            try eventInput("stale.registration"), source: recordingSource, expectedExporterRegistrationID: oldID
+        )
+        #expect(!rejected)
+        #expect(old.events.isEmpty)
+
+        let accepted = await dispatcher.record(
+            try eventInput("current.registration"), source: recordingSource, expectedExporterRegistrationID: currentID
+        )
+        #expect(accepted)
+        #expect(current.events.map(\.input.eventName) == ["current.registration"])
     }
 
     @Test("excluding and including a plugin affects later events without replay")
@@ -92,7 +116,8 @@ struct NectoEventDispatcherTests {
         try await dispatcher.registerExporter(receive: receiver.accept)
         await dispatcher.record(try eventInput("accepted"), source: recordingSource)
         await dispatcher.updatePolicy(.init(excludedPluginIDs: ["tools"]))
-        await dispatcher.record(try eventInput("while.excluded"), source: recordingSource)
+        let acceptedWhileExcluded = await dispatcher.record(try eventInput("while.excluded"), source: recordingSource)
+        #expect(!acceptedWhileExcluded)
         #expect(receiver.events.map(\.input.eventName) == ["accepted"])
         await dispatcher.updatePolicy(.init())
         #expect(receiver.events.map(\.input.eventName) == ["accepted"])
@@ -107,7 +132,7 @@ struct NectoEventDispatcherTests {
         let input = try eventInput()
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<16 {
-                group.addTask { await dispatcher.record(input, source: recordingSource) }
+                group.addTask { _ = await dispatcher.record(input, source: recordingSource) }
             }
         }
         try await dispatcher.registerExporter(receive: receiver.accept)

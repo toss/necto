@@ -30,7 +30,8 @@ final class NectoAppModel {
                 exporter: eventExporter,
                 registry: registry,
                 eventDispatcher: eventDispatcher,
-                diagnostics: diagnostics
+                diagnostics: diagnostics,
+                usageLogger: usageLogger
             )
             prunePluginUpdates()
         }
@@ -73,6 +74,9 @@ final class NectoAppModel {
         },
         logFailure: { [weak self] title, detail in
             Task { await self?.log(.failure, .plugin, title, detail: detail) }
+        },
+        didInstall: { [weak self] package in
+            self?.usageLogger.pluginInstalled(package)
         }
     )
     var prompt: Prompt? { installer.prompt }
@@ -171,6 +175,7 @@ final class NectoAppModel {
 
     let registry: NectoPluginRegistry
     let eventDispatcher: NectoEventDispatcher
+    let usageLogger: NectoUsageLogger
     @ObservationIgnored private let eventPreferences: NectoEventPreferences
     private(set) var eventCollectionPolicy: NectoEventCollectionPolicy
 
@@ -195,6 +200,12 @@ final class NectoAppModel {
             policy: eventPreferences.policy
         )
         eventDispatcher = dispatcher
+        usageLogger = NectoUsageLogger(
+            eventDispatcher: dispatcher,
+            diagnostics: diagnostics,
+            cliInstaller: cliInstaller,
+            agentSkills: agentSkills
+        )
         registry = NectoPluginRegistry(targetHandles: Self.targetHandles, eventDispatcher: dispatcher)
         shellAccess = NectoShellAccessController(snapshot: NectoPluginLibrary.shellPolicy) {
             NectoPluginLibrary.shellPolicy = $0
@@ -271,9 +282,11 @@ final class NectoAppModel {
     }
 
     func setPlugin(_ id: String, enabled: Bool) {
+        let wasEnabled = !disabledIDs.contains(id)
+        guard wasEnabled != enabled else { return }
         NectoPluginLibrary.setEnabled(id, enabled)
         disabledIDs = NectoPluginLibrary.disabledIDs
-
+        usageLogger.pluginEnabledChanged(id: id, enabled: enabled)
     }
 
     // MARK: Event collection
@@ -498,6 +511,7 @@ final class NectoAppModel {
         packagesAwaitingApproval.removeAll { $0.id == plugin.id }
         disabledIDs = NectoPluginLibrary.disabledIDs
         pluginUpdates.removeValue(forKey: id)
+        usageLogger.pluginRemoved(plugin)
         return ["deleted": true, "pluginID": .string(id)]
     }
 

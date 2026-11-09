@@ -49,19 +49,36 @@ final class NectoWebPage {
     private let bridge: NectoBridgeCoordinator
     private var invalidated = false
 
-    init(package: NectoInstalledPackage, registry: NectoPluginRegistry, target: NectoTarget?,
-         find: NectoFindSession? = nil,
-         uiFontFamily: String = NectoFontPreference.defaultUI,
-         codeFontFamily: String = NectoFontPreference.defaultCode,
-         locale: String = "en", isDark: Bool = false,
-         websiteDataStore: WKWebsiteDataStore? = nil,
-         eventDispatcher: NectoEventDispatcher? = nil, diagnostics: NectoDiagnosticsLog? = nil) {
+    init(
+        package: NectoInstalledPackage,
+        registry: NectoPluginRegistry,
+        target: NectoTarget?,
+        find: NectoFindSession? = nil,
+        uiFontFamily: String = NectoFontPreference.defaultUI,
+        codeFontFamily: String = NectoFontPreference.defaultCode,
+        locale: String = "en",
+        isDark: Bool = false,
+        websiteDataStore: WKWebsiteDataStore? = nil,
+        eventDispatcher: NectoEventDispatcher? = nil,
+        diagnostics: NectoDiagnosticsLog? = nil,
+        usageLogger: NectoUsageLogger? = nil
+    ) {
         let originHost = package.principal.map(NectoPluginSchemeHandler.originHost(for:))
             ?? UUID().uuidString.lowercased()
-        bridge = NectoBridgeCoordinator(package: package, originHost: originHost, registry: registry, target: target, find: find,
-                                        uiFontFamily: uiFontFamily, codeFontFamily: codeFontFamily,
-                                        locale: locale, isDarkAppearance: isDark,
-                                        eventDispatcher: eventDispatcher, diagnostics: diagnostics)
+        bridge = NectoBridgeCoordinator(
+            package: package,
+            originHost: originHost,
+            registry: registry,
+            target: target,
+            find: find,
+            uiFontFamily: uiFontFamily,
+            codeFontFamily: codeFontFamily,
+            locale: locale,
+            isDarkAppearance: isDark,
+            eventDispatcher: eventDispatcher,
+            diagnostics: diagnostics,
+            usageLogger: usageLogger
+        )
         let controller = WKUserContentController()
         controller.addUserScript(NectoBridgeCoordinator.localeUserScript(locale))
         controller.addScriptMessageHandler(bridge, contentWorld: .page, name: NectoBridgeCoordinator.handlerName)
@@ -136,6 +153,7 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
     private let registry: NectoPluginRegistry
     private let eventDispatcher: NectoEventDispatcher?
     private let diagnostics: NectoDiagnosticsLog?
+    private let usageLogger: NectoUsageLogger?
     private var exporterRegistrationID: UUID?
     private var exporterRegistrationPending = false
     private let exporterShutdown = OSAllocatedUnfairLock(initialState: false)
@@ -188,13 +206,15 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         locale: String,
         isDarkAppearance: Bool,
         eventDispatcher: NectoEventDispatcher? = nil,
-        diagnostics: NectoDiagnosticsLog? = nil
+        diagnostics: NectoDiagnosticsLog? = nil,
+        usageLogger: NectoUsageLogger? = nil
     ) {
         self.package = package
         self.originHost = originHost
         self.registry = registry
         self.eventDispatcher = eventDispatcher
         self.diagnostics = diagnostics
+        self.usageLogger = usageLogger
         self.target = target
         self.find = find
         self.uiFontFamily = uiFontFamily
@@ -538,6 +558,7 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
             }
             exporterRegistrationID = registrationID
             exporterRegistrationPending = false
+            await usageLogger?.appStartedIfNeeded(registrationID: registrationID)
             await diagnostics?.append(.info, .exporter, "Event exporter registered", detail: package.id)
             return Self.successReply(NectoJSONValue.null)
         } catch {

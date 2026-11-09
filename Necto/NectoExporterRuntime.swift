@@ -20,7 +20,8 @@ final class NectoExporterRuntime {
         exporter: NectoInstalledExporter?,
         registry: NectoPluginRegistry,
         eventDispatcher: NectoEventDispatcher,
-        diagnostics: NectoDiagnosticsLog
+        diagnostics: NectoDiagnosticsLog,
+        usageLogger: NectoUsageLogger
     ) {
         let nextIdentity = exporter.map {
             "\($0.id)|\($0.principal?.sourceIdentity ?? "")|\($0.contentIdentity)"
@@ -41,7 +42,8 @@ final class NectoExporterRuntime {
             target: nil,
             locale: NectoL10n.languageCode,
             eventDispatcher: eventDispatcher,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            usageLogger: usageLogger
         )
         page.setVisible(false, find: nil, scale: 1)
         self.page = page

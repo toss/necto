@@ -37,13 +37,7 @@ struct SettingsScreen: View {
         NectoLanguage(rawValue: language) ?? .system
     }
 
-    enum Page: Hashable {
-        case general
-        case shellAccess
-        case plugins
-        case eventExporter
-        case diagnostics
-    }
+    typealias Page = NectoUsageLogger.SettingsPage
 
     @State private var entries: [NectoDiagnosticsLog.Entry] = []
     @State private var droppedLines = 0
@@ -92,6 +86,9 @@ struct SettingsScreen: View {
         }
         .padding(.leading, 12)
         .background(NectoTheme.background)
+        .onChange(of: page, initial: true) { _, page in
+            model.usageLogger.settingsOpened(page: page)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if page == .general {
                 model.cliInstaller.refresh()
@@ -99,10 +96,6 @@ struct SettingsScreen: View {
             }
         }
         .task(id: page) {
-            if page == .general {
-                model.cliInstaller.refresh()
-                model.agentSkills.refresh()
-            }
             if page != .shellAccess { selectedShellCaller = nil }
             if page == .plugins { await model.checkPluginUpdates() }
             if page == .eventExporter {
@@ -138,7 +131,11 @@ struct SettingsScreen: View {
                 "",
                 selection: Binding(
                     get: { selectedLanguage },
-                    set: { language = $0.rawValue }
+                    set: { newLanguage in
+                        guard newLanguage != NectoL10n.language else { return }
+                        language = newLanguage.rawValue
+                        model.usageLogger.languageChanged(to: newLanguage)
+                    }
                 )
             ) {
                 ForEach(NectoLanguage.allCases) { option in
@@ -250,7 +247,10 @@ struct SettingsScreen: View {
                         Button(NectoL10n.text(model.agentSkills.installing == agent ? "Installing…"
                             : model.agentSkills.updates.contains(agent) ? "Update"
                             : model.agentSkills.installed.contains(agent) ? "Installed" : "Add")) {
-                            Task { await model.agentSkills.install(agent) }
+                            Task {
+                                guard let result = await model.agentSkills.install(agent) else { return }
+                                model.usageLogger.agentSkillInstallCompleted(agent: agent, result: result)
+                            }
                         }
                         .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
                         .disabled(model.agentSkills.installing != nil

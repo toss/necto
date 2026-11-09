@@ -58,18 +58,23 @@ public actor NectoEventDispatcher {
         self.policy = policy
     }
 
+    /// Returns whether the event was handed to the registered receiver.
+    @discardableResult
     public func record(
         _ input: NectoEvent.Input,
         source: NectoEvent.Source,
-        channel: NectoInvocationChannel? = nil
-    ) {
+        channel: NectoInvocationChannel? = nil,
+        expectedExporterRegistrationID: UUID? = nil
+    ) -> Bool {
+        guard let exporter,
+              expectedExporterRegistrationID == nil || expectedExporterRegistrationID == exporter.registrationID,
+              policy.allowsCollection(from: source.collectionPluginID)
+        else { return false }
         let event = NectoEvent(
             eventID: UUID(), occurredAt: now(), installationID: installationID,
             nectoVersion: nectoVersion, source: source, channel: channel, input: input
         )
-        guard let exporter,
-              policy.allowsCollection(from: source.collectionPluginID)
-        else { return }
         exporter.receive(event)
+        return true
     }
 }

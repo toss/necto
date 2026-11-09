@@ -230,6 +230,55 @@ There is no dispatcher queue or replay. Records received without a receiver or f
 an excluded plugin are dropped, not retained for later registration or inclusion. Exclusions match plugin IDs across apps and versions. A host event related to
 a plugin, such as opening its panel, uses the related ID for the same policy check.
 
+### Recording Necto usage
+
+`NectoUsageLogger` owns the native shell's event names, parameters, related plugin
+IDs and settings snapshots. Views and action handlers call named methods such as
+`settingsOpened(page:)`, `languageChanged(to:)` and `pluginOpened(_:)` after the
+relevant action. The logger reads the existing settings/installation services;
+it does not install packages, change settings or own exporter delivery policy.
+
+The app shares one logger with its exporter runtime. After accepting a document's
+registration, the bridge notifies that logger. The logger serializes overlapping
+startup attempts and remembers a successful handoff for the current process.
+The dispatcher can require an expected receiver registration ID and report whether
+it accepted a record; it does not know the `necto.started` event or its once rule.
+A rejected stale registration does not consume the startup event. Delivery remains
+best effort if WebKit closes after dispatcher handoff.
+
+Native shell events have `origin: "necto"` and omit `channel`; native UI is not
+reported as a web plugin call. The host uses the same dispatcher and collection
+policy as plugin records. Events about a plugin carry `relatedPluginId`, so an
+excluded plugin cannot be collected through host instrumentation.
+
+| Event | When | Parameters |
+| --- | --- | --- |
+| `necto.started` | Once per host process, after the first approved exporter document registers | None |
+| `necto.plugin.opened` | A panel becomes displayed, including returning from Settings | `pluginSource`: `device` or `desktop` |
+| `necto.settings.opened` | Settings appears or its selected page changes, after refreshing installation status | `page`, `languagePreference`, `displayLanguage`, `cliInstalled`, `codexSkillInstalled`, `claudeSkillInstalled` |
+| `necto.setting.changed` | A user changes the language preference | `setting`: `language`; `value`: `system`, `english`, or `korean`; `displayLanguage`: `en` or `ko` |
+| `necto.agent_skill.install_completed` | An attempted skill installation or update finishes | `agent`: `codex` or `claude`; `action`: `install` or `update`; `result`: `success` or `failure` |
+| `necto.plugin.installed` | A newly approved package successfully loads after installation | `pluginVersion`, `packageType`: `plugin` or `exporter` |
+| `necto.plugin.removed` | Local package removal completes | `pluginVersion`, `packageType` |
+| `necto.plugin.enabled`, `necto.plugin.disabled` | The plugin's enabled state actually changes | None |
+
+`necto.started` marks the start of collectable usage, not the OS process launch
+time. Approving an exporter during an existing run can emit it then. Reloading or
+replacing the exporter in that process does not repeat it. Other events are not
+replayed after approval. In particular, an exporter's own installation or removal
+is not guaranteed to reach it while its receiver is starting or being torn down.
+
+Panel records do not measure focus or dwell time. Redrawing the same panel does
+not produce another event, and a background panel owned by another window does
+not count as displayed here. Updates and catalog reloads do not count as new
+installations. Settings snapshots report the selected language preference separately
+from the effective `en`/`ko` display language, plus booleans for CLI and Necto skill
+installation. They describe settings visitors, not the entire user population or
+actual agent usage. Skill completion records exclude no-op calls and contain no
+installation paths or raw error messages. Text size and free text (including font
+fields, URLs, paths and commands) are not recorded. CLI operations and connection/failure activity are not
+automatically instrumented by this first set of host events.
+
 ### Recording from a web plugin
 
 `necto.log(eventName, params?)` returns immediately without waiting for export.

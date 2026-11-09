@@ -20,12 +20,14 @@ final class InstallCoordinator {
     private let present: @MainActor () throws -> Void
     private let delete: @MainActor (String) async throws -> NectoJSONValue
     private let logFailure: @MainActor (String, String) -> Void
+    private let didInstall: @MainActor (NectoInstalledPackage) -> Void
 
     init(shellAccess: NectoShellAccessController,
          reload: @escaping @MainActor () async -> [NectoInstalledPackage],
          present: @escaping @MainActor () throws -> Void,
          delete: @escaping @MainActor (String) async throws -> NectoJSONValue,
          logFailure: @escaping @MainActor (String, String) -> Void,
+         didInstall: @escaping @MainActor (NectoInstalledPackage) -> Void,
          installedPlugins: @escaping @MainActor () -> [NectoInstalledPackage] = { NectoPluginLibrary.loadInstalled().packages },
          installationDirectory: URL? = nil) {
         self.installedPlugins = installedPlugins
@@ -35,6 +37,7 @@ final class InstallCoordinator {
         self.present = present
         self.delete = delete
         self.logFailure = logFailure
+        self.didInstall = didInstall
     }
 
     private(set) var isDeleting = false
@@ -561,9 +564,13 @@ final class InstallCoordinator {
             shellAccess.cancelRequests(for: record.principal)
             workTask = Task {
                 let plugins = await reload()
+                let loaded = plugins.first { $0.id == staged.manifest.id && $0.contentIdentity == staged.archive.contentHash }
+                if let loaded, staged.previous?.installation == nil {
+                    didInstall(loaded)
+                }
                 isCommitting = false
                 if let cliRequest {
-                    if let plugin = plugins.first(where: { $0.id == staged.manifest.id && $0.contentIdentity == staged.archive.contentHash }) {
+                    if let plugin = loaded {
                         completeCLIInstallation(requestID: cliRequest.requestID, result: .success([
                             "installed": true,
                             "pluginID": .string(plugin.id),

@@ -20,6 +20,11 @@ final class NectoAgentSkills {
         }
     }
 
+    struct InstallResult {
+        let isUpdate: Bool
+        let succeeded: Bool
+    }
+
     private(set) var agents: [Agent] = []
     private(set) var installed: Set<Agent> = []
     private(set) var updates: Set<Agent> = []
@@ -58,9 +63,11 @@ final class NectoAgentSkills {
         }
     }
 
-    func install(_ agent: Agent) async {
+    @discardableResult
+    func install(_ agent: Agent) async -> InstallResult? {
+        let isUpdate = updates.contains(agent)
         guard installing == nil, agents.contains(agent),
-              !installed.contains(agent) || updates.contains(agent) else { return }
+              !installed.contains(agent) || isUpdate else { return nil }
         installing = agent
         error = nil
         defer {
@@ -72,15 +79,17 @@ final class NectoAgentSkills {
             environment["HOME"] = home.path
             environment["CFFIXED_USER_HOME"] = home.path
             var arguments = ["skills", "install", "--\(agent.rawValue)"]
-            if updates.contains(agent) { arguments.append("--force") }
+            if isUpdate { arguments.append("--force") }
             let output = try await NectoProcessRunner.run(tool.path, arguments: arguments, environment: environment)
             guard output.exitCode == 0 else {
                 let detail = String(decoding: output.stderr, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
                 error = detail.isEmpty ? NectoL10n.text("Could not install the skill.") : detail
-                return
+                return InstallResult(isUpdate: isUpdate, succeeded: false)
             }
+            return InstallResult(isUpdate: isUpdate, succeeded: true)
         } catch {
             self.error = error.localizedDescription
+            return InstallResult(isUpdate: isUpdate, succeeded: false)
         }
     }
 
