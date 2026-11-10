@@ -99,7 +99,11 @@ struct SettingsScreen: View {
             if page != .shellAccess { selectedShellCaller = nil }
             if page == .plugins { await model.checkPluginUpdates() }
             if page == .eventExporter {
-                exporterEntries = await model.diagnostics.recent(source: .exporter)
+                for await entries in await model.diagnostics.updates(source: .exporter) {
+                    guard !Task.isCancelled else { return }
+                    exporterEntries = entries
+                }
+                return
             }
             guard page == .diagnostics else { return }
             entries = await model.diagnostics.recent()

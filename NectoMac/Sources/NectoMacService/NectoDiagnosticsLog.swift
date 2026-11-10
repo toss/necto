@@ -60,6 +60,7 @@ public actor NectoDiagnosticsLog {
     private var entries: [Entry] = []
     private var droppedCount = 0
     private var acknowledgedFailures = 0
+    private var observers: [UUID: (source: Source?, continuation: AsyncStream<[Entry]>.Continuation)] = [:]
 
     public init() {}
 
@@ -79,6 +80,30 @@ public actor NectoDiagnosticsLog {
             acknowledgedFailures = max(0, acknowledgedFailures)
             droppedCount += removed.count
             entries.removeFirst(removed.count)
+        }
+        publishUpdates()
+    }
+
+    /// Starts with the current entries, then keeps an open log view up to date.
+    /// Slow readers only need the latest snapshot, which includes retained entries.
+    public func updates(source: Source? = nil) -> AsyncStream<[Entry]> {
+        let (stream, continuation) = AsyncStream<[Entry]>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let id = UUID()
+        observers[id] = (source, continuation)
+        continuation.yield(recent(source: source))
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeObserver(id) }
+        }
+        return stream
+    }
+
+    private func removeObserver(_ id: UUID) {
+        observers.removeValue(forKey: id)
+    }
+
+    private func publishUpdates() {
+        for observer in observers.values {
+            observer.continuation.yield(recent(source: observer.source))
         }
     }
 
@@ -136,5 +161,6 @@ public actor NectoDiagnosticsLog {
         entries.removeAll()
         droppedCount = 0
         acknowledgedFailures = 0
+        publishUpdates()
     }
 }

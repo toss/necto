@@ -9,6 +9,51 @@ import Testing
 
 @Suite("Diagnostics log")
 struct NectoDiagnosticsLogTests {
+    @Test("an open exporter log receives existing and new entries", .timeLimit(.minutes(1)))
+    func liveExporterEntries() async {
+        let log = NectoDiagnosticsLog()
+        await log.append(.info, .exporter, "ready")
+        await log.append(.info, .connection, "connected")
+        var updates = await log.updates(source: .exporter).makeAsyncIterator()
+        #expect(await updates.next()?.map(\.message) == ["ready"])
+
+        await log.append(.warning, .exporter, "retrying", detail: "Attempt 2")
+        let latest = await updates.next()
+        #expect(latest?.map(\.message) == ["retrying", "ready"])
+        #expect(latest?.first?.detail == "Attempt 2")
+
+        await log.clear()
+        #expect(await updates.next()?.isEmpty == true)
+    }
+
+    @Test("slow readers receive the latest retained snapshot", .timeLimit(.minutes(1)))
+    func coalescesUpdates() async {
+        let log = NectoDiagnosticsLog()
+        var updates = await log.updates().makeAsyncIterator()
+        #expect(await updates.next()?.isEmpty == true)
+
+        for index in 0 ... NectoDiagnosticsLog.capacity {
+            await log.append(.info, .exporter, "line \(index)")
+        }
+        let latest = await updates.next()
+        #expect(latest?.count == NectoDiagnosticsLog.capacity)
+        #expect(latest?.first?.message == "line \(NectoDiagnosticsLog.capacity)")
+        #expect(latest?.last?.message == "line 1")
+    }
+
+    @Test("other sources evict stale entries from an open filtered log", .timeLimit(.minutes(1)))
+    func filteredEviction() async {
+        let log = NectoDiagnosticsLog()
+        await log.append(.info, .exporter, "ready")
+        var updates = await log.updates(source: .exporter).makeAsyncIterator()
+        #expect(await updates.next()?.count == 1)
+
+        for _ in 0 ..< NectoDiagnosticsLog.capacity {
+            await log.append(.info, .connection, "connected")
+        }
+        #expect(await updates.next()?.isEmpty == true)
+    }
+
     @Test("reads newest first")
     func newestFirst() async {
         let log = NectoDiagnosticsLog()
