@@ -265,6 +265,7 @@
 "Event Exporter" = "Event Exporter";
 "Plugin events" = "플러그인 이벤트";
 "Exporter diagnostics" = "Exporter 진단 로그";
+"View diagnostics" = "진단 로그 보기";
 "Exporter diagnostics appear here." = "Exporter의 진단 내용을 확인할 수 있어요.";
 "Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection." = "Necto 자체 활동과 현재 및 앞으로 설치되는 플러그인을 포함하며, 제외한 ID는 전달하지 않아요. 수집을 끝내려면 Exporter를 제거해 주세요.";
 

@@ -2,9 +2,70 @@
 //  Copyright (c) 2026 Viva Republica, Inc.
 //
 
+import AppKit
 import NectoMacService
 import Foundation
 import SwiftUI
+
+/// A detail of the exporter settings, with a subscription only while it is open.
+struct SettingsExporterDiagnostics: View {
+    let log: NectoDiagnosticsLog
+    let scale: CGFloat
+    let back: () -> Void
+    @State private var entries: [NectoDiagnosticsLog.Entry] = []
+    @State private var didCopy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: back) {
+                Label(NectoL10n.text("Event Exporter"), systemImage: "chevron.left")
+                    .font(.necto(.label, scale: scale))
+                    .foregroundStyle(NectoTheme.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("settings.exporter-diagnostics.back")
+            .padding(.bottom, 16)
+
+            HStack(alignment: .firstTextBaseline) {
+                NectoSectionTitle(NectoL10n.text("Exporter diagnostics"), scale: scale, isFirst: true)
+                Spacer(minLength: 12)
+                Button(didCopy ? NectoL10n.text("Copied") : NectoL10n.text("Copy all")) { copyLog() }
+                    .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+                    .disabled(entries.isEmpty)
+            }
+
+            if entries.isEmpty {
+                NectoEmpty(
+                    title: NectoL10n.text("Nothing logged yet"),
+                    detail: NectoL10n.text("Exporter diagnostics appear here."),
+                    scale: scale
+                )
+                .frame(height: 120)
+            } else {
+                ForEach(entries) { entry in
+                    LogRow(entry: entry, scale: scale)
+                }
+            }
+        }
+        .task {
+            for await entries in await log.updates(source: .exporter) {
+                guard !Task.isCancelled else { return }
+                self.entries = entries
+            }
+        }
+    }
+
+    private func copyLog() {
+        Task {
+            let transcript = await log.transcript(source: .exporter)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(transcript, forType: .string)
+            didCopy = true
+            try? await Task.sleep(for: .seconds(1.4))
+            didCopy = false
+        }
+    }
+}
 
 /// One line: when, how bad, where from, and what happened.
 struct LogRow: View {

@@ -24,6 +24,7 @@ struct SettingsScreen: View {
     @AppStorage("settingsNavWidth") private var navWidth = Double(NectoNav<Page>.defaultWidth)
     @State private var page = Page.general
     @State private var eventPluginSearch = ""
+    @State private var showingExporterDiagnostics = false
     @State private var selectedShellCaller: NectoShellCaller?
 
     private var scale: CGFloat {
@@ -42,8 +43,6 @@ struct SettingsScreen: View {
     @State private var entries: [NectoDiagnosticsLog.Entry] = []
     @State private var droppedLines = 0
     @State private var didCopy = false
-    @State private var exporterEntries: [NectoDiagnosticsLog.Entry] = []
-    @State private var didCopyExporterLog = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -76,7 +75,14 @@ struct SettingsScreen: View {
                             selectedCaller: $selectedShellCaller
                         )
                     case .plugins: plugins
-                    case .eventExporter: eventExporter
+                    case .eventExporter:
+                        if showingExporterDiagnostics {
+                            SettingsExporterDiagnostics(log: model.diagnostics, scale: scale) {
+                                showingExporterDiagnostics = false
+                            }
+                        } else {
+                            eventExporter
+                        }
                     case .diagnostics: diagnostics
                     }
                 }
@@ -87,6 +93,7 @@ struct SettingsScreen: View {
         .padding(.leading, 12)
         .background(NectoTheme.background)
         .onChange(of: page, initial: true) { _, page in
+            if page != .eventExporter { showingExporterDiagnostics = false }
             model.usageLogger.settingsOpened(page: page)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -98,13 +105,6 @@ struct SettingsScreen: View {
         .task(id: page) {
             if page != .shellAccess { selectedShellCaller = nil }
             if page == .plugins { await model.checkPluginUpdates() }
-            if page == .eventExporter {
-                for await entries in await model.diagnostics.updates(source: .exporter) {
-                    guard !Task.isCancelled else { return }
-                    exporterEntries = entries
-                }
-                return
-            }
             guard page == .diagnostics else { return }
             entries = await model.diagnostics.recent()
             droppedLines = await model.diagnostics.dropped()
@@ -362,7 +362,13 @@ struct SettingsScreen: View {
 
     @ViewBuilder
     private var eventExporter: some View {
-        NectoSectionTitle(NectoL10n.text("Event Exporter"), scale: scale, isFirst: true)
+        HStack(alignment: .firstTextBaseline) {
+            NectoSectionTitle(NectoL10n.text("Event Exporter"), scale: scale, isFirst: true)
+            Spacer(minLength: 12)
+            Button(NectoL10n.text("View diagnostics")) { showingExporterDiagnostics = true }
+                .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+                .accessibilityIdentifier("settings.exporter-diagnostics.open")
+        }
 
         if let exporter = model.eventExporter {
             NectoRow(
@@ -416,47 +422,6 @@ struct SettingsScreen: View {
                 .padding(.top, 8)
         }
 
-        exporterDiagnostics
-    }
-
-    @ViewBuilder
-    private var exporterDiagnostics: some View {
-        HStack(alignment: .firstTextBaseline) {
-            NectoSectionTitle(NectoL10n.text("Exporter diagnostics"), scale: scale)
-            Spacer(minLength: 12)
-            Button(didCopyExporterLog ? NectoL10n.text("Copied") : NectoL10n.text("Copy all")) {
-                copyExporterLog()
-            }
-            .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
-            .disabled(exporterEntries.isEmpty)
-        }
-
-        if exporterEntries.isEmpty {
-            NectoEmpty(
-                title: NectoL10n.text("Nothing logged yet"),
-                detail: NectoL10n.text("Exporter diagnostics appear here."),
-                scale: scale
-            )
-            .frame(height: 120)
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(exporterEntries) { entry in
-                    LogRow(entry: entry, scale: scale)
-                }
-            }
-        }
-    }
-
-    private func copyExporterLog() {
-        Task {
-            let transcript = await model.diagnostics.transcript(source: .exporter)
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(transcript, forType: .string)
-
-            didCopyExporterLog = true
-            try? await Task.sleep(for: .seconds(1.4))
-            didCopyExporterLog = false
-        }
     }
 
     @ViewBuilder
