@@ -41,6 +41,8 @@ final class NectoExporterRuntime {
             registry: registry,
             target: nil,
             locale: NectoL10n.languageCode,
+            // Batching and retry timers must run without an attached window.
+            inactiveSchedulingPolicy: .none,
             eventDispatcher: eventDispatcher,
             diagnostics: diagnostics,
             usageLogger: usageLogger

@@ -78,6 +78,7 @@ struct NectoExporterWebViewTests {
         panels.synchronize(plugins: [feature], registry: registry)
         defer { panels.synchronize(plugins: [], registry: registry) }
         let featurePage = try #require(panels.page(for: feature.id))
+        #expect(featurePage.webView.configuration.preferences.inactiveSchedulingPolicy == .suspend)
         let firstWindow = UUID(), secondWindow = UUID()
         panels.present(feature.id, in: firstWindow)
         panels.release(windowID: firstWindow)
@@ -111,6 +112,37 @@ struct NectoExporterWebViewTests {
             if replacement == nil { try await Task.sleep(for: .milliseconds(10)) }
         }
         await dispatcher.unregisterExporter(registrationID: try #require(replacement))
+    }
+
+    @Test("Hidden exporter timers run without host JavaScript calls")
+    func timersRunWhileIdle() async throws {
+        let dispatcher = NectoEventDispatcher(installationID: "test-installation", nectoVersion: "1.0.0")
+        let diagnostics = NectoDiagnosticsLog()
+        let usageLogger = Self.makeUsageLogger(dispatcher: dispatcher, diagnostics: diagnostics)
+        let registry = NectoPluginRegistry()
+        let runtime = NectoExporterRuntime()
+        runtime.synchronize(exporter: .init(package: fixture()), registry: registry,
+                            eventDispatcher: dispatcher, diagnostics: diagnostics, usageLogger: usageLogger)
+        defer {
+            runtime.synchronize(exporter: nil, registry: registry, eventDispatcher: dispatcher,
+                                diagnostics: diagnostics, usageLogger: usageLogger)
+        }
+        let page = try #require(runtime.page)
+        try await NectoWebViewSecurityTests.wait(page, for: "window.loaded === true")
+        #expect(page.webView.isHidden && page.webView.window == nil)
+        _ = try await page.webView.evaluateJavaScript("""
+        setTimeout(() => window.webkit.messageHandlers.necto.postMessage({
+            type: 'diagnostic', level: 'info', message: 'Idle timer fired'
+        }), 8500); null;
+        """)
+
+        // Poll native state only: evaluating JavaScript here would wake a suspended page.
+        let deadline = ContinuousClock.now + .seconds(20)
+        while ContinuousClock.now < deadline {
+            if await diagnostics.recent().contains(where: { $0.message == "Idle timer fired" }) { return }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        Issue.record("The hidden exporter timer did not run without a host wake-up")
     }
 
     @Test("Exporter replacement follows both content and installation identity")

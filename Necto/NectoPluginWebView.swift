@@ -59,6 +59,7 @@ final class NectoWebPage {
         locale: String = "en",
         isDark: Bool = false,
         websiteDataStore: WKWebsiteDataStore? = nil,
+        inactiveSchedulingPolicy: WKPreferences.InactiveSchedulingPolicy = .suspend,
         eventDispatcher: NectoEventDispatcher? = nil,
         diagnostics: NectoDiagnosticsLog? = nil,
         usageLogger: NectoUsageLogger? = nil
@@ -86,6 +87,7 @@ final class NectoWebPage {
         // Unregistered previews must not inherit or persist another installation's data.
         configuration.websiteDataStore = package.principal == nil ? .nonPersistent() : (websiteDataStore ?? .default())
         configuration.userContentController = controller
+        configuration.preferences.inactiveSchedulingPolicy = inactiveSchedulingPolicy
         configuration.setURLSchemeHandler(
             NectoPluginSchemeHandler(originHost: originHost, archive: package.archive),
             forURLScheme: NectoPluginSchemeHandler.scheme
