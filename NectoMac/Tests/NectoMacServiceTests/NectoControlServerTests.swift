@@ -102,7 +102,7 @@ private final class TestClient {
 }
 
 private func makeServer(
-    _ handler: StubHandler = StubHandler()
+    _ handler: any NectoControlHandling = StubHandler()
 ) throws -> (server: NectoControlServer, url: URL) {
     let url = FileManager.default.temporaryDirectory
         .appending(path: "necto-control-test-\(UUID().uuidString.prefix(8)).sock")
@@ -146,6 +146,60 @@ struct NectoControlServerTests {
         let response = try await client.receive()
         #expect(response.kind == .result)
         #expect(response.value?["path"]?.stringValue == repository)
+    }
+
+    @Test("exporter review, approval and rejection route through the control bridge")
+    func exporterRoundTrip() async throws {
+        let bridge = NectoControlBridge(
+            registry: NectoPluginRegistry(), connectedApps: { [] },
+            reviewExporter: { ["pending": false] },
+            approveExporter: { ["shellAccess": $0.shellAccess.map { .string($0.rawValue) } ?? .null] },
+            rejectExporter: { ["rejected": true, "pluginID": "sample"] }
+        )
+        let (server, url) = try makeServer(bridge)
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        for input: NectoJSONValue? in [nil, .null, .object([:])] {
+            try await client.session.send(NectoControlRequest(kind: .reviewExporter, input: input))
+            #expect(try await client.receive().value == ["pending": false])
+            try await client.session.send(NectoControlRequest(kind: .approveExporter, input: input))
+            #expect(try await client.receive().value == ["shellAccess": .null])
+            try await client.session.send(NectoControlRequest(kind: .rejectExporter, input: input))
+            #expect(try await client.receive().value == ["rejected": true, "pluginID": "sample"])
+        }
+        for choice in NectoExporterApproval.ShellAccess.allCases {
+            let input = NectoExporterApproval(shellAccess: choice).input
+            try await client.session.send(NectoControlRequest(kind: .approveExporter, input: input))
+            #expect(try await client.receive().value == ["shellAccess": .string(choice.rawValue)])
+        }
+    }
+
+    @Test("exporter requests reject scope selectors and unsupported input", arguments: [
+        NectoControlRequest.Kind.reviewExporter, .approveExporter, .rejectExporter,
+    ])
+    func validatesExporterRequest(kind: NectoControlRequest.Kind) async throws {
+        let (server, url) = try makeServer()
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        let scoped: [NectoControlRequest] = [
+            .init(kind: kind, pluginID: "sample"), .init(kind: kind, operationID: "read"),
+            .init(kind: kind, app: "com.example.app"), .init(kind: kind, device: "device"),
+            .init(kind: kind, desktop: true), .init(kind: kind, desktop: false),
+        ]
+        let invalidInputs: [NectoJSONValue] = ["full", [], ["path": "/tmp/exporter"],
+            ["shellAccess": true], ["shellAccess": .null], ["shellAccess": "protected"],
+            ["shellAccess": "commands", "commands": ["echo hello"]],
+        ]
+        let inputs = kind == .approveExporter ? invalidInputs : invalidInputs + [["shellAccess": "none"]]
+        for request in scoped + inputs.map({ .init(kind: kind, input: $0) }) {
+            try await client.session.send(request)
+            let response = try await client.receive()
+            #expect(response.kind == .error)
+            #expect(response.error?.code == "INVALID_INPUT")
+        }
+
+        try await client.session.send(NectoControlRequest(kind: kind))
+        #expect(try await client.receive().error?.code == "OPERATION_UNAVAILABLE")
     }
 
     @Test("the socket rejects ambiguous installation sources")

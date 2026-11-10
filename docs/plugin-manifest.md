@@ -185,7 +185,9 @@ Full Access and Protected clear the old list. Installer rechecks the reviewed
 policy and installation before approving. A failed load restores the shell grant
 changed by that approval unless a later policy change has replaced it. This does
 not roll back installed files. Ordinary plugin installation retains its existing
-shell approval flow. Direct CLI approval commands and warnings are subsequent work.
+shell approval flow. The [exporter CLI commands](control-socket.md#exporter-approval-from-the-cli)
+use the same installation and permission application without opening a sheet.
+Warnings during unrelated CLI commands remain subsequent work.
 
 ### Identity and trust
 

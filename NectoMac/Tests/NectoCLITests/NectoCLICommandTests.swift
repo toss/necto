@@ -12,6 +12,20 @@ import Testing
 
 @Suite("necto-cli commands")
 struct NectoCLICommandTests {
+    @Test("exporter review displays an empty queue and global Full Access without a shell choice")
+    func exporterReviewWithoutShellChoice() {
+        #expect(Exporter.Review.render(["pending": false]) == "No exporter is pending review.")
+
+        let text = Exporter.Review.render([
+            "pending": true, "exporter": ["name": "Sample"],
+            "shellAccess": ["requested": true, "globalFullAccess": true, "currentLevel": "protected", "availableChoices": []],
+        ])
+        #expect(text.contains("Global Full Access On"))
+        #expect(text.contains("Global Full Access allows every caller to run any shell command."))
+        #expect(text.contains("No --shell-access choice is available."))
+        #expect(text.contains("necto exporter approve to install"))
+    }
+
     @Test("explicit empty input is invalid rather than the omitted input default")
     func rejectsExplicitEmptyInput() throws {
         let parsed = try NectoCLI.parseAsRoot(["plugin", "send", "sample", "read", "--desktop", "--input", ""])

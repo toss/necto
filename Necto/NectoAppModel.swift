@@ -565,6 +565,18 @@ final class NectoAppModel {
             delete: { [weak self] id in
                 guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
                 return try await self.deletePluginFromCLI(id: id)
+            },
+            reviewExporter: { [weak self] in
+                guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
+                return try await self.installer.reviewExporterFromCLI()
+            },
+            approveExporter: { [weak self] approval in
+                guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
+                return try await self.installer.approveExporterFromCLI(approval)
+            },
+            rejectExporter: { [weak self] in
+                guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
+                return try await self.installer.rejectExporterFromCLI()
             }
         ))
         do {

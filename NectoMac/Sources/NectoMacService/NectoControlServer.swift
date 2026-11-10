@@ -17,6 +17,9 @@ public protocol NectoControlHandling: Sendable {
     func plugins(app: String?, device: String?, desktop: Bool, pluginID: String?, operationID: String?) async throws -> NectoJSONValue
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue
     func deletePlugin(id: String) async throws -> NectoJSONValue
+    func reviewExporter() async throws -> NectoJSONValue
+    func approveExporter(_ approval: NectoExporterApproval) async throws -> NectoJSONValue
+    func rejectExporter() async throws -> NectoJSONValue
     func invoke(
         pluginID: String,
         operationID: String,
@@ -43,6 +46,15 @@ public extension NectoControlHandling {
     }
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue {
         throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support plugin installation.")
+    }
+    func reviewExporter() async throws -> NectoJSONValue {
+        throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support exporter review.")
+    }
+    func approveExporter(_ approval: NectoExporterApproval) async throws -> NectoJSONValue {
+        throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support exporter approval.")
+    }
+    func rejectExporter() async throws -> NectoJSONValue {
+        throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support exporter rejection.")
     }
 }
 
@@ -280,6 +292,22 @@ public final class NectoControlServer: @unchecked Sendable {
                 let value = try await handler.deletePlugin(id: deletion.pluginID)
                 responder.send(.init(id: request.id, kind: .result, value: value))
 
+            case .reviewExporter:
+                try validateExporterRequest(request)
+                let value = try await handler.reviewExporter()
+                responder.send(.init(id: request.id, kind: .result, value: value))
+
+            case .approveExporter:
+                try validateExporterRequest(request)
+                let approval = try NectoExporterApproval(input: request.input ?? .null)
+                let value = try await handler.approveExporter(approval)
+                responder.send(.init(id: request.id, kind: .result, value: value))
+
+            case .rejectExporter:
+                try validateExporterRequest(request)
+                let value = try await handler.rejectExporter()
+                responder.send(.init(id: request.id, kind: .result, value: value))
+
             case .invoke:
                 let value = try await handler.invoke(
                     pluginID: request.pluginID ?? "",
@@ -319,6 +347,16 @@ public final class NectoControlServer: @unchecked Sendable {
                     message: bridged?.message ?? String(describing: error)
                 )
             ))
+        }
+    }
+
+    private static func validateExporterRequest(_ request: NectoControlRequest) throws {
+        guard request.pluginID == nil, request.operationID == nil, request.app == nil,
+              request.device == nil, request.desktop == nil else {
+            throw NectoBridgeError(code: .invalidInput, message: "Exporter commands do not accept plugin, operation, app, device, or desktop selectors.")
+        }
+        if request.kind != .approveExporter, let input = request.input, input != .object([:]) {
+            throw NectoBridgeError(code: .invalidInput, message: "Exporter review and rejection do not accept input.")
         }
     }
 

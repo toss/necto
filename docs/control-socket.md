@@ -35,6 +35,9 @@ general CLI calls from plugin grants. See [shell access](bridges.md#shell-access
 { "id": "i1", "kind": "installPlugin", "input": { "path": "/absolute/path/to/dist" } }
 { "id": "i2", "kind": "installPlugin", "input": { "repositoryURL": "https://github.com/owner/plugins" } }
 { "id": "d1", "kind": "deletePlugin", "pluginID": "com.example.plugin" }
+{ "id": "e1", "kind": "reviewExporter" }
+{ "id": "e2", "kind": "approveExporter", "input": { "shellAccess": "commands" } }
+{ "id": "e3", "kind": "rejectExporter" }
 { "id": "r3", "kind": "invoke",    "pluginID": "url-scheme", "operationID": "links.open",
   "input": { "url": "https://example.com" }, "device": "sim-1", "app": "com.example.app" }
 { "id": "r4", "kind": "subscribe", "pluginID": "plugin-sample", "operationID": "host.ticks", "device": "sim-1", "app": "com.example.app" }
@@ -173,3 +176,67 @@ Deletion is explicit and does
 not ask for a second installation approval; it does not delete a GitHub repository.
 
 Use `necto install --help`, `necto delete --help` or `necto plugin --help` for options.
+
+## Exporter approval from the CLI
+
+An exporter placed in Necto's plugins folder can be reviewed and approved without
+opening an approval sheet. The Necto app must be running. These commands do not
+download packages and do not take a plugin ID, file path or device selector:
+
+```bash
+necto exporter review
+necto exporter review --json
+
+# Choose exactly one option when the review requests a shell access choice.
+necto exporter approve --shell-access full
+necto exporter approve --shell-access commands
+necto exporter approve --shell-access none
+
+# No shell option when global Full Access is on or no shell access is requested.
+necto exporter approve
+
+necto exporter reject
+```
+
+All three commands support `--json`; it changes output formatting only. Review
+reports the candidate's identity, version, author, source, content hash, collection
+scope, current global and individual shell access, interpreted operations and
+available choices. Descriptions are supplied by the author. Unknown contracts or
+unreadable command lists remain visible; they do not silently become approved
+commands. Text output escapes terminal controls; JSON preserves the source values.
+
+`reviewExporter` returns `pending: false` when no valid exporter awaits approval.
+Otherwise it returns `pending: true`, `exporter`, `collection`, and `shellAccess`.
+Several pending exporters fail rather than selecting one. Review does not execute
+the exporter, grant access or register collection. It keeps one review in the app's
+memory between CLI connections; a new successful review replaces it. It does not
+reserve the installer while the user considers the choice.
+
+`approveExporter` accepts only an optional `shellAccess` input:
+
+| Value | Installation choice |
+| --- | --- |
+| `full` | Allow all shell commands for this exporter. |
+| `commands` | Replace its approved command list with the complete declared list. |
+| `none` | Set its individual shell policy to Protected. |
+| omitted | Preserve individual shell access; only valid when no choice is required. |
+
+Approval requires a prior review. It uses the same installation and permission
+application as the UI, rechecking the candidate, files, installation identity and
+shell policy before committing. Changed reviews must be repeated; invalid shell
+choices can be corrected against the same review. Approval returns the common
+installation result (`installed`, `pluginID`, `name`, `version`, `enabled`).
+The legacy `enabled` field describes plugin enablement storage, not an exporter
+collection switch; removing the exporter stops collection.
+
+`rejectExporter` discards the review and returns `rejected: true` and `pluginID`.
+It leaves candidate files and existing grants alone, does not uninstall an existing
+exporter and does not suppress future warnings. Approval, rejection or restarting
+Necto requires a new review before another decision. A concurrent installation or
+approval sheet must finish first. Once commit has begun, files may remain after a
+failed load or disconnected CLI, as with the existing installation path.
+
+The control socket trusts the local OS user; these commands do not independently
+verify that a person supplied consent. Agents must obtain the user's explicit
+choice before sending approval. Automatic approval and pending-exporter warnings
+during unrelated commands are not part of this interface.

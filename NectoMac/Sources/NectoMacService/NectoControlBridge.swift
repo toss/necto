@@ -12,6 +12,9 @@ public struct NectoControlBridge: NectoControlHandling {
     private let connectedApps: @Sendable () async -> [NectoConnectedApp]
     private let install: @Sendable (NectoPluginInstallSource) async throws -> NectoJSONValue
     private let delete: @Sendable (String) async throws -> NectoJSONValue
+    private let review: @Sendable () async throws -> NectoJSONValue
+    private let approve: @Sendable (NectoExporterApproval) async throws -> NectoJSONValue
+    private let reject: @Sendable () async throws -> NectoJSONValue
 
     public init(
         registry: NectoPluginRegistry,
@@ -21,12 +24,24 @@ public struct NectoControlBridge: NectoControlHandling {
         },
         delete: @escaping @Sendable (String) async throws -> NectoJSONValue = { _ in
             throw NectoBridgeError(code: .operationUnavailable, message: "Plugin deletion is unavailable.")
+        },
+        reviewExporter: @escaping @Sendable () async throws -> NectoJSONValue = {
+            throw NectoBridgeError(code: .operationUnavailable, message: "Exporter review is unavailable.")
+        },
+        approveExporter: @escaping @Sendable (NectoExporterApproval) async throws -> NectoJSONValue = { _ in
+            throw NectoBridgeError(code: .operationUnavailable, message: "Exporter approval is unavailable.")
+        },
+        rejectExporter: @escaping @Sendable () async throws -> NectoJSONValue = {
+            throw NectoBridgeError(code: .operationUnavailable, message: "Exporter rejection is unavailable.")
         }
     ) {
         self.registry = registry
         self.connectedApps = connectedApps
         self.install = install
         self.delete = delete
+        self.review = reviewExporter
+        self.approve = approveExporter
+        self.reject = rejectExporter
     }
 
     public func deletePlugin(id: String) async throws -> NectoJSONValue { try await delete(id) }
@@ -34,6 +49,14 @@ public struct NectoControlBridge: NectoControlHandling {
     public func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue {
         try await install(source)
     }
+
+    public func reviewExporter() async throws -> NectoJSONValue { try await review() }
+
+    public func approveExporter(_ approval: NectoExporterApproval) async throws -> NectoJSONValue {
+        try await approve(approval)
+    }
+
+    public func rejectExporter() async throws -> NectoJSONValue { try await reject() }
 
     public func targets() async -> NectoJSONValue {
         let apps = await connectedApps()

@@ -42,7 +42,7 @@ final class InstallCoordinator {
 
     private(set) var isDeleting = false
     private(set) var isReloading = false
-    var isBusy: Bool { isReloading || isDeleting || isCancelling || isCommitting || cliInstallation != nil || prompt != nil || isReadingRelease || isFetching || !fetchQueue.isEmpty }
+    var isBusy: Bool { isReviewingExporter || isReloading || isDeleting || isCancelling || isCommitting || cliInstallation != nil || prompt != nil || isReadingRelease || isFetching || !fetchQueue.isEmpty }
 
     func reloadPlugins() async {
         guard !isBusy, !Task.isCancelled else { return }
@@ -82,6 +82,8 @@ final class InstallCoordinator {
     }
     @ObservationIgnored private var cliInstallation: CLIInstallation?
     @ObservationIgnored private var workTask: Task<Void, Never>?
+    @ObservationIgnored private var cliExporterReview: PendingInstall?
+    private var isReviewingExporter = false
     private(set) var isCancelling = false
     private(set) var isCommitting = false
 
@@ -345,7 +347,7 @@ final class InstallCoordinator {
     /// several asks first, and what it shows comes from the manifests published beside
     /// the archives — nothing large is downloaded to draw that list.
     func beginInstallFromLink(_ text: String, cliRequestID: UUID? = nil) {
-        guard !isReloading, !isDeleting, !isCancelling, !isCommitting, !isFetching,
+        guard !isReviewingExporter, !isReloading, !isDeleting, !isCancelling, !isCommitting, !isFetching,
               pendingInstall == nil, pendingChoice == nil, fetchQueue.isEmpty else { return }
         guard cliInstallation == nil || cliInstallation?.requestID == cliRequestID else { return }
         installFailure = nil
@@ -517,6 +519,174 @@ final class InstallCoordinator {
         scheduleNext()
     }
 
+    // MARK: Exporter approval from the CLI
+
+    /// Reads a candidate without presenting a sheet, loading code or granting access.
+    /// Only this in-memory review survives between separate CLI connections.
+    func reviewExporterFromCLI() async throws -> NectoJSONValue {
+        try requireIdleForExporterCLI()
+        isReviewingExporter = true
+        defer { isReviewingExporter = false }
+        cliExporterReview = nil
+        try Task.checkCancellation()
+        guard let candidate = try pendingExporterCandidate() else { return ["pending": false] }
+        let staged = try await NectoPluginInstaller.stage(
+            from: candidate.rootURL,
+            installed: installedPlugins(),
+            expectedPluginID: candidate.id
+        )
+        let review = await reviewShellAccess(staged, origin: nil)
+        try Task.checkCancellation()
+        let pending = PendingInstall(staged: staged, shellReview: review, origin: nil)
+        try validateExporterCandidate(pending)
+        cliExporterReview = pending
+        return exporterReviewValue(pending)
+    }
+
+    func approveExporterFromCLI(_ approval: NectoExporterApproval) async throws -> NectoJSONValue {
+        try requireIdleForExporterCLI()
+        guard let pending = cliExporterReview else {
+            throw NectoBridgeError(code: .operationUnavailable, message: "Run necto exporter review before approving.")
+        }
+        let level: NectoShellAccessLevel? = approval.shellAccess.map {
+            switch $0 {
+            case .full: .fullAccess
+            case .commands: .commandApproval
+            case .none: .protected
+            }
+        }
+        // An invalid choice can be corrected without discarding the reviewed files.
+        do {
+            try pending.shellReview?.validateInstallationChoice(level)
+        } catch {
+            throw NectoBridgeError(
+                code: .invalidInput,
+                message: "Use a shell access choice shown by necto exporter review, or omit --shell-access when no choice is required."
+            )
+        }
+        try Task.checkCancellation()
+        isCommitting = true
+        cliExporterReview = nil
+        defer {
+            isCommitting = false
+            scheduleNext()
+        }
+        do {
+            return try await commitInstallation(pending, shellAccess: level, recheckExporterCandidate: true)
+        } catch NectoShellPolicy.InstallationError.staleReview {
+            throw NectoBridgeError(code: .operationUnavailable, message: "Shell access changed. Run necto exporter review again.")
+        } catch NectoLocalPluginFiles.Failure.changedSinceReview {
+            throw NectoBridgeError(code: .operationUnavailable, message: "The installation changed. Run necto exporter review again.")
+        }
+    }
+
+    func rejectExporterFromCLI() async throws -> NectoJSONValue {
+        try requireIdleForExporterCLI()
+        try Task.checkCancellation()
+        guard let pending = cliExporterReview else {
+            throw NectoBridgeError(code: .operationUnavailable, message: "Run necto exporter review before rejecting.")
+        }
+        cliExporterReview = nil
+        return ["rejected": true, "pluginID": .string(pending.staged.manifest.id)]
+    }
+
+    private func requireIdleForExporterCLI() throws {
+        guard !isBusy else {
+            throw NectoBridgeError(
+                code: .operationUnavailable,
+                message: "Finish the current installation or review in Necto before using exporter approval commands."
+            )
+        }
+    }
+
+    private func pendingExporterCandidate() throws -> NectoInstalledPackage? {
+        let grants = NectoPluginLibrary.grants
+        let candidates = installedPlugins().filter { package in
+            guard package.manifest.type == .eventExporter else { return false }
+            guard let record = package.installation,
+                  record.approvedContentHash == package.contentIdentity else { return true }
+            let bindings = Set(package.manifest.operations.map(\.binding.identity))
+            return !grants.unapproved(bindings, for: record.principal).isEmpty
+        }
+        guard candidates.count <= 1 else {
+            throw NectoBridgeError(
+                code: .operationUnavailable,
+                message: "More than one exporter is awaiting approval. Review the candidates in Necto Settings first."
+            )
+        }
+        return candidates.first
+    }
+
+    private func validateExporterCandidate(_ pending: PendingInstall) throws {
+        guard let current = try pendingExporterCandidate(),
+              current.id == pending.staged.manifest.id,
+              current.rootURL.standardizedFileURL == pending.staged.previous?.rootURL.standardizedFileURL,
+              current.contentIdentity == pending.staged.archive.contentHash,
+              current.contentIdentity == pending.staged.previous?.contentIdentity,
+              current.installation == pending.staged.previous?.installation else {
+            throw NectoBridgeError(
+                code: .operationUnavailable,
+                message: "The exporter candidate changed. Run necto exporter review again."
+            )
+        }
+    }
+
+    private func exporterReviewValue(_ pending: PendingInstall) -> NectoJSONValue {
+        guard let review = pending.shellReview else { return ["pending": false] }
+        let manifest = pending.staged.manifest
+        let operations: [NectoJSONValue] = review.requestedOperations.map { operation in
+            var value: [String: NectoJSONValue] = [
+                "id": .string(operation.operationID),
+                "description": .string(operation.description),
+                "binding": ["name": .string(operation.binding.name), "version": .number(Double(operation.binding.version))],
+                "kind": .string(operation.kind.rawValue),
+            ]
+            switch operation.interpretation {
+            case let .execute(.values(commands)):
+                value["status"] = "commands"
+                value["commands"] = .array(commands.map(NectoJSONValue.string))
+            case let .execute(.unavailable(reason)):
+                value["status"] = "unavailable"
+                let reasonName = switch reason {
+                case .unsupportedSchema: "unsupportedSchema"
+                case .propertyNotDeclared: "propertyNotDeclared"
+                case .enumNotDeclared: "enumNotDeclared"
+                case .notStringEnum: "notStringEnum"
+                }
+                value["reason"] = .string(reasonName)
+            case .authorizationRequest:
+                value["status"] = "authorizationRequest"
+            case .unsupportedContract:
+                value["status"] = "unsupportedContract"
+            }
+            return .object(value)
+        }
+        let choices: [NectoJSONValue] = review.availableAccessLevels.map {
+            switch $0 {
+            case .fullAccess: "full"
+            case .commandApproval: "commands"
+            case .protected: "none"
+            }
+        }
+        return [
+            "pending": true,
+            "exporter": [
+                "id": .string(manifest.id), "name": .string(manifest.name),
+                "version": .string(manifest.version), "author": .string(manifest.author),
+                "description": .string(manifest.description), "source": .string(pending.staged.origin),
+                "contentHash": .string(pending.staged.archive.contentHash),
+            ],
+            "collection": ["includesNecto": true, "includesCurrentAndFuturePlugins": true, "preservesExclusions": true],
+            "shellAccess": [
+                "requested": .bool(review.requestsShellAccess),
+                "globalFullAccess": .bool(review.isFullAccessEnabled),
+                "currentLevel": .string((review.currentGrant?.level ?? .protected).rawValue),
+                "availableChoices": .array(choices),
+                "operations": .array(operations),
+            ],
+        ]
+    }
+
     private func reviewShellAccess(
         _ staged: NectoPluginInstaller.Staged,
         origin: NectoLocalPluginInstallation.Origin?
@@ -532,79 +702,22 @@ final class InstallCoordinator {
 
     func confirmInstall(shellAccess level: NectoShellAccessLevel? = nil) {
         guard let pending = pendingInstall, !isCommitting else { return }
-        let staged = pending.staged
         isCommitting = true
         let cliRequest = cliInstallation
         pendingInstall = nil
+        cliExporterReview = nil
 
         workTask = Task {
-            var shellChange: NectoShellPolicy.InstallationChange?
+            defer {
+                isCommitting = false
+                scheduleNext()
+            }
             do {
-                if let reviewed = pending.shellReview {
-                    let current = await reviewShellAccess(staged, origin: pending.origin)
-                    guard current == reviewed else { throw NectoShellPolicy.InstallationError.staleReview }
-                    try reviewed.validateInstallationChoice(level)
-                } else if level != nil {
-                    throw NectoShellPolicy.InstallationError.unavailableAccessLevel
-                }
-                try Task.checkCancellation()
-                try NectoPluginInstaller.validateExporter(staged.manifest, installed: installedPlugins())
-                guard NectoPluginLibrary.installations[staged.manifest.id] == staged.previous?.installation else {
-                    throw NectoLocalPluginFiles.Failure.changedSinceReview
-                }
-                let installed = try NectoPluginInstaller.commit(staged, into: installationDirectory ?? NectoPluginLibrary.directory)
-                var record = staged.previous?.installation ?? NectoLocalPluginInstallation(
-                    pluginID: staged.manifest.id,
-                    directoryPath: installed.path,
-                    approvedContentHash: staged.archive.contentHash,
-                    origin: pending.origin
-                )
-                let previousPrincipal = record.principal
-                record.approveUpdate(contentHash: staged.archive.contentHash, origin: pending.origin)
-                if let reviewed = pending.shellReview {
-                    shellChange = try await shellAccess.applyInstallationChoice(
-                        review: reviewed,
-                        level: level,
-                        for: record.principal
-                    )
-                }
-
-                if record.principal != previousPrincipal {
-                    var stale = NectoPluginLibrary.grants
-                    stale.revoke(previousPrincipal)
-                    NectoPluginLibrary.grants = stale
-                    await shellAccess.forget(previousPrincipal)
-                }
-                var records = NectoPluginLibrary.installations
-                records[record.pluginID] = record
-                NectoPluginLibrary.installations = records
-
-                var grants = NectoPluginLibrary.grants
-                grants.grant(Set(staged.manifest.operations.map(\.binding.identity)), to: record.principal)
-                NectoPluginLibrary.grants = grants
-
-                shellAccess.cancelRequests(for: record.principal)
-                let plugins = await reload()
-                guard let loaded = plugins.first(where: {
-                    $0.id == staged.manifest.id && $0.contentIdentity == staged.archive.contentHash
-                }) else {
-                    throw NectoBridgeError(
-                        code: .providerFailed,
-                        message: "Files were installed, but the plugin did not load. Check Necto Settings."
-                    )
-                }
-                if staged.previous?.installation == nil { didInstall(loaded) }
+                let result = try await commitInstallation(pending, shellAccess: level)
                 if let cliRequest {
-                    completeCLIInstallation(requestID: cliRequest.requestID, result: .success([
-                        "installed": true,
-                        "pluginID": .string(loaded.id),
-                        "name": .string(loaded.manifest.name),
-                        "version": .string(loaded.manifest.version),
-                        "enabled": .bool(!NectoPluginLibrary.disabledIDs.contains(loaded.id)),
-                    ]))
+                    completeCLIInstallation(requestID: cliRequest.requestID, result: .success(result))
                 }
             } catch {
-                if let shellChange { await shellAccess.rollbackInstallationChoice(shellChange) }
                 installFailure = error.localizedDescription
                 if let cliRequest {
                     completeCLIInstallation(requestID: cliRequest.requestID, result: .failure(
@@ -612,8 +725,83 @@ final class InstallCoordinator {
                     ))
                 }
             }
-            isCommitting = false
-            scheduleNext()
+        }
+    }
+
+    /// Both approval surfaces enter here after reserving the coordinator for commit.
+    private func commitInstallation(
+        _ pending: PendingInstall,
+        shellAccess level: NectoShellAccessLevel?,
+        recheckExporterCandidate: Bool = false
+    ) async throws -> NectoJSONValue {
+        let staged = pending.staged
+        var shellChange: NectoShellPolicy.InstallationChange?
+        do {
+            if let reviewed = pending.shellReview {
+                let current = await reviewShellAccess(staged, origin: pending.origin)
+                guard current == reviewed else { throw NectoShellPolicy.InstallationError.staleReview }
+                try reviewed.validateInstallationChoice(level)
+            } else if level != nil {
+                throw NectoShellPolicy.InstallationError.unavailableAccessLevel
+            }
+            try Task.checkCancellation()
+            if recheckExporterCandidate { try validateExporterCandidate(pending) }
+            try NectoPluginInstaller.validateExporter(staged.manifest, installed: installedPlugins())
+            guard NectoPluginLibrary.installations[staged.manifest.id] == staged.previous?.installation else {
+                throw NectoLocalPluginFiles.Failure.changedSinceReview
+            }
+            let installed = try NectoPluginInstaller.commit(staged, into: installationDirectory ?? NectoPluginLibrary.directory)
+            var record = staged.previous?.installation ?? NectoLocalPluginInstallation(
+                pluginID: staged.manifest.id,
+                directoryPath: installed.path,
+                approvedContentHash: staged.archive.contentHash,
+                origin: pending.origin
+            )
+            let previousPrincipal = record.principal
+            record.approveUpdate(contentHash: staged.archive.contentHash, origin: pending.origin)
+            if let reviewed = pending.shellReview {
+                shellChange = try await shellAccess.applyInstallationChoice(
+                    review: reviewed,
+                    level: level,
+                    for: record.principal
+                )
+            }
+
+            if record.principal != previousPrincipal {
+                var stale = NectoPluginLibrary.grants
+                stale.revoke(previousPrincipal)
+                NectoPluginLibrary.grants = stale
+                await shellAccess.forget(previousPrincipal)
+            }
+            var records = NectoPluginLibrary.installations
+            records[record.pluginID] = record
+            NectoPluginLibrary.installations = records
+
+            var grants = NectoPluginLibrary.grants
+            grants.grant(Set(staged.manifest.operations.map(\.binding.identity)), to: record.principal)
+            NectoPluginLibrary.grants = grants
+
+            shellAccess.cancelRequests(for: record.principal)
+            let plugins = await reload()
+            guard let loaded = plugins.first(where: {
+                $0.id == staged.manifest.id && $0.contentIdentity == staged.archive.contentHash
+            }) else {
+                throw NectoBridgeError(
+                    code: .providerFailed,
+                    message: "Files were installed, but the plugin did not load. Check Necto Settings."
+                )
+            }
+            if staged.previous?.installation == nil { didInstall(loaded) }
+            return [
+                "installed": true,
+                "pluginID": .string(loaded.id),
+                "name": .string(loaded.manifest.name),
+                "version": .string(loaded.manifest.version),
+                "enabled": .bool(!NectoPluginLibrary.disabledIDs.contains(loaded.id)),
+            ]
+        } catch {
+            if let shellChange { await shellAccess.rollbackInstallationChoice(shellChange) }
+            throw error
         }
     }
 

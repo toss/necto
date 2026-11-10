@@ -26,6 +26,12 @@ public struct NectoControlRequest: Sendable, Codable {
         case installPlugin
         /// Remove an installed desktop plugin through the app's removal path.
         case deletePlugin
+        /// Review the exporter currently awaiting approval in the app.
+        case reviewExporter
+        /// Approve the reviewed exporter with an optional shell access choice.
+        case approveExporter
+        /// Discard the current exporter review.
+        case rejectExporter
         /// Call an operation that answers once.
         case invoke
         /// Follow an operation that streams; events arrive until `end`.
