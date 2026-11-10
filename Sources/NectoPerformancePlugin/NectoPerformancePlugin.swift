@@ -142,6 +142,8 @@ public final class NectoPerformancePlugin: NectoPlugin, NectoPerformanceReportin
     }
 
     public func register(_ necto: NectoRegistrar) {
+        let logger = necto.logger
+
         necto.handle("performance.metrics") { [self] _ in
             ["metrics": .array(metrics.map(Self.describe))]
         }
@@ -164,6 +166,10 @@ public final class NectoPerformancePlugin: NectoPlugin, NectoPerformanceReportin
                     ])
                 }
 
+            logger.log(
+                "performance.operation",
+                params: ["operation": "series", "result": "success"]
+            )
             return ["series": .array(series)]
         }
 
@@ -178,6 +184,7 @@ public final class NectoPerformancePlugin: NectoPlugin, NectoPerformanceReportin
                     self?.receive(reading)
                 }
             }
+            logger.log("performance.subscription_started")
 
             do {
                 while !Task.isCancelled {
@@ -192,19 +199,38 @@ public final class NectoPerformancePlugin: NectoPlugin, NectoPerformanceReportin
         }
 
         necto.handle("performance.snapshot") { [self] _ in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "performance.operation",
+                    params: ["operation": "snapshot", "result": result]
+                )
+            }
+
             guard let sampler else {
                 throw NectoBridgeError(code: .operationUnavailable, message: "Process metrics were not enabled")
             }
             let reading = await sampler.snapshot()
             receive(reading)
+            result = "success"
             return ["snapshot": reading.snapshot]
         }
 
         necto.handle("performance.memory") { [self] _ in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "performance.operation",
+                    params: ["operation": "memory", "result": result]
+                )
+            }
+
             guard let sampler else {
                 throw NectoBridgeError(code: .operationUnavailable, message: "Process metrics were not enabled")
             }
-            return ["memory": await sampler.detail()]
+            let memory = await sampler.detail()
+            result = "success"
+            return ["memory": memory]
         }
     }
 

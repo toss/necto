@@ -86,6 +86,7 @@ public final class NectoUIControlPlugin: NectoPlugin, @unchecked Sendable {
     #endif
 
     public func register(_ necto: NectoRegistrar) {
+        let logger = necto.logger
         necto.handle("control.actionTargets") { [self] input in
             let query = input["query"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let available = await actionTargets().filter { !$0.actions.isEmpty }
@@ -94,7 +95,12 @@ public final class NectoUIControlPlugin: NectoPlugin, @unchecked Sendable {
                     $0?.localizedCaseInsensitiveContains(query) == true
                 }
             }
-            return ["targets": .array(matches.map(Self.encode))]
+            let output: NectoJSONValue = ["targets": .array(matches.map(Self.encode))]
+            logger.log(
+                "control.operation",
+                params: ["operation": "actionTargets", "result": "success"]
+            )
+            return output
         }
         necto.handle("control.readAccessibility") { [self] input in
             let query = input["query"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -104,11 +110,30 @@ public final class NectoUIControlPlugin: NectoPlugin, @unchecked Sendable {
                     $0?.localizedCaseInsensitiveContains(query) == true
                 }
             }
-            return ["items": .array(matches.map { $0.json })]
+            let output: NectoJSONValue = ["items": .array(matches.map { $0.json })]
+            logger.log(
+                "control.operation",
+                params: ["operation": "readAccessibility", "result": "success"]
+            )
+            return output
         }
         for operation in ["tap", "input", "swipe", "back"] {
             necto.handle("control.\(operation)") { [self] input in
-                try await action(operation, input)
+                do {
+                    let output = try await action(operation, input)
+                    var params: [String: NectoJSONValue] = ["operation": .string(operation), "result": "success"]
+                    if let changed = output["contentChanged"]?.boolValue {
+                        params["contentChanged"] = .bool(changed)
+                    }
+                    logger.log("control.operation", params: params)
+                    return output
+                } catch {
+                    logger.log(
+                        "control.operation",
+                        params: ["operation": .string(operation), "result": "failure"]
+                    )
+                    throw error
+                }
             }
         }
     }

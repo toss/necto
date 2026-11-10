@@ -88,6 +88,8 @@ public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
     }
 
     public func register(_ necto: NectoRegistrar) {
+        let logger = necto.logger
+
         necto.handle("files.roots") { [self] _ in
             ["roots": .array(roots.map { root in
                 [
@@ -99,6 +101,14 @@ public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
         }
 
         necto.handle("files.list") { [self] input in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "files.operation",
+                    params: ["operation": "list", "result": result]
+                )
+            }
+
             let directory = try resolve(input)
             let entries = try FileManager.default.contentsOfDirectory(
                 at: directory,
@@ -116,10 +126,19 @@ public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
                     if firstDirectory != secondDirectory { return firstDirectory }
                     return (first["name"]?.stringValue ?? "") < (second["name"]?.stringValue ?? "")
                 }
+            result = "success"
             return ["entries": .array(encoded)]
         }
 
         necto.handle("files.preview") { [self] input in
+            var params: [String: NectoJSONValue] = ["operation": "preview", "result": "failure"]
+            defer {
+                logger.log(
+                    "files.operation",
+                    params: params
+                )
+            }
+
             let file = try resolve(input, requirePath: true)
             let values = try file.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
             guard values.isDirectory != true else {
@@ -141,6 +160,8 @@ public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
                 fields["kind"] = .string("image")
                 fields["mediaType"] = .string(mediaType)
                 fields["base64"] = .string(try Data(contentsOf: file).base64EncodedString())
+                params["result"] = "success"
+                params["format"] = fields["kind"]
                 return ["file": .object(fields)]
             }
 
@@ -160,6 +181,8 @@ public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
                 // Not UTF-8 is as far as this guesses. Rendering base64 would say nothing.
                 fields["kind"] = .string("binary")
             }
+            params["result"] = "success"
+            params["format"] = fields["kind"]
             return ["file": .object(fields)]
         }
 
@@ -169,6 +192,14 @@ public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
         }
 
         necto.handle("files.write") { [self] input in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "files.operation",
+                    params: ["operation": "write", "result": result]
+                )
+            }
+
             let target = try resolve(input, requirePath: true)
             guard let content = input["content"]?.stringValue else {
                 throw NectoBridgeError(code: .invalidInput, message: "content is required")
@@ -179,6 +210,7 @@ public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
 
             let data = Data(content.utf8)
             try data.write(to: target, options: .atomic)
+            result = "success"
             return [
                 "written": .bool(true),
                 "size": .number(Double(data.count)),
@@ -186,8 +218,17 @@ public final class NectoFilesPlugin: NectoPlugin, @unchecked Sendable {
         }
 
         necto.handle("files.delete") { [self] input in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "files.operation",
+                    params: ["operation": "delete", "result": result]
+                )
+            }
+
             let target = try resolve(input, requirePath: true)
             try FileManager.default.removeItem(at: target)
+            result = "success"
             return ["removed": .bool(true)]
         }
     }

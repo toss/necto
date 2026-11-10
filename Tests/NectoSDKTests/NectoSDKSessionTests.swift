@@ -4,6 +4,7 @@
 
 import Foundation
 import NectoModel
+import NectoNetworkPlugin
 import NectoTransport
 import Testing
 @testable import NectoSDK
@@ -155,6 +156,39 @@ private func result(_ host: NectoMessageSession) async throws -> NectoPluginResu
 
 @Suite("SDK session ownership", .timeLimit(.minutes(1)))
 struct NectoSDKSessionTests {
+    @Test("a built-in operation emits the same usage event with its web or CLI channel",
+          arguments: [NectoInvocationChannel.web, .cli])
+    func builtInUsageChannel(channel: NectoInvocationChannel) async throws {
+        let harness = SessionHarness()
+        let plugin = NectoNetworkPlugin()
+        #expect(harness.runtime.register(plugin))
+        let (host, worker) = try await harness.connect()
+        defer { host.close(); harness.runtime.stop(); worker.cancel() }
+        try await host.handshake(timeout: .seconds(3)) {
+            let registration = try await host.receive(NectoEnvelope.self).decode(NectoPluginRegistration.self)
+            #expect(registration.pluginID == plugin.id)
+            try await host.send(NectoEnvelope(type: .pluginInvoke, encoding: NectoPluginInvocation(
+                requestID: "built-in-usage",
+                name: "necto.device.network-records.list",
+                version: 1,
+                kind: .once,
+                input: [:],
+                invocationChannel: channel
+            )))
+            let replies = [try await host.receive(NectoEnvelope.self), try await host.receive(NectoEnvelope.self)]
+            let result = try #require(replies.first { $0.type == .pluginResult }).decode(NectoPluginResult.self)
+            #expect(result.output == ["records": []])
+            let event = try #require(replies.first { $0.type == .pluginEvent }).decode(NectoPluginEvent.self)
+            #expect(event.pluginID == plugin.id)
+            #expect(event.channel == "necto.usage")
+            #expect(event.invocationChannel == channel)
+            #expect(event.payload == [
+                "eventName": "network.operation",
+                "params": ["operation": "list", "result": "success"],
+            ])
+        }
+    }
+
     @Test(
         "retained and handler logs carry their own context alongside handler results",
         arguments: [nil, .web, .cli] as [NectoInvocationChannel?]

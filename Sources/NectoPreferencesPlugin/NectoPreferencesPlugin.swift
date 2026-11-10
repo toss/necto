@@ -36,7 +36,17 @@ public final class NectoPreferencesPlugin: NectoPlugin, @unchecked Sendable {
     }
 
     public func register(_ necto: NectoRegistrar) {
+        let logger = necto.logger
+
         necto.handle("preferences.list") { [self] input in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "preferences.operation",
+                    params: ["operation": "list", "result": result]
+                )
+            }
+
             let defaults = try store(named: input["suite"]?.stringValue)
             let prefix = input["prefix"]?.stringValue ?? ""
 
@@ -45,16 +55,28 @@ public final class NectoPreferencesPlugin: NectoPlugin, @unchecked Sendable {
                 .sorted { $0.key < $1.key }
                 .map { Self.summary(key: $0.key, value: $0.value) }
 
-            return ["entries": .array(entries), "total": .number(Double(defaults.dictionaryRepresentation().count))]
+            let total = defaults.dictionaryRepresentation().count
+            result = "success"
+            return ["entries": .array(entries), "total": .number(Double(total))]
         }
 
         necto.handle("preferences.detail") { [self] input in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "preferences.operation",
+                    params: ["operation": "detail", "result": result]
+                )
+            }
+
             let key = try Self.requiredKey(input)
             let defaults = try store(named: input["suite"]?.stringValue)
             guard let value = defaults.object(forKey: key) else {
                 throw NectoBridgeError(code: .operationUnavailable, message: "No key '\(key)'")
             }
-            return ["entry": Self.detail(key: key, value: value)]
+            let entry = Self.detail(key: key, value: value)
+            result = "success"
+            return ["entry": entry]
         }
 
         necto.handle("preferences.suites") { [self] _ in
@@ -64,18 +86,44 @@ public final class NectoPreferencesPlugin: NectoPlugin, @unchecked Sendable {
         // Writing into a store a running app is reading from can change what it does
         // next. The name says so; a panel that wants to ask does the asking.
         necto.handle("preferences.set") { [self] input in
+            var params: [String: NectoJSONValue] = ["operation": "set", "result": "failure"]
+            defer {
+                logger.log(
+                    "preferences.operation",
+                    params: params
+                )
+            }
+
             let key = try Self.requiredKey(input)
             guard let value = input["value"] else {
                 throw NectoBridgeError(code: .invalidInput, message: "value is required")
             }
             let defaults = try store(named: input["suite"]?.stringValue)
             defaults.set(try Self.plain(value, as: input["type"]?.stringValue), forKey: key)
-            return ["entry": Self.detail(key: key, value: defaults.object(forKey: key) ?? NSNull())]
+            let entry = Self.detail(key: key, value: defaults.object(forKey: key) ?? NSNull())
+            let storedType = entry["type"]
+            switch storedType?.stringValue {
+            case "String", "Data", "Date", "Array", "Dictionary", "Bool", "Double", "Int":
+                params["valueType"] = storedType
+            default:
+                params["valueType"] = "Other"
+            }
+            params["result"] = "success"
+            return ["entry": entry]
         }
 
         necto.handle("preferences.remove") { [self] input in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "preferences.operation",
+                    params: ["operation": "remove", "result": result]
+                )
+            }
+
             let key = try Self.requiredKey(input)
             try store(named: input["suite"]?.stringValue).removeObject(forKey: key)
+            result = "success"
             return ["removed": .bool(true)]
         }
     }

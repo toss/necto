@@ -241,6 +241,47 @@ omits the channel. You do not pass a channel to `logger.log()`.
 See [usage event delivery](architecture.md#usage-event-delivery) for transport,
 registration and metadata rules.
 
+### Built-in operation examples
+
+The built-in plugins record selected operations with the same `necto.logger` API.
+They obtain the logger once during registration and call it in the handler, so web
+and CLI requests produce the same event with their respective invocation channel.
+These event names and fields are plugin conventions, not a required logging schema.
+
+| Plugin | Event | `operation` values |
+| --- | --- | --- |
+| Network | `network.operation` | `list`, `detail`, `clear` |
+| Events | `events.operation` | `list`, `detail`, `clear` |
+| Files | `files.operation` | `list`, `preview`, `write`, `delete` |
+| UserDefaults | `preferences.operation` | `list`, `detail`, `set`, `remove` |
+| Performance | `performance.operation` | `series`, `snapshot`, `memory` |
+| Control | `control.operation` | `actionTargets`, `readAccessibility`, `tap`, `input`, `swipe`, `back` |
+
+Each selected handler records one event with `result: success` or `failure`, while
+preserving its normal output and error. Failure refers to work inside that handler;
+host-side schema or authorization refusals that never reach it are not included.
+Network, Events and Performance also record one `<prefix>.subscription_started`
+event when their observation handler establishes a subscription. They do not log
+each delivered record, periodic sample, cancellation or stream completion.
+
+For example, a successful network list call produces:
+
+```json
+{"eventName":"network.operation","params":{"operation":"list","result":"success"}}
+```
+
+The narrow additional fields are Files preview `format` (`text`, `image`, `binary`),
+UserDefaults set `valueType` (a known stored type, otherwise `Other`), and a Control
+action's `contentChanged` boolean when its response supplies one. Inputs, record IDs,
+URLs, headers, bodies, file paths, preference keys and values, search terms, typed
+text, and error messages are not copied into these usage events.
+
+Counts describe operation execution, not unique user clicks: opening a panel,
+refreshing after a write, or running a CLI command can reach the same read handler.
+Split by the host-provided `web`/`cli` channel when interpreting usage. Host-side
+`necto.plugin.opened` already records panel exposure. Copying, tab changes and other
+web-only interactions require separate logs at the UI action when needed.
+
 ## The panel
 
 The panel is a web page that calls operations by their manifest ids. This example

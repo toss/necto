@@ -44,19 +44,35 @@ public final class NectoNetworkPlugin: NectoPlugin, NectoNetworkReporting, @unch
     public init() {}
 
     public func register(_ necto: NectoRegistrar) {
+        let logger = necto.logger
+
         necto.handle("network-records.list") { [self] input in
             let limit = Int(input["limit"]?.numberValue ?? 200)
             let page = lock.withLock { Array(records.prefix(limit)) }
-            return ["records": .array(page.map(NectoNetworkRecordCoding.summary))]
+            let summaries = page.map(NectoNetworkRecordCoding.summary)
+            logger.log(
+                "network.operation",
+                params: ["operation": "list", "result": "success"]
+            )
+            return ["records": .array(summaries)]
         }
 
         necto.handle("network-records.detail") { [self] input in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "network.operation",
+                    params: ["operation": "detail", "result": result]
+                )
+            }
+
             guard let recordID = input["recordID"]?.stringValue else {
                 throw NectoBridgeError(code: .invalidInput, message: "recordID is required")
             }
             guard let record = lock.withLock({ records.first { $0.id == recordID } }) else {
                 throw NectoBridgeError(code: .operationUnavailable, message: "No record '\(recordID)'")
             }
+            result = "success"
             return ["record": NectoNetworkRecordCoding.detail(record)]
         }
 
@@ -64,6 +80,7 @@ public final class NectoNetworkPlugin: NectoPlugin, NectoNetworkReporting, @unch
             let token = UUID()
             lock.withLock { observers[token] = out }
             defer { lock.withLock { _ = observers.removeValue(forKey: token) } }
+            logger.log("network.subscription_started")
 
             // Held open until the caller stops listening; `report` does the sending.
             while !Task.isCancelled {
@@ -73,6 +90,10 @@ public final class NectoNetworkPlugin: NectoPlugin, NectoNetworkReporting, @unch
 
         necto.handle("network-records.clear") { [self] _ in
             lock.withLock { records.removeAll() }
+            logger.log(
+                "network.operation",
+                params: ["operation": "clear", "result": "success"]
+            )
             return ["cleared": .bool(true)]
         }
     }
