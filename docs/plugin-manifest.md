@@ -172,11 +172,20 @@ Write descriptions in English for publicly distributed exporters; each descripti
 is displayed as authored and other languages are allowed. It is an author-provided
 explanation, not a host-verified claim about the command's effects.
 
-The planned registration choices are Full Access, declared Command approval,
-Protected, or rejection. UI and CLI will share the review and installation path.
-AccessController will apply and persist the selected policy; Installer will own
-staging, revalidation and activation after approval. These installation choices,
-permission application, CLI approval and warnings are subsequent work.
+The installation sheet offers Full Access, declared Command approval when available,
+Protected, or rejection. A shell access choice must be selected explicitly before
+confirming. If global Full Access is already enabled, or no shell operation is
+requested, only collection approval or rejection is needed. In those cases the
+existing individual shell grant is preserved; a new installation gets no extra
+shell grant from approval.
+
+AccessController applies and persists the choice before the Exporter is loaded.
+Command approval replaces the previous command list with the declared commands;
+Full Access and Protected clear the old list. Installer rechecks the reviewed
+policy and installation before approving. A failed load restores the shell grant
+changed by that approval unless a later policy change has replaced it. This does
+not roll back installed files. Ordinary plugin installation retains its existing
+shell approval flow. Direct CLI approval commands and warnings are subsequent work.
 
 ### Identity and trust
 

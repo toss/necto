@@ -266,25 +266,25 @@ struct NectoNotice: View {
     let scale: CGFloat
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.necto(.label, scale: scale))
+                .foregroundStyle(NectoTheme.text)
+            Text(detail)
+                .font(.necto(.caption, scale: scale))
+                .foregroundStyle(NectoTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.leading, 2)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(NectoTheme.surface)
+        .overlay(alignment: .leading) {
             Rectangle()
                 .fill(isDanger ? NectoTheme.danger : NectoTheme.textTertiary)
                 .frame(width: 2)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.necto(.label, scale: scale))
-                    .foregroundStyle(NectoTheme.text)
-                Text(detail)
-                    .font(.necto(.caption, scale: scale))
-                    .foregroundStyle(NectoTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NectoTheme.surface)
         .clipShape(RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
         .overlay(
             RoundedRectangle(cornerRadius: NectoTheme.radiusControl)

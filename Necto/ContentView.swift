@@ -82,9 +82,10 @@ struct ContentView: View {
             case let .approve(pending):
                 PluginApprovalSheet(
                     staged: pending.staged,
+                    shellReview: pending.shellReview,
                     scale: scale,
                     cancel: { model.cancelInstall() },
-                    approve: { model.confirmInstall() }
+                    approve: { model.confirmInstall(shellAccess: $0) }
                 )
             case .address:
                 PluginAddressSheet(

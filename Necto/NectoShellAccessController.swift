@@ -53,6 +53,22 @@ final class NectoShellAccessController: NectoShellApprovalRequesting {
         persist(await policy.registerContentIdentity(identity, for: principal))
     }
 
+    func applyInstallationChoice(
+        review: NectoShellPolicy.Review,
+        level: NectoShellAccessLevel?,
+        for principal: NectoPluginPrincipal
+    ) async throws -> NectoShellPolicy.InstallationChange? {
+        let change = try await policy.applyInstallationChoice(review: review, level: level, for: principal)
+        if let change { persist(change.snapshot) }
+        return change
+    }
+
+    func rollbackInstallationChoice(_ change: NectoShellPolicy.InstallationChange) async {
+        if let restored = await policy.rollbackInstallationChoice(change) {
+            persist(restored)
+        }
+    }
+
     func approve(_ command: String, for principal: NectoPluginPrincipal) async throws {
         persist(try await policy.approve(command, for: principal))
     }

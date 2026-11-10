@@ -119,14 +119,20 @@ struct NectoShellPolicyReviewTests {
         let noShell = await policy.review(interpretedOperations: [])
         #expect(!noShell.requestsShellAccess)
         #expect(!noShell.canApproveDeclaredCommands)
+        #expect(!noShell.requiresAccessChoice)
+        #expect(noShell.availableAccessLevels.isEmpty)
 
         let authorizationOnly = await policy.review(interpretedOperations: [authorization])
         #expect(authorizationOnly.requestsShellAccess)
         #expect(authorizationOnly.requestedOperations == [authorization])
         #expect(!authorizationOnly.canApproveDeclaredCommands)
+        #expect(authorizationOnly.requiresAccessChoice)
+        #expect(authorizationOnly.availableAccessLevels == [.fullAccess, .protected])
 
         let withExecution = await policy.review(interpretedOperations: [authorization, execution()])
         #expect(withExecution.canApproveDeclaredCommands)
+        #expect(withExecution.requiresAccessChoice)
+        #expect(withExecution.availableAccessLevels == [.fullAccess, .commandApproval, .protected])
     }
 
     @Test("incomplete execution declarations stay visible but disable command approval")
@@ -218,6 +224,102 @@ struct NectoShellPolicyReviewTests {
         #expect(newCandidate.effectiveAccessLevel == .fullAccess)
         #expect(newCandidate.currentGrant == nil)
         #expect(await policy.snapshot() == .init(isFullAccessEnabled: true, grants: [grant]))
+    }
+
+    @Test("installation approves exactly the commands declared in the reviewed package")
+    func installsDeclaredCommands() async throws {
+        let grant = NectoShellGrant(
+            principal: notes, level: .commandApproval, approvedCommands: ["old command"], contentIdentity: "previous"
+        )
+        let policy = NectoShellPolicy(snapshot: .init(grants: [grant]))
+        let operations = [
+            execution(),
+            execution(id: "shell.git", interpretation: .execute(.values([" git status ", "pwd"]))),
+        ]
+        let review = await policy.review(interpretedOperations: operations, for: notes)
+
+        let change = try await policy.applyInstallationChoice(review: review, level: .commandApproval, for: notes)
+
+        #expect(change != nil)
+        let updated = await policy.access(for: notes)
+        #expect(updated.approvedCommands == ["pwd", " git status "])
+        #expect(updated.contentIdentity == "previous")
+        #expect(await policy.allows(" git status ", for: notes))
+        #expect(!(await policy.allows("git status", for: notes)))
+        #expect(!(await policy.allows("old command", for: notes)))
+        #expect(!(await policy.allows("pwd", for: other)))
+    }
+
+    @Test("installation applies the selected level and clears older command approvals",
+          arguments: [NectoShellAccessLevel.fullAccess, .protected])
+    func installsSelectedLevel(level: NectoShellAccessLevel) async throws {
+        let grant = NectoShellGrant(principal: notes, level: .commandApproval, approvedCommands: ["old command"])
+        let policy = NectoShellPolicy(snapshot: .init(grants: [grant]))
+        let review = await policy.review(interpretedOperations: [execution()], for: notes)
+
+        _ = try await policy.applyInstallationChoice(review: review, level: level, for: notes)
+
+        let updated = await policy.access(for: notes)
+        #expect(updated.level == level)
+        #expect(updated.approvedCommands.isEmpty)
+        #expect(await policy.allows("any command", for: notes) == (level == .fullAccess))
+        #expect(!(await policy.allows("any command", for: other)))
+        let freshReview = await policy.review(interpretedOperations: [execution()], for: notes)
+        #expect(try await policy.applyInstallationChoice(review: freshReview, level: level, for: notes) == nil)
+    }
+
+    @Test("installation without a choice preserves existing grants and creates none",
+          arguments: [false, true])
+    func leavesGrantsAloneWithoutChoice(globalFullAccess: Bool) async throws {
+        let grant = NectoShellGrant(principal: notes, level: .commandApproval, approvedCommands: ["old command"])
+        let before = NectoShellPolicySnapshot(isFullAccessEnabled: globalFullAccess, grants: [grant])
+        let policy = NectoShellPolicy(snapshot: before)
+        let operations = globalFullAccess ? [execution()] : []
+        let existing = await policy.review(interpretedOperations: operations, for: notes)
+        let new = await policy.review(interpretedOperations: operations)
+
+        #expect(!existing.requiresAccessChoice)
+        #expect(existing.availableAccessLevels.isEmpty)
+        await #expect(throws: NectoShellPolicy.InstallationError.unavailableAccessLevel) {
+            try await policy.applyInstallationChoice(review: existing, level: .fullAccess, for: notes)
+        }
+        #expect(try await policy.applyInstallationChoice(review: existing, level: nil, for: notes) == nil)
+        #expect(try await policy.applyInstallationChoice(review: new, level: nil, for: other) == nil)
+        #expect(await policy.snapshot() == before)
+        #expect(await policy.access(for: other).level == .protected)
+    }
+
+    @Test("installation refuses a missing or unavailable choice without changing policy")
+    func refusesUnavailableChoice() async {
+        let policy = NectoShellPolicy()
+        let operations = [execution(interpretation: .execute(.unavailable(.enumNotDeclared)))]
+        let review = await policy.review(interpretedOperations: operations)
+
+        for level: NectoShellAccessLevel? in [nil, .commandApproval] {
+            await #expect(throws: NectoShellPolicy.InstallationError.unavailableAccessLevel) {
+                try await policy.applyInstallationChoice(review: review, level: level, for: notes)
+            }
+        }
+        #expect(await policy.snapshot() == .init())
+    }
+
+    @Test("installation refuses reviews that no longer match global access or the saved grant")
+    func refusesStaleReview() async throws {
+        let policy = NectoShellPolicy()
+        let review = await policy.review(interpretedOperations: [execution()], for: notes)
+        let globalOverride = await policy.setFullAccessEnabled(true)
+
+        await #expect(throws: NectoShellPolicy.InstallationError.staleReview) {
+            try await policy.applyInstallationChoice(review: review, level: .fullAccess, for: notes)
+        }
+        #expect(await policy.snapshot() == globalOverride)
+
+        await policy.setFullAccessEnabled(false)
+        let savedApproval = try await policy.approve("new approval", for: notes)
+        await #expect(throws: NectoShellPolicy.InstallationError.staleReview) {
+            try await policy.applyInstallationChoice(review: review, level: .fullAccess, for: notes)
+        }
+        #expect(await policy.snapshot() == savedApproval)
     }
 
     private func execution(

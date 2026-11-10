@@ -351,7 +351,9 @@ final class NectoAppModel {
     func cancelChoice() { installer.cancelChoice() }
     func install(_ offer: NectoReleaseSource.Offer) { installer.install(offer) }
     func cancelInstall() { installer.cancelInstall() }
-    func confirmInstall() { installer.confirmInstall() }
+    func confirmInstall(shellAccess: NectoShellAccessLevel?) {
+        installer.confirmInstall(shellAccess: shellAccess)
+    }
 
     // MARK: Following a source
 

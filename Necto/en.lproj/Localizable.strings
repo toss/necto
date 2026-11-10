@@ -240,6 +240,22 @@
 "Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection." = "Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection.";
 "Install and allow collection" = "Install and allow collection";
 "Update and allow collection" = "Update and allow collection";
+"Reject" = "Reject";
+"Global Full Access is enabled" = "Global Full Access is enabled";
+"The global setting lets this exporter run any shell command. Registering it keeps its individual Shell Access settings." = "The global setting lets this exporter run any shell command. Registering it keeps its individual Shell Access settings.";
+"The ID matches, but Necto cannot verify the author of local files. Only update if you trust their source. The Shell Access option you choose replaces the saved one." = "The ID matches, but Necto cannot verify the author of local files. Only update if you trust their source. The Shell Access option you choose replaces the saved one.";
+"Choose Shell Access" = "Choose Shell Access";
+"Run any shell command without confirmation." = "Run any shell command without confirmation.";
+"Run only the exact commands listed in the details below." = "Run only the exact commands listed in the details below.";
+"Block this exporter's shell requests." = "Block this exporter's shell requests.";
+"Command approval requires at least one shell execution operation, with a description and valid exact commands for each one." = "Command approval requires at least one shell execution operation, with a description and valid exact commands for each one.";
+"The author did not describe this operation." = "The author did not describe this operation.";
+"Description from the author" = "Description from the author";
+"The author did not declare exact commands." = "The author did not declare exact commands.";
+"Commands declared by the author" = "Commands declared by the author";
+"The declared list contains an invalid command." = "The declared list contains an invalid command.";
+"Necto could not read exact commands from this declaration." = "Necto could not read exact commands from this declaration.";
+"This version of Necto does not recognize this shell operation's declaration." = "This version of Necto does not recognize this shell operation's declaration.";
 "Event collection" = "Event collection";
 "No event exporter installed. Install one to allow collection. Plugin exclusions are preserved." = "No event exporter installed. Install one to allow collection. Plugin exclusions are preserved.";
 "Search plugin IDs" = "Search plugin IDs";
@@ -251,3 +267,13 @@
 "Exporter diagnostics" = "Exporter diagnostics";
 "Exporter diagnostics appear here." = "Exporter diagnostics appear here.";
 "Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection." = "Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection.";
+
+"Choose Shell Access to enable installation." = "Choose Shell Access to enable installation.";
+"Exporter ID" = "Exporter ID";
+"Identifies this package across versions." = "Identifies this package across versions.";
+"Installation source" = "Installation source";
+"Run shell commands" = "Run shell commands";
+"Request shell access" = "Request shell access";
+"Capability identifier" = "Capability identifier";
+"Purpose · provided by the author" = "Purpose · provided by the author";
+"Requested commands" = "Requested commands";
