@@ -205,6 +205,7 @@ function detailBody(): Node[] {
     const restore = () => setTimeout(() => (copy.textContent = t("Copy")), 1400);
     void navigator.clipboard?.writeText(detail?.value ?? "").then(
       () => {
+        necto.log("preferences.value_copied");
         copy.textContent = t("Copied");
         restore();
       },

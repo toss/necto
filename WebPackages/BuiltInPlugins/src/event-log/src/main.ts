@@ -346,14 +346,24 @@ function messageOf(error: unknown): string {
 }
 
 search.addEventListener("input", () => {
+  const enabled = search.value.trim().length > 0;
+  if (enabled !== (query.trim().length > 0)) {
+    necto.log("events.filter_changed", { filter: "search", enabled });
+  }
   query = search.value;
   render();
 });
 levelFilter.addEventListener("change", () => {
+  if (level !== levelFilter.value) {
+    necto.log("events.filter_changed", { filter: "level", enabled: levelFilter.value !== "" });
+  }
   level = levelFilter.value;
   render();
 });
 tagFilter.addEventListener("change", () => {
+  if (tag !== tagFilter.value) {
+    necto.log("events.filter_changed", { filter: "category", enabled: tagFilter.value !== "" });
+  }
   tag = tagFilter.value;
   render();
 });

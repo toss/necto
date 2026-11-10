@@ -289,3 +289,245 @@ struct NectoWebLogTests {
                 == "current")
     }
 }
+
+@Suite("Built-in panel usage logging", .serialized, .timeLimit(.minutes(1)))
+@MainActor
+struct NectoBuiltInUsageLogTests {
+    // Use the shipped HTML and module scripts, with no connected app or system clipboard.
+    private func open(_ panel: String, replies: [String: NectoJSONValue]) async throws -> WKWebView {
+        let directory = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Sources/\(panel)")
+        let archive = try NectoPanelArchive.read(directory: directory)
+        let origin = "panel-test"
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        configuration.setURLSchemeHandler(NectoPluginSchemeHandler(originHost: origin, archive: archive),
+            forURLScheme: NectoPluginSchemeHandler.scheme)
+        let fixtures = try NectoJSONValue.object(replies).jsonString()
+        configuration.userContentController.addUserScript(NectoBridgeCoordinator.localeUserScript("en"))
+        configuration.userContentController.addUserScript(WKUserScript(source: """
+            (() => {
+              const replies = \(fixtures);
+              const host = window.panelTest = { logs: [], writes: [], clipboardSucceeds: true, ready: false };
+              const ok = value => ({ok: true, value});
+              const postMessage = async message => {
+                switch (message.type) {
+                  case 'context': return ok({target: {targetHandle: 'fixture'}, operations: []});
+                  case 'ready': host.ready = true; return ok(null);
+                  case 'subscribe': return ok(message.operationID);
+                  case 'log': host.logs.push(message); return ok(null);
+                  case 'invoke': {
+                    if (host.hold === message.operationID) {
+                      await new Promise(resolve => { host.release = resolve; });
+                    }
+                    const key = message.input?.recordID ?? message.operationID;
+                    if (Object.hasOwn(replies, key)) return ok(replies[key]);
+                    break;
+                  }
+                }
+                throw new Error(`Unexpected host call: ${JSON.stringify(message)}`);
+              };
+              Object.defineProperty(window, 'webkit', {value: {messageHandlers: {necto: {postMessage}}}});
+              Object.defineProperty(navigator, 'clipboard', {value: {writeText: async text => {
+                host.writes.push(text);
+                if (!host.clipboardSucceeds) throw new Error('Clipboard denied');
+              }}});
+              document.execCommand = () => false;
+            })();
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        let url = try #require(NectoPluginSchemeHandler.entryPointURL(originHost: origin))
+        view.load(URLRequest(url: url))
+        try await wait(view, for: "window.panelTest?.ready === true")
+        return view
+    }
+
+    private func wait(_ view: WKWebView, for expression: String) async throws {
+        let deadline = ContinuousClock.now + .seconds(8)
+        while ContinuousClock.now < deadline {
+            if (try? await view.evaluateJavaScript(expression) as? Bool) == true { return }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        try #require(Bool(false), "Panel did not reach: \(expression)")
+    }
+
+    private func run(_ view: WKWebView, _ actions: String, arguments: [String: Any] = [:]) async throws {
+        _ = try await view.callAsyncJavaScript("""
+            const host = window.panelTest;
+            const click = selector => document.querySelector(selector).click();
+            \(actions)
+            """, arguments: arguments, in: nil, contentWorld: .page)
+    }
+
+    private func log(_ name: String, _ params: [String: NectoJSONValue] = [:]) -> NectoJSONValue {
+        ["type": "log", "input": ["eventName": .string(name), "params": .object(params)]]
+    }
+
+    private func expectLogs(_ view: WKWebView, _ expected: [NectoJSONValue]) async throws {
+        let result = try await view.evaluateJavaScript("JSON.stringify(window.panelTest.logs)") as? String
+        let json = try #require(result)
+        let actual = try JSONDecoder().decode([NectoJSONValue].self, from: Data(json.utf8))
+        #expect(actual == expected)
+    }
+
+    private func copy(_ view: WKWebView, button: String, text: String, succeeds: Bool = true) async throws {
+        try await run(view, """
+            host.clipboardSucceeds = succeeds;
+            host.lastCopy = \(button);
+            host.lastCopy.click();
+            """, arguments: ["succeeds": succeeds])
+        let status = succeeds ? "copied" : "failed"
+        try await wait(view, for: "window.panelTest.lastCopy.textContent.toLowerCase() === '\(status)'")
+        let actual = try await view.evaluateJavaScript("window.panelTest.writes.at(-1)") as? String
+        #expect(actual == text)
+    }
+
+    @Test("Network logs changed detail tabs and successful copies of real content only")
+    func network() async throws {
+        let requestBody: NectoJSONValue = ["text": "synthetic request", "byteCount": 17, "isTruncated": false]
+        let responseBody: NectoJSONValue = ["text": "synthetic response", "byteCount": 18, "isTruncated": false]
+        let curl = "curl https://example.invalid/request"
+        let row: [String: NectoJSONValue] = [
+            "id": "with-curl", "method": "POST", "url": "https://example.invalid/request", "name": "with-curl",
+            "host": "example.invalid", "state": "completed", "startedAtMilliseconds": 2, "statusCode": 200,
+        ]
+        var noCurl = row
+        noCurl["id"] = "without-curl"
+        noCurl["name"] = "without-curl"
+        noCurl["startedAtMilliseconds"] = 1
+        let detail = row.merging(["requestBody": requestBody, "responseBody": responseBody, "curl": .string(curl)]) { _, new in new }
+        let view = try await open("NectoNetworkPlugin/Panels/network-logger", replies: [
+            "records.list": ["records": .array([.object(row), .object(noCurl)])],
+            "with-curl": ["record": .object(detail)], "without-curl": ["record": .object(noCurl)],
+        ])
+        try await run(view, """
+            click('tbody tr:first-child');
+            click('.necto-tab[aria-selected="true"]');
+            click('.necto-tab:nth-child(2)');
+            click('.necto-tab[aria-selected="true"]');
+            """)
+        let button = "document.querySelector('.necto-code-copy')"
+        try await wait(view, for: "\(button) !== null")
+        try await copy(view, button: button, text: "synthetic request", succeeds: false)
+        try await copy(view, button: button, text: "synthetic request")
+        try await run(view, "click('.necto-tab:nth-child(3)');")
+        try await copy(view, button: button, text: "synthetic response")
+        try await run(view, "click('.necto-tab:nth-child(4)');")
+        try await copy(view, button: button, text: curl)
+        try await run(view, "click('tbody tr:last-child');")
+        try await wait(view, for: "document.querySelector('.necto-code')?.textContent === 'No command available.'")
+        try await copy(view, button: button, text: "No command available.")
+        try await run(view, "click('.necto-tab:first-child');")
+        try await expectLogs(view, [
+            log("network.detail_tab_changed", ["tab": "request"]), log("network.copied", ["kind": "request_body"]),
+            log("network.detail_tab_changed", ["tab": "response"]), log("network.copied", ["kind": "response_body"]),
+            log("network.detail_tab_changed", ["tab": "curl"]), log("network.copied", ["kind": "curl"]),
+            log("network.detail_tab_changed", ["tab": "summary"]),
+        ])
+    }
+
+    @Test("Events log filter transitions without search text or selected values")
+    func events() async throws {
+        let row: NectoJSONValue = ["id": "one", "at": 1, "level": "info", "tag": "example-a",
+                                  "message": "synthetic event", "hasDetail": false]
+        let view = try await open("NectoEventsPlugin/Panels/event-log", replies: ["events.list": ["events": [row]]])
+        try await run(view, """
+            window.__nectoBridgeDeliver('events.observe', {event: {
+              id: 'two', at: 2, level: 'warn', tag: 'example-b', message: 'synthetic live event', hasDetail: false
+            }});
+            const change = (id, values, type) => {
+              const field = document.getElementById(id);
+              for (const value of values) {
+                field.value = value;
+                field.dispatchEvent(new Event(type, {bubbles: true}));
+              }
+            };
+            change('search', ['  ', 's', 'synthetic query', '  ', ''], 'input');
+            change('level', ['', 'info', 'info', 'warn', '', ''], 'change');
+            change('category', ['', 'example-a', 'example-a', 'example-b', '', ''], 'change');
+            """)
+        func filter(_ name: String, _ enabled: Bool) -> NectoJSONValue {
+            log("events.filter_changed", ["filter": .string(name), "enabled": .bool(enabled)])
+        }
+        try await expectLogs(view, [filter("search", true), filter("search", false),
+            filter("level", true), filter("level", true), filter("level", false),
+            filter("category", true), filter("category", true), filter("category", false)])
+    }
+
+    @Test("Files and Preferences log successful copies with no path, key, or value", arguments: ["files", "preferences"])
+    func fileAndPreferenceCopies(panel: String) async throws {
+        let view: WKWebView
+        let label: String
+        let text: String
+        let event: String
+        if panel == "files" {
+            let item: NectoJSONValue = ["name": "fixture.txt", "isDirectory": false, "size": 7]
+            view = try await open("NectoFilesPlugin/Panels/files", replies: [
+                "files.roots": ["roots": [["id": "documents", "name": "Documents", "path": "/fixture"]]],
+                "files.list": ["entries": [item]], "files.info": ["item": item],
+                "files.preview": ["file": ["name": "fixture.txt", "kind": "text", "size": 7, "text": "example"]],
+            ])
+            try await run(view, "click('.necto-tree-row');")
+            label = "Copy path"
+            text = "/fixture/fixture.txt"
+            event = "files.path_copied"
+        } else {
+            view = try await open("NectoPreferencesPlugin/Panels/preferences", replies: [
+                "preferences.suites": ["suites": ["standard"]],
+                "preferences.list": ["entries": [["key": "example-key", "type": "String",
+                                                  "preview": "synthetic value", "isTruncated": false]]],
+                "preferences.detail": ["entry": ["key": "example-key", "type": "String", "value": "synthetic value"]],
+            ])
+            try await run(view, "click('tbody tr');")
+            label = "Copy"
+            text = "synthetic value"
+            event = "preferences.value_copied"
+        }
+        let button = "[...document.querySelectorAll('.necto-detail button')].find(b => b.textContent === '\(label)')"
+        try await wait(view, for: "\(button) !== undefined")
+        try await copy(view, button: button, text: text, succeeds: false)
+        try await expectLogs(view, [])
+        try await copy(view, button: "host.lastCopy", text: text)
+        try await expectLogs(view, [log(event)])
+    }
+
+    @Test("Performance logs changed windows without startup, repeated selections, or live samples")
+    func performance() async throws {
+        let view = try await open("NectoPerformancePlugin/Panels/performance-monitor", replies: [
+            "performance.metrics": ["metrics": [["id": "cpu", "title": "CPU", "unit": "%"]]],
+            "performance.snapshot": [:], "performance.series": ["series": []],
+        ])
+        try await run(view, """
+            window.__nectoBridgeDeliver('performance.observe', {
+              metricID: 'cpu', sample: {at: Date.now(), value: 7}, isOverBudget: false
+            });
+            for (const seconds of [300, 60, 60, 3600, 3600, 300]) click(`[data-window="${seconds}"]`);
+            """)
+        try await expectLogs(view, [log("performance.window_changed", ["window": "1m"]),
+            log("performance.window_changed", ["window": "1h"]), log("performance.window_changed", ["window": "5m"])])
+    }
+
+    @Test("Control logs allowed mode changes and ignores blocked and repeated selections")
+    func control() async throws {
+        let view = try await open("NectoUIControlPlugin/Panels/control", replies: [
+            "control.actionTargets": ["targets": []], "control.readAccessibility": ["items": []],
+        ])
+        try await run(view, """
+            click('#actions-tab');
+            host.hold = 'control.readAccessibility';
+            click('#reading-tab');
+            if (!host.release) throw new Error('Reading did not start');
+            // Dispatch directly to exercise the panel guard even though the tab is disabled.
+            document.querySelector('#actions-tab').dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            if (document.querySelector('#reading-tab').getAttribute('aria-selected') !== 'true') {
+              throw new Error('The mode changed while loading');
+            }
+            host.release();
+            """)
+        try await wait(view, for: "document.querySelector('#control-content').getAttribute('aria-busy') === 'false'")
+        try await run(view, "click('#reading-tab'); click('#actions-tab');")
+        try await wait(view, for: "document.querySelector('#control-content').getAttribute('aria-busy') === 'false'")
+        try await expectLogs(view, [log("control.mode_changed", ["mode": "reading"]),
+            log("control.mode_changed", ["mode": "actions"])])
+    }
+}

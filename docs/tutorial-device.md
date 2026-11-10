@@ -279,8 +279,28 @@ text, and error messages are not copied into these usage events.
 Counts describe operation execution, not unique user clicks: opening a panel,
 refreshing after a write, or running a CLI command can reach the same read handler.
 Split by the host-provided `web`/`cli` channel when interpreting usage. Host-side
-`necto.plugin.opened` already records panel exposure. Copying, tab changes and other
-web-only interactions require separate logs at the UI action when needed.
+`necto.plugin.opened` already records panel exposure.
+
+The built-in panels also use `necto.log()` for actions completed entirely in the
+web UI. They do not repeat the common operation logs above:
+
+| Event | Parameters and trigger |
+| --- | --- |
+| `network.detail_tab_changed` | `tab`: `summary`, `request`, `response`, `curl`; an actual tab change. |
+| `network.copied` | `kind`: `request_body`, `response_body`, `curl`; only after copying succeeds. |
+| `events.filter_changed` | `filter`: `search`, `level`, `category`; `enabled`: boolean. |
+| `files.path_copied` | No parameters; only after copying succeeds. |
+| `preferences.value_copied` | No parameters; only after copying succeeds. |
+| `performance.window_changed` | `window`: `1m`, `5m`, `1h`; an actual range change. |
+| `control.mode_changed` | `mode`: `actions`, `reading`; an accepted mode change. |
+
+Search logs only transitions between empty and nonempty trimmed input, not every
+keystroke. Level and category selectors log actual selection changes, including a
+change from one active selection to another, without the selected value. Initial
+rendering, repeated selection of the same tab or range, and blocked mode changes do
+not log. Copy failures and the Network panel's missing-cURL placeholder do not count
+as successful copies. These events contain no clipboard contents, paths, queries,
+category names, response bodies or command strings.
 
 ## The panel
 

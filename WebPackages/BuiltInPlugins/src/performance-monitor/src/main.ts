@@ -217,7 +217,12 @@ async function readMemory(): Promise<void> {
 for (const tab of document.querySelectorAll<HTMLButtonElement>("[data-window]")) {
   tab.textContent = t(tab.textContent?.trim() ?? "");
   tab.addEventListener("click", () => {
-    windowSeconds = Number(tab.dataset.window ?? 300);
+    const nextWindow = Number(tab.dataset.window ?? 300);
+    const windowLabel = nextWindow === 60 ? "1m" : nextWindow === 300 ? "5m" : nextWindow === 3600 ? "1h" : undefined;
+    if (windowSeconds !== nextWindow && windowLabel) {
+      necto.log("performance.window_changed", { window: windowLabel });
+    }
+    windowSeconds = nextWindow;
     for (const other of document.querySelectorAll<HTMLButtonElement>("[data-window]")) {
       other.setAttribute("aria-selected", String(other === tab));
     }

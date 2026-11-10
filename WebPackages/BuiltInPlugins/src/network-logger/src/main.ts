@@ -2,7 +2,7 @@
 //  Copyright (c) 2026 Viva Republica, Inc.
 //
 
-import { createDetailPane } from "@necto/bridge";
+import { createDetailPane, necto } from "@necto/bridge";
 
 import "@necto/bridge/theme.css";
 import "@necto/bridge/components.css";
@@ -120,14 +120,17 @@ async function copyText(text: string): Promise<boolean> {
 
 /// A body is read far more often than it is copied, so the button stays out of the
 /// way until the pointer or the keyboard reaches the block.
-function codeBlock(text: string): HTMLElement {
+function codeBlock(text: string, copyKind?: "request_body" | "response_body" | "curl"): HTMLElement {
   const button = el("button", { type: "button", class: "necto-code-copy" }, [t("copy")]);
 
   button.addEventListener("click", () => {
     void copyText(text).then((copied) => {
       // A button that silently does nothing is worse than one that says it failed.
       button.textContent = copied ? t("copied") : t("failed");
-      if (copied) button.dataset.copied = "true";
+      if (copied) {
+        button.dataset.copied = "true";
+        if (copyKind) necto.log("network.copied", { kind: copyKind });
+      }
 
       setTimeout(() => {
         button.textContent = t("copy");
@@ -171,7 +174,7 @@ function pairs(rows: [string, string][]): HTMLElement {
   );
 }
 
-function bodyView(body: Body | undefined, label: string): Node[] {
+function bodyView(body: Body | undefined, label: "request" | "response"): Node[] {
   if (!body) return [el("p", { class: "necto-caption" }, [t("No {side} body.", { side: t(label) })])];
 
   const meta = [formatBytes(body.byteCount), body.contentType].filter(Boolean).join(" · ");
@@ -184,7 +187,7 @@ function bodyView(body: Body | undefined, label: string): Node[] {
 
   return [
     el("p", { class: "necto-caption" }, [meta + (body.isTruncated ? ` · ${t("truncated")}` : "")]),
-    codeBlock(formatBody(body.text, body.contentType)),
+    codeBlock(formatBody(body.text, body.contentType), label === "request" ? "request_body" : "response_body"),
   ];
 }
 
@@ -353,6 +356,7 @@ function renderDetail(): void {
           "aria-selected": tab === id ? "true" : "false",
         }, [label]);
         button.addEventListener("click", () => {
+          if (tab !== id) necto.log("network.detail_tab_changed", { tab: id });
           tab = id;
           renderDetail();
         });
@@ -370,7 +374,7 @@ function detailBody(): Node[] {
   if (!detail) return [el("p", { class: "necto-caption" }, [t("Loading…")])];
   if (tab === "summary") return [summary(detail)];
   // On its own tab because it is looked up to be copied, not read.
-  if (tab === "curl") return [codeBlock(detail.curl ?? t("No command available."))];
+  if (tab === "curl") return [codeBlock(detail.curl ?? t("No command available."), detail.curl ? "curl" : undefined)];
   return exchange(detail, tab);
 }
 

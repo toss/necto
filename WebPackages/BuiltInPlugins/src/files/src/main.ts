@@ -200,6 +200,7 @@ function detailBody(): Node[] {
     const restore = () => setTimeout(() => (copy.textContent = t("Copy path")), 1400);
     void navigator.clipboard?.writeText(absolute).then(
       () => {
+        necto.log("files.path_copied");
         copy.textContent = t("Copied");
         restore();
       },
