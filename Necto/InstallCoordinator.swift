@@ -597,10 +597,10 @@ final class InstallCoordinator {
         return ["rejected": true, "pluginID": .string(pending.staged.manifest.id)]
     }
 
-    /// Warning discovery must not create or replace the user's explicit review.
-    func exporterWarning() -> NectoJSONValue? {
+    /// Uses the loaded catalog without reading files or replacing an explicit review.
+    func exporterWarning(packages: [NectoInstalledPackage]) -> NectoJSONValue? {
         let rejected = NectoPluginLibrary.rejectedExporterContentHashes
-        let pending = pendingExporterCandidates()
+        let pending = pendingExporterCandidates(in: packages)
         let candidates = pending.filter {
             rejected[$0.id] != $0.contentIdentity
         }.sorted { ($0.id, $0.rootURL.path) < ($1.id, $1.rootURL.path) }
@@ -634,9 +634,9 @@ final class InstallCoordinator {
         }
     }
 
-    private func pendingExporterCandidates() -> [NectoInstalledPackage] {
+    private func pendingExporterCandidates(in packages: [NectoInstalledPackage]) -> [NectoInstalledPackage] {
         let grants = NectoPluginLibrary.grants
-        return installedPlugins().filter { package in
+        return packages.filter { package in
             guard package.manifest.type == .eventExporter else { return false }
             guard let record = package.installation,
                   record.approvedContentHash == package.contentIdentity else { return true }
@@ -646,7 +646,7 @@ final class InstallCoordinator {
     }
 
     private func pendingExporterCandidate() throws -> NectoInstalledPackage? {
-        let candidates = pendingExporterCandidates()
+        let candidates = pendingExporterCandidates(in: installedPlugins())
         guard candidates.count <= 1 else {
             throw NectoBridgeError(
                 code: .operationUnavailable,

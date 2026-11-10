@@ -600,7 +600,7 @@ struct NectoExporterInstallationTests {
 
             #expect(coordinator.pendingInstall == nil)
             #expect(NectoPluginLibrary.rejectedExporterContentHashes[id] == (exit == .reject ? plugin.contentIdentity : nil))
-            #expect((cliCoordinator(directory: directory).exporterWarning() == nil) == (exit == .reject))
+            #expect((cliCoordinator(directory: directory).exporterWarning(packages: loadInstallations(in: directory)) == nil) == (exit == .reject))
             #expect(NectoPluginLibrary.installations[id] == nil)
             #expect(NectoPluginLibrary.grants == originalGrants)
             #expect(await access.policy.snapshot().grants.isEmpty)
@@ -730,7 +730,7 @@ struct NectoExporterInstallationTests {
                 return loadInstallations(in: directory)
             }, didInstall: { notifications.append($0.id) })
 
-            #expect(coordinator.exporterWarning() == ["exporters": [[
+            #expect(coordinator.exporterWarning(packages: loadInstallations(in: directory)) == ["exporters": [[
                 "id": .string(id), "name": .string(plugin.manifest.name), "requestsShellAccess": true,
             ]]])
             #expect(coordinator.pendingInstall == nil)
@@ -743,7 +743,7 @@ struct NectoExporterInstallationTests {
             #expect(rejection["rejected"] == true)
             #expect(rejection["pluginID"] == .string(id))
             #expect(NectoPluginLibrary.rejectedExporterContentHashes[id] == plugin.contentIdentity)
-            #expect(cliCoordinator(directory: directory).exporterWarning() == nil)
+            #expect(cliCoordinator(directory: directory).exporterWarning(packages: loadInstallations(in: directory)) == nil)
             await #expect(throws: (any Error).self) {
                 _ = try await coordinator.approveExporterFromCLI(.init(shellAccess: .full))
             }
@@ -771,17 +771,22 @@ struct NectoExporterInstallationTests {
             let coordinator = cliCoordinator(directory: directory)
             let review = try await coordinator.reviewExporterFromCLI()
             #expect(review["exporter"]?["contentHash"] == .string(original.contentIdentity))
-            #expect(coordinator.exporterWarning()?["exporters"]?.arrayValue?.first?["requestsShellAccess"] == false)
+            let cachedPackages = loadInstallations(in: directory)
+            let cachedWarning = coordinator.exporterWarning(packages: cachedPackages)
+            #expect(cachedWarning?["exporters"]?.arrayValue?.first?["requestsShellAccess"] == false)
 
             let updated = try fixture(at: path, id: id, operations: [shellOperation()])
             #expect(updated.contentIdentity != original.contentIdentity)
+            // Files changed, but ordinary warnings keep using the catalog until it is refreshed.
+            #expect(coordinator.exporterWarning(packages: cachedPackages) == cachedWarning)
             let expectedWarning: NectoJSONValue = ["exporters": [[
                 "id": .string(id), "name": .string(updated.manifest.name), "requestsShellAccess": true,
             ]]]
-            #expect(coordinator.exporterWarning() == expectedWarning)
+            #expect(coordinator.exporterWarning(packages: loadInstallations(in: directory)) == expectedWarning)
             #expect(try await coordinator.rejectExporterFromCLI()["rejected"] == true)
             #expect(NectoPluginLibrary.rejectedExporterContentHashes[id] == original.contentIdentity)
-            #expect(cliCoordinator(directory: directory).exporterWarning() == expectedWarning)
+            #expect(coordinator.exporterWarning(packages: cachedPackages) == nil)
+            #expect(cliCoordinator(directory: directory).exporterWarning(packages: loadInstallations(in: directory)) == expectedWarning)
             #expect(NectoPluginLibrary.installations[id] == nil)
         }
     }
@@ -791,14 +796,14 @@ struct NectoExporterInstallationTests {
         try await withInstallationDirectory { directory in
             let coordinator = cliCoordinator(directory: directory)
             #expect(try await coordinator.reviewExporterFromCLI()["pending"] == false)
-            #expect(coordinator.exporterWarning() == nil)
+            #expect(coordinator.exporterWarning(packages: loadInstallations(in: directory)) == nil)
             let id = "com.example.cli-approved-\(UUID().uuidString)"
             let exporter = try approved(fixture(at: directory.appending(path: id), id: id))
             NectoPluginLibrary.installations[id] = exporter.installation
             _ = try fixture(at: directory.appending(path: "ordinary"), id: "com.example.ordinary", exporter: false)
 
             #expect(try await coordinator.reviewExporterFromCLI()["pending"] == false)
-            #expect(coordinator.exporterWarning() == nil)
+            #expect(coordinator.exporterWarning(packages: loadInstallations(in: directory)) == nil)
         }
     }
 
@@ -812,11 +817,11 @@ struct NectoExporterInstallationTests {
             }
             let second = try fixture(at: directory.appending(path: "second"), id: "com.example.cli-second-\(UUID().uuidString)")
 
-            let warnings = try #require(coordinator.exporterWarning()?["exporters"]?.arrayValue)
+            let warnings = try #require(coordinator.exporterWarning(packages: loadInstallations(in: directory))?["exporters"]?.arrayValue)
             #expect(warnings.count == 2)
             #expect(Set(warnings.compactMap { $0["id"]?.stringValue }) == Set([first.id, second.id]))
             NectoPluginLibrary.rejectedExporterContentHashes[first.id] = first.contentIdentity
-            let remainingWarning = try #require(coordinator.exporterWarning())
+            let remainingWarning = try #require(coordinator.exporterWarning(packages: loadInstallations(in: directory)))
             #expect(remainingWarning["multipleCandidates"] == true)
             #expect(remainingWarning["exporters"]?.arrayValue?.compactMap { $0["id"]?.stringValue } == [second.id])
             if !changedAfterReview {
@@ -853,7 +858,7 @@ struct NectoExporterInstallationTests {
             switch change {
             case .files:
                 try Data("<!doctype html><title>Changed</title>".utf8).write(to: path.appending(path: "index.html"))
-                #expect(coordinator.exporterWarning()?["exporters"]?.arrayValue?.first?["id"] == .string(id))
+                #expect(coordinator.exporterWarning(packages: loadInstallations(in: directory))?["exporters"]?.arrayValue?.first?["id"] == .string(id))
             case .policy:
                 await access.setFullAccessEnabled(true)
             case .replacementRecord:

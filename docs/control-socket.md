@@ -255,6 +255,12 @@ into JSON results or stream events, changes the original exit status, or waits f
 approval. A stream receives its warning before the handler starts, even if no event
 has arrived. Subsequent events do not repeat it or count it toward `--limit`.
 
+Warnings use the app's loaded approval-pending catalog; ordinary CLI commands do
+not rescan plugin files. The catalog is loaded at app startup and refreshed by
+plugin reload, installation and removal. After placing or changing files outside
+Necto while it is running, reload plugins or restart the app to refresh warnings.
+Explicit review and approval still check the files before installation.
+
 ```json
 { "id": "r1", "kind": "targets", "includeWarnings": true }
 { "id": "r1", "kind": "warning", "value": { "exporters": [

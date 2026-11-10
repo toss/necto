@@ -580,7 +580,8 @@ final class NectoAppModel {
                 return try await self.installer.rejectExporterFromCLI()
             },
             exporterWarning: { [weak self] in
-                await self?.installer.exporterWarning()
+                guard let self else { return nil }
+                return await self.installer.exporterWarning(packages: self.packagesAwaitingApproval)
             }
         ))
         do {
