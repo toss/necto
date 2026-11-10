@@ -519,6 +519,12 @@ final class InstallCoordinator {
         scheduleNext()
     }
 
+    func rejectInstall() {
+        guard !isCommitting, let pending = pendingInstall else { return }
+        rememberExporterRejection(pending)
+        cancelInstall()
+    }
+
     // MARK: Exporter approval from the CLI
 
     /// Reads a candidate without presenting a sheet, loading code or granting access.
@@ -586,8 +592,37 @@ final class InstallCoordinator {
         guard let pending = cliExporterReview else {
             throw NectoBridgeError(code: .operationUnavailable, message: "Run necto exporter review before rejecting.")
         }
+        rememberExporterRejection(pending)
         cliExporterReview = nil
         return ["rejected": true, "pluginID": .string(pending.staged.manifest.id)]
+    }
+
+    /// Warning discovery must not create or replace the user's explicit review.
+    func exporterWarning() -> NectoJSONValue? {
+        let rejected = NectoPluginLibrary.rejectedExporterContentHashes
+        let pending = pendingExporterCandidates()
+        let candidates = pending.filter {
+            rejected[$0.id] != $0.contentIdentity
+        }.sorted { ($0.id, $0.rootURL.path) < ($1.id, $1.rootURL.path) }
+        guard !candidates.isEmpty else { return nil }
+        var value: [String: NectoJSONValue] = ["exporters": .array(candidates.map { candidate in
+            [
+                "id": .string(candidate.id),
+                "name": .string(candidate.manifest.name),
+                "requestsShellAccess": .bool(!NectoShellOperationInterpreter.interpret(
+                    operations: candidate.manifest.operations
+                ).isEmpty),
+            ]
+        })]
+        if pending.count > 1 { value["multipleCandidates"] = true }
+        return .object(value)
+    }
+
+    private func rememberExporterRejection(_ pending: PendingInstall) {
+        guard pending.staged.manifest.type == .eventExporter else { return }
+        var rejected = NectoPluginLibrary.rejectedExporterContentHashes
+        rejected[pending.staged.manifest.id] = pending.staged.archive.contentHash
+        NectoPluginLibrary.rejectedExporterContentHashes = rejected
     }
 
     private func requireIdleForExporterCLI() throws {
@@ -599,15 +634,19 @@ final class InstallCoordinator {
         }
     }
 
-    private func pendingExporterCandidate() throws -> NectoInstalledPackage? {
+    private func pendingExporterCandidates() -> [NectoInstalledPackage] {
         let grants = NectoPluginLibrary.grants
-        let candidates = installedPlugins().filter { package in
+        return installedPlugins().filter { package in
             guard package.manifest.type == .eventExporter else { return false }
             guard let record = package.installation,
                   record.approvedContentHash == package.contentIdentity else { return true }
             let bindings = Set(package.manifest.operations.map(\.binding.identity))
             return !grants.unapproved(bindings, for: record.principal).isEmpty
         }
+    }
+
+    private func pendingExporterCandidate() throws -> NectoInstalledPackage? {
+        let candidates = pendingExporterCandidates()
         guard candidates.count <= 1 else {
             throw NectoBridgeError(
                 code: .operationUnavailable,

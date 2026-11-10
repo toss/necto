@@ -187,7 +187,10 @@ changed by that approval unless a later policy change has replaced it. This does
 not roll back installed files. Ordinary plugin installation retains its existing
 shell approval flow. The [exporter CLI commands](control-socket.md#exporter-approval-from-the-cli)
 use the same installation and permission application without opening a sheet.
-Warnings during unrelated CLI commands remain subsequent work.
+Ordinary CLI commands report pending exporters on stderr without blocking their
+original operation. Explicit rejection remembers the reviewed ID and content hash
+across app restarts; changed content is announced again. Closing the approval sheet
+without selecting Reject does not remember a rejection.
 
 ### Identity and trust
 

@@ -15,6 +15,7 @@ public struct NectoControlBridge: NectoControlHandling {
     private let review: @Sendable () async throws -> NectoJSONValue
     private let approve: @Sendable (NectoExporterApproval) async throws -> NectoJSONValue
     private let reject: @Sendable () async throws -> NectoJSONValue
+    private let warning: @Sendable () async -> NectoJSONValue?
 
     public init(
         registry: NectoPluginRegistry,
@@ -33,7 +34,8 @@ public struct NectoControlBridge: NectoControlHandling {
         },
         rejectExporter: @escaping @Sendable () async throws -> NectoJSONValue = {
             throw NectoBridgeError(code: .operationUnavailable, message: "Exporter rejection is unavailable.")
-        }
+        },
+        exporterWarning: @escaping @Sendable () async -> NectoJSONValue? = { nil }
     ) {
         self.registry = registry
         self.connectedApps = connectedApps
@@ -42,6 +44,7 @@ public struct NectoControlBridge: NectoControlHandling {
         self.review = reviewExporter
         self.approve = approveExporter
         self.reject = rejectExporter
+        self.warning = exporterWarning
     }
 
     public func deletePlugin(id: String) async throws -> NectoJSONValue { try await delete(id) }
@@ -57,6 +60,8 @@ public struct NectoControlBridge: NectoControlHandling {
     }
 
     public func rejectExporter() async throws -> NectoJSONValue { try await reject() }
+
+    public func exporterWarning() async -> NectoJSONValue? { await warning() }
 
     public func targets() async -> NectoJSONValue {
         let apps = await connectedApps()

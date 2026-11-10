@@ -85,6 +85,7 @@ struct ContentView: View {
                     shellReview: pending.shellReview,
                     scale: scale,
                     cancel: { model.cancelInstall() },
+                    reject: { model.rejectInstall() },
                     approve: { model.confirmInstall(shellAccess: $0) }
                 )
             case .address:

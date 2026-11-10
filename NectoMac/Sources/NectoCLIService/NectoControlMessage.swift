@@ -30,7 +30,7 @@ public struct NectoControlRequest: Sendable, Codable {
         case reviewExporter
         /// Approve the reviewed exporter with an optional shell access choice.
         case approveExporter
-        /// Discard the current exporter review.
+        /// Reject the reviewed content and suppress reminders until it changes.
         case rejectExporter
         /// Call an operation that answers once.
         case invoke
@@ -38,6 +38,13 @@ public struct NectoControlRequest: Sendable, Codable {
         case subscribe
         /// Cancel a pending request with the same `id`.
         case cancel
+
+        public var supportsWarnings: Bool {
+            switch self {
+            case .targets, .plugins, .installPlugin, .deletePlugin, .invoke, .subscribe: true
+            case .reviewExporter, .approveExporter, .rejectExporter, .cancel: false
+            }
+        }
     }
 
     /// Correlates responses on a connection that interleaves them.
@@ -52,6 +59,8 @@ public struct NectoControlRequest: Sendable, Codable {
     public let device: String?
     /// Select installed desktop plugins instead of plugins carried by an app.
     public let desktop: Bool?
+    /// Opt in to advisory frames before the ordinary response.
+    public var includeWarnings: Bool?
 
     public init(
         id: String = UUID().uuidString,
@@ -61,7 +70,8 @@ public struct NectoControlRequest: Sendable, Codable {
         input: NectoJSONValue? = nil,
         app: String? = nil,
         device: String? = nil,
-        desktop: Bool? = nil
+        desktop: Bool? = nil,
+        includeWarnings: Bool? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -71,17 +81,20 @@ public struct NectoControlRequest: Sendable, Codable {
         self.app = app
         self.device = device
         self.desktop = desktop
+        self.includeWarnings = includeWarnings
     }
 }
 
 /// One reply. A request sees exactly one `result` or `error`, except `subscribe`,
-/// which sees any number of `event`s and then one `end` or `error`.
+/// which sees any number of `event`s and then one `end` or `error`. An eligible
+/// request that opts in can first receive one `warning`.
 public struct NectoControlResponse: Sendable, Codable {
     public enum Kind: String, Sendable, Codable {
         case result
         case event
         case end
         case error
+        case warning
     }
 
     public struct Failure: Sendable, Codable {

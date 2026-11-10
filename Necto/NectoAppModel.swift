@@ -351,6 +351,7 @@ final class NectoAppModel {
     func cancelChoice() { installer.cancelChoice() }
     func install(_ offer: NectoReleaseSource.Offer) { installer.install(offer) }
     func cancelInstall() { installer.cancelInstall() }
+    func rejectInstall() { installer.rejectInstall() }
     func confirmInstall(shellAccess: NectoShellAccessLevel?) {
         installer.confirmInstall(shellAccess: shellAccess)
     }
@@ -577,6 +578,9 @@ final class NectoAppModel {
             rejectExporter: { [weak self] in
                 guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
                 return try await self.installer.rejectExporterFromCLI()
+            },
+            exporterWarning: { [weak self] in
+                await self?.installer.exporterWarning()
             }
         ))
         do {

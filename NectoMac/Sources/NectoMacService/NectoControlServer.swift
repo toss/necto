@@ -20,6 +20,7 @@ public protocol NectoControlHandling: Sendable {
     func reviewExporter() async throws -> NectoJSONValue
     func approveExporter(_ approval: NectoExporterApproval) async throws -> NectoJSONValue
     func rejectExporter() async throws -> NectoJSONValue
+    func exporterWarning() async -> NectoJSONValue?
     func invoke(
         pluginID: String,
         operationID: String,
@@ -56,6 +57,7 @@ public extension NectoControlHandling {
     func rejectExporter() async throws -> NectoJSONValue {
         throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support exporter rejection.")
     }
+    func exporterWarning() async -> NectoJSONValue? { nil }
 }
 
 /// Listens on a Unix socket for control connections.
@@ -270,6 +272,10 @@ public final class NectoControlServer: @unchecked Sendable {
         handler: any NectoControlHandling,
         responder: Responder
     ) async {
+        if request.kind.supportsWarnings, request.includeWarnings == true,
+           let value = await handler.exporterWarning(), !Task.isCancelled {
+            await responder.sendWarning(id: request.id, value: value)
+        }
         do {
             switch request.kind {
             case .targets:
@@ -384,6 +390,15 @@ public final class NectoControlServer: @unchecked Sendable {
                 session.close()
                 stop()
             }
+        }
+
+        func sendWarning(id: String, value: NectoJSONValue) async {
+            // Socket writes are serialized. Send this before the handler can produce
+            // output, without occupying an event buffer slot or inheriting cancellation
+            // from the request (a cancelled write closes the shared connection).
+            await Task { [session] in
+                try? await session.send(NectoControlResponse(id: id, kind: .warning, value: value))
+            }.value
         }
 
         func stop() {

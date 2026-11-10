@@ -324,6 +324,8 @@ struct NectoExporterInstallationTests {
     func cancellationInstallsNothing() async throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
+        let originalRejections = NectoPluginLibrary.rejectedExporterContentHashes
+        defer { NectoPluginLibrary.rejectedExporterContentHashes = originalRejections }
         let plugin = try fixture(
             at: root.appending(path: "source"), id: "com.example.cancel-\(UUID().uuidString)", operations: [shellOperation()]
         )
@@ -342,6 +344,7 @@ struct NectoExporterInstallationTests {
         } catch is CancellationError {} catch { Issue.record(error) }
         #expect(!FileManager.default.fileExists(atPath: directory.path))
         #expect(NectoPluginLibrary.installations[plugin.id] == nil)
+        #expect(NectoPluginLibrary.rejectedExporterContentHashes == originalRejections)
         #expect(await access.policy.snapshot().grants.isEmpty)
         #expect(coordinator.pendingInstall == nil)
         #expect(notifications == 0)
@@ -553,16 +556,56 @@ struct NectoExporterInstallationTests {
         #expect(NectoPluginLibrary.installations[plugin.id] == nil)
     }
 
-    private func withCLIInstallationDirectory(_ run: @MainActor (URL) async throws -> Void) async throws {
+    private func withInstallationDirectory(_ run: @MainActor (URL) async throws -> Void) async throws {
         let root = try temporaryDirectory()
         let originalInstallations = NectoPluginLibrary.installations
         let originalGrants = NectoPluginLibrary.grants
+        let originalRejections = NectoPluginLibrary.rejectedExporterContentHashes
         defer {
             try? FileManager.default.removeItem(at: root)
             NectoPluginLibrary.installations = originalInstallations
             NectoPluginLibrary.grants = originalGrants
+            NectoPluginLibrary.rejectedExporterContentHashes = originalRejections
         }
         try await run(root.appending(path: "plugins", directoryHint: .isDirectory))
+    }
+
+    enum UIReviewExit: CaseIterable {
+        case cancel, dismiss, reject
+    }
+
+    @Test("only explicitly rejecting a UI review suppresses the warning", arguments: UIReviewExit.allCases)
+    func uiExporterReviewExit(exit: UIReviewExit) async throws {
+        try await withInstallationDirectory { directory in
+            let id = "com.example.ui-reject-\(UUID().uuidString)"
+            let plugin = try fixture(at: directory.appending(path: id), id: id, operations: [shellOperation()])
+            let access = NectoShellAccessController(snapshot: .init()) { _ in
+                Issue.record("Ending a review saved shell access")
+            }
+            let originalGrants = NectoPluginLibrary.grants
+            let coordinator = coordinator(directory: directory, shellAccess: access, installed: {
+                loadInstallations(in: directory)
+            }, reload: {
+                Issue.record("Ending a review reloaded plugins")
+                return []
+            }, didInstall: { _ in Issue.record("Ending a review sent an installation notification") })
+
+            coordinator.review(plugin)
+            try await waitForApproval(coordinator)
+            switch exit {
+            case .cancel: coordinator.cancelInstall()
+            case .dismiss: coordinator.dismissPrompt()
+            case .reject: coordinator.rejectInstall()
+            }
+
+            #expect(coordinator.pendingInstall == nil)
+            #expect(NectoPluginLibrary.rejectedExporterContentHashes[id] == (exit == .reject ? plugin.contentIdentity : nil))
+            #expect((cliCoordinator(directory: directory).exporterWarning() == nil) == (exit == .reject))
+            #expect(NectoPluginLibrary.installations[id] == nil)
+            #expect(NectoPluginLibrary.grants == originalGrants)
+            #expect(await access.policy.snapshot().grants.isEmpty)
+            #expect(try NectoPackageLoader.load(from: plugin.rootURL).archive == plugin.archive)
+        }
     }
 
     private func cliCoordinator(
@@ -586,7 +629,7 @@ struct NectoExporterInstallationTests {
     @Test("CLI review is read-only and approval applies the selected shell access before reloading",
           arguments: NectoShellAccessLevel.allCases)
     func cliExporterShellAccess(level: NectoShellAccessLevel) async throws {
-        try await withCLIInstallationDirectory { directory in
+        try await withInstallationDirectory { directory in
             let id = "com.example.cli-shell-update-\(UUID().uuidString)"
             let path = directory.appending(path: id, directoryHint: .isDirectory)
             let old = approved(try fixture(at: path, id: id))
@@ -646,7 +689,7 @@ struct NectoExporterInstallationTests {
 
     @Test("CLI approval without a required shell choice preserves prior grants", arguments: [false, true])
     func cliExporterPreservesShellAccess(globalFullAccess: Bool) async throws {
-        try await withCLIInstallationDirectory { directory in
+        try await withInstallationDirectory { directory in
             let id = "com.example.cli-unchanged-\(UUID().uuidString)"
             let path = directory.appending(path: id, directoryHint: .isDirectory)
             let old = approved(try fixture(at: path, id: id))
@@ -673,9 +716,9 @@ struct NectoExporterInstallationTests {
         }
     }
 
-    @Test("CLI approval requires a review and rejection leaves the exporter eligible for review")
+    @Test("CLI rejection silences the warning across coordinators and still allows explicit review and approval")
     func cliExporterRejectsAndReviewsAgain() async throws {
-        try await withCLIInstallationDirectory { directory in
+        try await withInstallationDirectory { directory in
             let id = "com.example.cli-reject-\(UUID().uuidString)"
             let plugin = try fixture(at: directory.appending(path: id), id: id, operations: [shellOperation()])
             let access = NectoShellAccessController(snapshot: .init()) { _ in }
@@ -687,6 +730,10 @@ struct NectoExporterInstallationTests {
                 return loadInstallations(in: directory)
             }, didInstall: { notifications.append($0.id) })
 
+            #expect(coordinator.exporterWarning() == ["exporters": [[
+                "id": .string(id), "name": .string(plugin.manifest.name), "requestsShellAccess": true,
+            ]]])
+            #expect(coordinator.pendingInstall == nil)
             await #expect(throws: (any Error).self) {
                 _ = try await coordinator.approveExporterFromCLI(.init(shellAccess: .full))
             }
@@ -695,6 +742,8 @@ struct NectoExporterInstallationTests {
             let rejection = try await coordinator.rejectExporterFromCLI()
             #expect(rejection["rejected"] == true)
             #expect(rejection["pluginID"] == .string(id))
+            #expect(NectoPluginLibrary.rejectedExporterContentHashes[id] == plugin.contentIdentity)
+            #expect(cliCoordinator(directory: directory).exporterWarning() == nil)
             await #expect(throws: (any Error).self) {
                 _ = try await coordinator.approveExporterFromCLI(.init(shellAccess: .full))
             }
@@ -713,23 +762,49 @@ struct NectoExporterInstallationTests {
         }
     }
 
-    @Test("CLI review reports no candidate with only ordinary plugins and approved exporters")
+    @Test("rejecting a stale review silences only the bytes the CLI reviewed")
+    func cliExporterRejectsReviewedBytes() async throws {
+        try await withInstallationDirectory { directory in
+            let id = "com.example.cli-reject-stale-\(UUID().uuidString)"
+            let path = directory.appending(path: id, directoryHint: .isDirectory)
+            let original = try fixture(at: path, id: id)
+            let coordinator = cliCoordinator(directory: directory)
+            let review = try await coordinator.reviewExporterFromCLI()
+            #expect(review["exporter"]?["contentHash"] == .string(original.contentIdentity))
+            #expect(coordinator.exporterWarning()?["exporters"]?.arrayValue?.first?["requestsShellAccess"] == false)
+
+            let updated = try fixture(at: path, id: id, operations: [shellOperation()])
+            #expect(updated.contentIdentity != original.contentIdentity)
+            let expectedWarning: NectoJSONValue = ["exporters": [[
+                "id": .string(id), "name": .string(updated.manifest.name), "requestsShellAccess": true,
+            ]]]
+            #expect(coordinator.exporterWarning() == expectedWarning)
+            #expect(try await coordinator.rejectExporterFromCLI()["rejected"] == true)
+            #expect(NectoPluginLibrary.rejectedExporterContentHashes[id] == original.contentIdentity)
+            #expect(cliCoordinator(directory: directory).exporterWarning() == expectedWarning)
+            #expect(NectoPluginLibrary.installations[id] == nil)
+        }
+    }
+
+    @Test("CLI review and warnings exclude ordinary plugins and approved exporters")
     func cliExporterHasNoCandidate() async throws {
-        try await withCLIInstallationDirectory { directory in
+        try await withInstallationDirectory { directory in
             let coordinator = cliCoordinator(directory: directory)
             #expect(try await coordinator.reviewExporterFromCLI()["pending"] == false)
+            #expect(coordinator.exporterWarning() == nil)
             let id = "com.example.cli-approved-\(UUID().uuidString)"
             let exporter = try approved(fixture(at: directory.appending(path: id), id: id))
             NectoPluginLibrary.installations[id] = exporter.installation
             _ = try fixture(at: directory.appending(path: "ordinary"), id: "com.example.ordinary", exporter: false)
 
             #expect(try await coordinator.reviewExporterFromCLI()["pending"] == false)
+            #expect(coordinator.exporterWarning() == nil)
         }
     }
 
     @Test("CLI does not select or approve an exporter when several candidates are pending", arguments: [false, true])
     func cliExporterRefusesMultipleCandidates(changedAfterReview: Bool) async throws {
-        try await withCLIInstallationDirectory { directory in
+        try await withInstallationDirectory { directory in
             let first = try fixture(at: directory.appending(path: "first"), id: "com.example.cli-first-\(UUID().uuidString)")
             let coordinator = cliCoordinator(directory: directory)
             if changedAfterReview {
@@ -737,6 +812,13 @@ struct NectoExporterInstallationTests {
             }
             let second = try fixture(at: directory.appending(path: "second"), id: "com.example.cli-second-\(UUID().uuidString)")
 
+            let warnings = try #require(coordinator.exporterWarning()?["exporters"]?.arrayValue)
+            #expect(warnings.count == 2)
+            #expect(Set(warnings.compactMap { $0["id"]?.stringValue }) == Set([first.id, second.id]))
+            NectoPluginLibrary.rejectedExporterContentHashes[first.id] = first.contentIdentity
+            let remainingWarning = try #require(coordinator.exporterWarning())
+            #expect(remainingWarning["multipleCandidates"] == true)
+            #expect(remainingWarning["exporters"]?.arrayValue?.compactMap { $0["id"]?.stringValue } == [second.id])
             if !changedAfterReview {
                 await #expect(throws: (any Error).self) { _ = try await coordinator.reviewExporterFromCLI() }
             }
@@ -755,7 +837,7 @@ struct NectoExporterInstallationTests {
     @Test("CLI approval requires a fresh review after files, policy or installation records change",
           arguments: CLIReviewChange.allCases)
     func cliExporterRejectsStaleReview(change: CLIReviewChange) async throws {
-        try await withCLIInstallationDirectory { directory in
+        try await withInstallationDirectory { directory in
             let id = "com.example.cli-stale-\(UUID().uuidString)"
             let path = directory.appending(path: id, directoryHint: .isDirectory)
             let old = approved(try fixture(at: path, id: id))
@@ -771,6 +853,7 @@ struct NectoExporterInstallationTests {
             switch change {
             case .files:
                 try Data("<!doctype html><title>Changed</title>".utf8).write(to: path.appending(path: "index.html"))
+                #expect(coordinator.exporterWarning()?["exporters"]?.arrayValue?.first?["id"] == .string(id))
             case .policy:
                 await access.setFullAccessEnabled(true)
             case .replacementRecord:
@@ -807,7 +890,7 @@ struct NectoExporterInstallationTests {
 
     @Test("CLI approval rejects an unavailable or missing shell choice without applying grants", arguments: [false, true])
     func cliExporterRejectsInvalidShellChoice(hasCommandEnum: Bool) async throws {
-        try await withCLIInstallationDirectory { directory in
+        try await withInstallationDirectory { directory in
             let id = "com.example.cli-invalid-shell-\(UUID().uuidString)"
             let plugin = try fixture(
                 at: directory.appending(path: id), id: id, operations: [shellOperation(commands: hasCommandEnum ? ["pwd"] : nil)]
@@ -833,7 +916,7 @@ struct NectoExporterInstallationTests {
 
     @Test("CLI exporter approval cannot interrupt an active UI install")
     func cliExporterRespectsActiveUIInstall() async throws {
-        try await withCLIInstallationDirectory { directory in
+        try await withInstallationDirectory { directory in
             let id = "com.example.cli-busy-\(UUID().uuidString)"
             let plugin = try fixture(at: directory.appending(path: id), id: id)
             let coordinator = cliCoordinator(directory: directory)

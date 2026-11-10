@@ -118,7 +118,7 @@ struct Exporter: AsyncParsableCommand {
 
             let approveCommand = choices.isEmpty ? "necto exporter approve" : "necto exporter approve --shell-access <choice>"
             lines += ["", "Run \(approveCommand) to install this exporter and allow event collection.",
-                      "Run necto exporter reject to discard this review."]
+                      "Run necto exporter reject to decline and hide reminders until its content changes."]
             return displayText(lines.joined(separator: "\n"))
         }
 
@@ -144,14 +144,14 @@ struct Exporter: AsyncParsableCommand {
     }
 
     struct Reject: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Discard the current exporter review.")
+        static let configuration = CommandConfiguration(abstract: "Reject the reviewed exporter and hide reminders until its content changes.")
         @Flag(name: .long, help: "Print the rejection result as JSON.") var json = false
 
         func run() async throws {
             let value = try await Client().request(.init(kind: .rejectExporter))
             guard value["rejected"] == true else { throw ValidationError("Necto did not confirm exporter rejection.") }
             if json { print(try encodeJSON(value)); return }
-            print(displayText("Discarded the review for exporter \(value["pluginID"]?.stringValue ?? "?")."))
+            print(displayText("Rejected exporter \(value["pluginID"]?.stringValue ?? "?"). CLI reminders are hidden until its content changes."))
         }
     }
 }

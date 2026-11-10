@@ -19,6 +19,14 @@ struct NectoPluginLibrary {
     private static let deviceOrderKey = "devicePluginOrder"
     private static let shellPolicyKey = "shellPolicy"
     private static let installationsKey = "localPluginInstallations"
+    private static let rejectedExporterContentHashesKey = "rejectedExporterContentHashes"
+
+    /// Explicit rejections suppress CLI reminders for the same package bytes only.
+    /// They never approve collection or remove the candidate from manual review.
+    static var rejectedExporterContentHashes: [String: String] {
+        get { UserDefaults.standard.dictionary(forKey: rejectedExporterContentHashesKey) as? [String: String] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: rejectedExporterContentHashesKey) }
+    }
 
     static var installations: [String: NectoLocalPluginInstallation] {
         get {

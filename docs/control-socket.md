@@ -92,7 +92,8 @@ even if the CLI exits. This is not an unattended or approval-bypassing install A
 ```
 
 A request sees exactly one `result` or `error` — except `subscribe`, which sees any
-number of `event`s and then one `end` or `error`. Error codes are the bridge's own
+number of `event`s and then one `end` or `error`. Requests opting in with
+`includeWarnings: true` can first receive one advisory `warning` frame. Error codes are the bridge's own
 (`docs/plugin-manifest.md` lists them), forwarded from the registry.
 
 ## The discovery chain
@@ -229,14 +230,50 @@ installation result (`installed`, `pluginID`, `name`, `version`, `enabled`).
 The legacy `enabled` field describes plugin enablement storage, not an exporter
 collection switch; removing the exporter stops collection.
 
-`rejectExporter` discards the review and returns `rejected: true` and `pluginID`.
-It leaves candidate files and existing grants alone, does not uninstall an existing
-exporter and does not suppress future warnings. Approval, rejection or restarting
+`rejectExporter` records the reviewed exporter's ID and content hash, discards the
+review and returns `rejected: true` and `pluginID`. The explicit Reject button in
+the installation sheet does the same. Candidate files and existing grants remain;
+an existing exporter is not uninstalled. CLI reminders for the same ID and content
+are suppressed across app restarts, but changed content is announced again.
+Escape or dismissing the sheet only postpones the decision and records no rejection.
+Manual `review` still includes rejected candidates. Approval, rejection or restarting
 Necto requires a new review before another decision. A concurrent installation or
 approval sheet must finish first. Once commit has begun, files may remain after a
 failed load or disconnected CLI, as with the existing installation path.
 
 The control socket trusts the local OS user; these commands do not independently
 verify that a person supplied consent. Agents must obtain the user's explicit
-choice before sending approval. Automatic approval and pending-exporter warnings
-during unrelated commands are not part of this interface.
+choice before sending approval. A warning is not consent to collect events or to
+execute shell commands.
+
+### Pending exporter warnings
+
+Ordinary remote CLI commands opt in to a warning before their usual response:
+`targets`, `plugins`, `installPlugin`, `deletePlugin`, `invoke` and `subscribe`.
+The CLI prints one warning block to stderr per execution. It never mixes warnings
+into JSON results or stream events, changes the original exit status, or waits for
+approval. A stream receives its warning before the handler starts, even if no event
+has arrived. Subsequent events do not repeat it or count it toward `--limit`.
+
+```json
+{ "id": "r1", "kind": "targets", "includeWarnings": true }
+{ "id": "r1", "kind": "warning", "value": { "exporters": [
+  { "id": "com.example.exporter", "name": "Example Exporter", "requestsShellAccess": true }
+] } }
+```
+
+The optional `multipleCandidates: true` in the warning value means the pending
+folders must first be resolved in Necto Settings. This includes cases where only
+one candidate needs a reminder but other pending candidates were previously rejected.
+The warning lists only candidates whose current content has not been rejected;
+it never selects one for approval or changes the explicit in-memory review.
+
+Explicit exporter commands and local-only commands such as `--help`, packaging and
+skill installation add no warning. Requests without the opt-in keep the previous
+response sequence, so older clients do not receive an unknown response kind. Older
+hosts may ignore the opt-in and return their usual result without a warning.
+
+The app stores the most recently rejected content hash per exporter ID using its
+normal preference storage. This controls reminders only, not execution or grants.
+The bundled agent guide explains how to read `exporter review`, ask the user for a
+choice, and then call `approve` or `reject` explicitly.

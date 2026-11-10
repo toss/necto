@@ -3,6 +3,7 @@
 //
 
 import ArgumentParser
+import Darwin
 import NectoCLIService
 import NectoModel
 import NectoTransport
@@ -43,6 +44,9 @@ struct Client {
 
     /// Sends one request and returns its single result.
     func request(_ request: NectoControlRequest) async throws -> NectoJSONValue {
+        var request = request
+        var showWarning = request.kind.supportsWarnings
+        request.includeWarnings = showWarning ? true : nil
         let session = try await connect()
         defer { session.close() }
         try await session.send(request)
@@ -54,6 +58,11 @@ struct Client {
             guard response.id == request.id else { continue }
 
             switch response.kind {
+            case .warning:
+                if showWarning {
+                    writeExporterWarning(response.value)
+                    showWarning = false
+                }
             case .result:
                 return response.value ?? .object([:])
             case .error:
@@ -74,6 +83,9 @@ struct Client {
         _ request: NectoControlRequest, limit: Int? = nil, timeout: Duration? = nil,
         onEvent: @escaping (NectoJSONValue) -> Void
     ) async throws {
+        var request = request
+        var showWarning = request.kind.supportsWarnings
+        request.includeWarnings = showWarning ? true : nil
         let session = try await connect()
         let control = StreamControl(session: session)
         let interrupt = Interrupt { control.stop(.interrupted) }
@@ -100,6 +112,11 @@ struct Client {
                     if control.reason != nil { break }
                     guard response.id == request.id else { continue }
                     switch response.kind {
+                    case .warning:
+                        if showWarning {
+                            writeExporterWarning(response.value)
+                            showWarning = false
+                        }
                     case .event:
                         if let value = response.value {
                             onEvent(value)
@@ -130,6 +147,32 @@ struct Client {
             control.stop(.cancelled)
         }
     }
+}
+
+private func writeExporterWarning(_ value: NectoJSONValue?) {
+    let exporters = value?["exporters"]?.arrayValue ?? []
+    let summaries = exporters.compactMap { exporter -> String? in
+        guard let name = exporter["name"]?.stringValue,
+              let shell = exporter["requestsShellAccess"]?.boolValue else { return nil }
+        let singleLineName = String(name.unicodeScalars.filter {
+            !CharacterSet.controlCharacters.contains($0) && !CharacterSet.newlines.contains($0)
+        })
+        let access = shell ? "event collection and shell access" : "event collection"
+        return "Exporter '\(singleLineName)' is awaiting approval for \(access)."
+    }
+    guard !summaries.isEmpty else { return }
+    let needsSettings = value?["multipleCandidates"]?.boolValue == true || exporters.count > 1
+    let nextStep = needsSettings
+        ? "Ask the user to resolve the pending exporters in Necto Settings."
+        : "Run `necto exporter review` and ask the user before approving."
+    let warning = displayText((summaries + [nextStep]).joined(separator: " "))
+    let stderr = FileHandle.standardError
+    let fd = stderr.fileDescriptor
+    // A closed stderr pipe must not change the command's result.
+    let priorNoSigPipe = fcntl(fd, F_GETNOSIGPIPE)
+    guard priorNoSigPipe >= 0, fcntl(fd, F_SETNOSIGPIPE, 1) == 0 else { return }
+    defer { _ = fcntl(fd, F_SETNOSIGPIPE, priorNoSigPipe) }
+    try? stderr.write(contentsOf: Data("Warning: \(warning)\n".utf8))
 }
 
 private final class StreamControl: @unchecked Sendable {

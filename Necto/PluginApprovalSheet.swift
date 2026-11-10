@@ -13,6 +13,7 @@ struct PluginApprovalSheet: View {
     let shellReview: NectoShellPolicy.Review?
     let scale: CGFloat
     let cancel: () -> Void
+    let reject: () -> Void
     let approve: (NectoShellAccessLevel?) -> Void
 
     @State private var selectedAccessLevel: NectoShellAccessLevel?
@@ -131,9 +132,8 @@ struct PluginApprovalSheet: View {
 
                 HStack(spacing: 8) {
                     Spacer()
-                    Button(NectoL10n.text(isExporter ? "Reject" : "Cancel"), action: cancel)
+                    Button(NectoL10n.text(isExporter ? "Reject" : "Cancel"), action: isExporter ? reject : cancel)
                         .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
-                        .keyboardShortcut(.cancelAction)
 
                     Button(NectoL10n.text(isExporter
                         ? (staged.keepsPermissions ? "Update and allow collection" : "Install and allow collection")
@@ -148,6 +148,7 @@ struct PluginApprovalSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .onExitCommand(perform: cancel)
         .onChange(of: shellReview) { _, _ in
             selectedAccessLevel = nil
         }
