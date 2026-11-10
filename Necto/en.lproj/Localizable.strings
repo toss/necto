@@ -263,6 +263,7 @@
 "Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent." = "Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent.";
 "Not currently installed or connected" = "Not currently installed or connected";
 "Event Exporter" = "Event Exporter";
+"Usage data collection" = "Usage data collection";
 "Plugin events" = "Plugin events";
 "Exporter diagnostics" = "Exporter diagnostics";
 "View diagnostics" = "View diagnostics";

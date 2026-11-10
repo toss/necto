@@ -263,6 +263,7 @@
 "Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent." = "플러그인을 제외하면 같은 ID를 사용하는 모든 앱과 버전의 새 이벤트 전달을 중지해요. 이미 Exporter에 전달한 이벤트는 계속 전송될 수 있어요.";
 "Not currently installed or connected" = "설치되지 않았거나 연결되지 않음";
 "Event Exporter" = "Event Exporter";
+"Usage data collection" = "사용 기록 수집";
 "Plugin events" = "플러그인 이벤트";
 "Exporter diagnostics" = "Exporter 진단 로그";
 "View diagnostics" = "진단 로그 보기";

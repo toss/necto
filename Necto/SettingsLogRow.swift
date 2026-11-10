@@ -18,7 +18,7 @@ struct SettingsExporterDiagnostics: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: back) {
-                Label(NectoL10n.text("Event Exporter"), systemImage: "chevron.left")
+                Label(NectoL10n.text("Usage data collection"), systemImage: "chevron.left")
                     .font(.necto(.label, scale: scale))
                     .foregroundStyle(NectoTheme.textSecondary)
             }

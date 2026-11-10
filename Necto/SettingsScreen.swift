@@ -51,7 +51,7 @@ struct SettingsScreen: View {
                     (.general, NectoL10n.text("General"), "slider.horizontal.3"),
                     (.shellAccess, NectoL10n.text("Shell Access"), "terminal"),
                     (.plugins, NectoL10n.text("Desktop Plugins"), "square.grid.2x2"),
-                    (.eventExporter, NectoL10n.text("Event Exporter"), "arrow.up.doc"),
+                    (.eventExporter, NectoL10n.text("Usage data collection"), "arrow.up.doc"),
                     (.diagnostics, NectoL10n.text("Log"), "text.alignleft"),
                 ],
                 selection: page,
@@ -363,7 +363,7 @@ struct SettingsScreen: View {
     @ViewBuilder
     private var eventExporter: some View {
         HStack(alignment: .firstTextBaseline) {
-            NectoSectionTitle(NectoL10n.text("Event Exporter"), scale: scale, isFirst: true)
+            NectoSectionTitle(NectoL10n.text("Usage data collection"), scale: scale, isFirst: true)
             Spacer(minLength: 12)
             Button(NectoL10n.text("View diagnostics")) { showingExporterDiagnostics = true }
                 .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))

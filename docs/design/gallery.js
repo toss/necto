@@ -397,7 +397,7 @@ const settingsNav = (current, updates = false) => `
     <button type="button" class="necto-nav-item" aria-selected="${current === "general"}">${gearIcon}<span>General</span>${updates ? updateDot : ""}</button>
     <button type="button" class="necto-nav-item" aria-selected="${current === "shell"}">${logIcon}<span>Shell Access</span></button>
     <button type="button" class="necto-nav-item" aria-selected="${current === "plugins"}">${sampleIcon}<span>Desktop Plugins</span>${updates ? updateDot : ""}</button>
-    <button type="button" class="necto-nav-item" aria-selected="${current === "exporter" || current === "exporter-diagnostics"}">${logIcon}<span>Event Exporter</span></button>
+    <button type="button" class="necto-nav-item" aria-selected="${current === "exporter" || current === "exporter-diagnostics"}">${logIcon}<span>Usage data collection</span></button>
     <button type="button" class="necto-nav-item" aria-selected="false">${logIcon}<span>Log</span></button>
   </div>`;
 
@@ -484,7 +484,7 @@ const generalPage = (updates = false) => `
 const eventExporterPage = () => `
   <div class="necto-body" style="padding: var(--necto-space-3)">
     <div style="display:flex;align-items:baseline;justify-content:space-between">
-      <h3 class="necto-section-title">Event Exporter</h3>
+      <h3 class="necto-section-title">Usage data collection</h3>
       <button type="button" class="necto-button necto-button-quiet" data-exporter-diagnostics>View diagnostics</button>
     </div>
     <div class="necto-row">
@@ -509,7 +509,7 @@ const eventExporterPage = () => `
 
 const exporterDiagnosticsPage = () => `
   <div class="necto-body" style="padding: var(--necto-space-3)">
-    <button type="button" class="necto-button necto-button-quiet" data-exporter-back>‹ Event Exporter</button>
+    <button type="button" class="necto-button necto-button-quiet" data-exporter-back>‹ Usage data collection</button>
     <div style="display:flex;align-items:baseline;justify-content:space-between">
       <h3 class="necto-section-title">Exporter diagnostics</h3>
       <button type="button" class="necto-button necto-button-quiet">Copy all</button>
