@@ -49,9 +49,8 @@ After building the web packages, you can also open `Necto.xcodeproj` and run the
 `Necto` scheme. To build `ExampleApp` with `script/build`, start an iOS simulator
 before running the script.
 
-To integrate the SDK into your app and exclude SDK calls from Release builds, see
-[docs/setup.md](docs/setup.md) for iOS and
-[SDK/Android/README.md](SDK/Android/README.md) for Android.
+To integrate the SDK into your iOS or Android app and exclude SDK calls from Release
+builds, see [docs/setup.md](docs/setup.md).
 
 ## Create a plugin
 

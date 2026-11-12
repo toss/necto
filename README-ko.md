@@ -48,9 +48,8 @@ open Build/Products/Debug/Necto.app
 `script/build`로 `ExampleApp`도 빌드하려면 스크립트 실행 전에 iOS 시뮬레이터를
 켜두세요.
 
-앱에 SDK를 연동하고 Release 빌드에서 SDK 호출을 제외하는 방법은 iOS는
-[docs/ko/setup.md](docs/ko/setup.md), Android는
-[SDK/Android/README.md](SDK/Android/README.md)를 참고하세요.
+iOS·Android 앱에 SDK를 연동하고 Release 빌드에서 SDK 호출을 제외하는 방법은
+[docs/ko/setup.md](docs/ko/setup.md)를 참고하세요.
 
 ## 플러그인 만들기
 
