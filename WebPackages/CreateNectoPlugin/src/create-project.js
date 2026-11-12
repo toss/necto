@@ -82,7 +82,8 @@ async function assertEmpty(directory) {
 async function renderDirectory(source, destination, replacements) {
   await mkdir(destination, { recursive: true });
   for (const entry of await readdir(source, { withFileTypes: true })) {
-    const outputName = replace(entry.name, replacements);
+    // npm excludes .gitignore files from packed templates.
+    const outputName = entry.name === "gitignore" ? ".gitignore" : replace(entry.name, replacements);
     const sourcePath = resolve(source, entry.name);
     const destinationPath = resolve(destination, outputName);
 
