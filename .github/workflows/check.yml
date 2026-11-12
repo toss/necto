@@ -206,13 +206,17 @@ jobs:
         working-directory: SDK/Android
         run: ./gradlew :sample:assembleDebug --console=plain
       - name: Boot an emulator
+        env:
+          # avdmanager and the emulator look for AVDs in different default folders here.
+          ANDROID_AVD_HOME: ${{ runner.temp }}/avd
         run: |
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd --force \
             --name necto --package "system-images;android-35;google_apis;x86_64"
           nohup $ANDROID_HOME/emulator/emulator -avd necto -no-window -no-audio -no-boot-anim \
             -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
           adb=$ANDROID_HOME/platform-tools/adb
-          $adb wait-for-device
+          timeout 180 $adb wait-for-device
           timeout 300 $adb shell 'until [ "$(getprop sys.boot_completed)" = 1 ]; do sleep 2; done'
           $adb shell svc power stayon true
           $adb shell wm dismiss-keyguard
