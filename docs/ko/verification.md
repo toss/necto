@@ -260,6 +260,9 @@ Android E2E 작업은 API 35 에뮬레이터를 부팅하고
 `script/test-android-security`를 실행해요. Necto 호스트는 macOS가 필요한데 호스티드 Mac
 러너에서는 에뮬레이터를 띄울 수 없어서, 호스트 없이 SDK에 직접 연결해 검사해요.
 Node 22.12.0은 Mac·iOS SDK·웹·문서 작업에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
+릴리스 워크플로는 게시 후 `Android SDK on JitPack` 작업에서 JitPack에 새 태그의 빌드를
+요청하고 `script/test-android-consumer --jitpack <version>`으로 결과를 검사해요. 이
+시점에는 릴리스가 이미 공개돼 있어서, 실패하면 재시도가 아니라 수정 릴리스가 필요해요.
 문서 배포는 별도 워크플로에서 수동으로 실행하며
 GitHub Pages는 Actions 배포로 설정해야 해요.
 워크플로 파일을 추가한 것만으로 외부 환경에서 실행에 성공했다고 볼 수는 없어요.

@@ -293,6 +293,10 @@ are reused; conflicting files stop the run for review. An upload failure leaves
 the release unpublished. Use **Re-run failed jobs** to retry publishing with the
 same build artifacts, retained for seven days.
 
+After publishing, the `Android SDK on JitPack` job asks JitPack to build the new tag and
+runs `script/test-android-consumer --jitpack <version>` against the result. The release
+is already public by then, so a failure there calls for a fixed release, not a retry.
+
 ### Local checks
 
 `script/test release` runs the release script in temporary fixtures with build,
