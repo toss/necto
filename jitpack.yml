@@ -1,0 +1,4 @@
+jdk:
+  - openjdk17
+install:
+  - ./SDK/Android/gradlew -p SDK/Android --no-daemon --console=plain -Pnecto.group="$GROUP.$ARTIFACT" -Pnecto.version="$VERSION" publishToMavenLocal

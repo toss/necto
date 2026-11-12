@@ -12,6 +12,17 @@ plugins {
 }
 
 allprojects {
-    group = "im.toss.necto"
-    version = "0.1.0"
+    group = providers.gradleProperty("necto.group").orElse("im.toss.necto").get()
+    version = providers.gradleProperty("necto.version").orElse("0.1.0").get()
+
+    plugins.withId("maven-publish") {
+        extensions.configure<org.gradle.api.publish.PublishingExtension> {
+            repositories {
+                maven {
+                    name = "consumerTest"
+                    url = uri(rootProject.layout.buildDirectory.dir("consumer-repository"))
+                }
+            }
+        }
+    }
 }

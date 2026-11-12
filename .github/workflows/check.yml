@@ -166,6 +166,8 @@ jobs:
         run: ./gradlew build --console=plain
       - name: Test Android artifacts
         run: script/test-android-artifacts
+      - name: Test selective Android SDK consumers
+        run: script/test-android-consumer
       - name: Upload Android test results
         if: failure()
         uses: actions/upload-artifact@v7

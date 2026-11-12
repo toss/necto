@@ -3,10 +3,9 @@
 package im.toss.necto.sample
 
 import android.content.Context
-import im.toss.necto.android.NectoAndroidPlugins
+import im.toss.necto.android.NectoProcessMetricPlugin
 import im.toss.necto.plugins.NectoEvent
 import im.toss.necto.plugins.NectoEventsPlugin
-import im.toss.necto.plugins.NectoPerformancePlugin
 
 /**
  * Gives the Events and Performance plugins something real to show.
@@ -17,7 +16,7 @@ object ExampleTelemetry {
     val events = NectoEventsPlugin()
 
     /** The sampler reads this process through a Context, so it is made once the app has one. */
-    fun performance(context: Context): NectoPerformancePlugin = NectoAndroidPlugins.performance(context)
+    fun performance(context: Context): NectoProcessMetricPlugin = NectoProcessMetricPlugin(context)
 
     fun start() {
         events.report(NectoEvent(NectoEvent.Level.INFO, "Boot", "Necto Example started"))

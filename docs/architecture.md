@@ -19,9 +19,9 @@ NectoPluginRegistry
    ├── desktop provider (Mac)
    └── device provider
          ↕ NectoDeviceBridgeClient / session
-       usbmuxd (device) · loopback (simulator)
+       usbmuxd (device) · loopback (simulator) · adb (Android)
          ↕ NectoSDK
-       NectoPlugin → NectoRegistrar (in the iOS app)
+       NectoPlugin → NectoRegistrar (in the app)
 ```
 
 A plugin calls an operation id from its own manifest. The runtime matches it against
@@ -80,7 +80,8 @@ panels; it is not an HTTP service. See [the control socket](control-socket.md).
 ## Why the app listens and the Mac connects
 
 usbmuxd can only reach a port the device already has open, so the socket roles are the
-reverse of the protocol roles.
+reverse of the protocol roles. An Android app listens too, on a private Unix socket
+that the Mac reaches through `adb forward`.
 
 | Layer | Mac | App |
 | --- | --- | --- |

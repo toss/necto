@@ -1,3 +1,2 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- No permissions: the SDK listens on a Unix socket that ADB forwards to. -->
+<!-- Copyright (c) 2026 Viva Republica, Inc. -->
 <manifest />

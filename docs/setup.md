@@ -1,16 +1,19 @@
 # Setting up Necto in an app
 
 Necto's SDK is a debug tool that compiles into your app. This page covers integrating
-the SDK and excluding its calls from production builds. Install the Mac app separately
-using [install.md](install.md).
+the SDK and excluding its calls from production builds, for [iOS](#ios) and
+[Android](#android). Install the Mac app separately using [install.md](install.md).
 
 Use Necto only with trusted apps and runtime environments, including development
-devices and networks. The SDK connection has no peer
-authentication or TLS: USB and loopback do not prevent other apps on the device or
-programs on the Mac from connecting. Do not expose or forward its ports to untrusted
-networks.
+devices and networks.
 
-## Wiring it up
+## iOS
+
+The SDK connection has no peer authentication or TLS: USB and loopback do not prevent
+other apps on the device or programs on the Mac from connecting. Do not expose or
+forward its ports to untrusted networks.
+
+### Wiring it up
 
 Add `https://github.com/toss/necto.git` in Xcode's Package Dependencies.
 Select `NectoSDK` and only the plugin products you need. The example below also
@@ -41,7 +44,7 @@ Your own plugins register the same way; their panels appear
 in Necto when the app connects. See [the device plugin tutorial](tutorial-device.md)
 for a complete implementation.
 
-### Choosing products
+#### Choosing products
 
 | Product / import | Purpose | Private APIs |
 | --- | --- | --- |
@@ -67,7 +70,7 @@ Registration methods and plugin type names are unchanged.
 .product(name: "NectoEventsPlugin", package: "necto")
 ```
 
-## Keeping it away from users
+### Keeping it away from users
 
 Do not run debugging tools in builds distributed to users.
 
@@ -103,23 +106,14 @@ If complete exclusion is required, use a separate distribution target without Ne
 dependencies and inspect the actual Release output for remaining code and resources.
 `EXCLUDED_SOURCE_FILE_NAMES` alone does not exclude Swift package sources.
 
-## What connecting involves
-
-- **Simulator**: the Mac reaches the app over loopback.
-- **Device**: over the USB cable, through `usbmuxd`.
-- The SDK listens on a local TCP port. If another simulator app holds it, the SDK
-  looks for a free port within its port range. Necto does not use Bonjour or multicast.
-- Two apps, or the same app on two devices, connect side by side and are told
-  apart in the sidebar and in `necto-cli` (`--app`, `--device`).
-
-## Where to start
+### Where to start
 
 Start with `URLSessionNetworkPlugin` and `NectoEventsPlugin`. Network requests appear
 as they happen. Keep the registered `events` instance in your app's debug logging code
 and call `events.report(...)` to send log entries, as in the example above. Add other
 plugins for the data you need to inspect.
 
-### Which requests are captured
+#### Which requests are captured
 
 Add `NectoURLSessionCapturePlugin` and register `URLSessionNetworkPlugin()`
 to automatically record HTTP(S) requests from `URLSession.shared` and sessions the
@@ -144,3 +138,119 @@ challenges and redirects. Use the public-API-only `NectoNetworkPlugin` for manua
 
 Reference implementations: [PulseProxy](https://github.com/kean/Pulse/blob/main/Sources/PulseProxy/URLSessionSwizzler.swift)
 and [Atlantis Network.framework loader support](https://github.com/ProxymanApp/atlantis/blob/main/Sources/NetworkInjector%2BNWURLSession.swift).
+
+## Android
+
+The Android SDK is a set of Gradle modules published through JitPack, for Android 8.0
+(API 26) or later. It opens no network port: the app listens on a private Unix socket
+that only ADB reaches, accepts connections only from the shell and root users, and
+starts only in a debuggable app. [Necto for Android](https://github.com/toss/necto/blob/main/SDK/Android/README.md)
+covers the connection, its limits and how the plugins differ from iOS.
+
+### Adding the modules
+
+Add JitPack to `settings.gradle.kts`, limited to Necto's group:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeGroup("com.github.toss.necto") }
+        }
+    }
+}
+```
+
+Add `necto-android` and only the plugin modules you need to the debug build. Pin every
+module to the same version, a release tag or a commit:
+
+```kotlin
+// app/build.gradle.kts
+val nectoVersion = "COMMIT_OR_TAG"
+dependencies {
+    debugImplementation("com.github.toss.necto:necto-android:$nectoVersion")
+    debugImplementation("com.github.toss.necto:necto-events-plugin:$nectoVersion")
+}
+```
+
+Adding a module does not register a plugin or start a listener. Each module carries
+only its own code and panel, plus its declared dependencies.
+
+### Choosing modules
+
+| Module | Purpose |
+| --- | --- |
+| `necto-android` | Connection and plugin registration |
+| `necto-network-plugin` | Report requests from your own networking hooks |
+| `necto-events-plugin` | Application events |
+| `necto-files-plugin` | Files |
+| `necto-datastore-preferences-plugin` | DataStore Preferences |
+| `necto-performance-plugin` | Report performance readings |
+| `necto-process-metric-plugin` | Automatic process metrics |
+| `necto-ui-control-plugin` | UI inspection and interaction, for Views and Jetpack Compose |
+| `necto-okhttp-capture-plugin` | Automatic OkHttp recording |
+
+### Keeping it out of release builds
+
+Keep SDK references in the debug source set. A `BuildConfig.DEBUG` condition in
+`src/main` does not remove those references from release compilation.
+
+```kotlin
+// src/debug/kotlin/com/example/NectoSetup.kt
+package com.example
+
+import android.app.Application
+import im.toss.necto.android.NectoAndroid
+import im.toss.necto.plugins.NectoEventsPlugin
+
+object NectoSetup {
+    fun start(app: Application) {
+        NectoAndroid.start(app, listOf(NectoEventsPlugin()))
+    }
+}
+```
+
+```kotlin
+// src/release/kotlin/com/example/NectoSetup.kt
+package com.example
+
+import android.app.Application
+
+object NectoSetup {
+    fun start(app: Application) = Unit
+}
+```
+
+Call `NectoSetup.start(this)` from the app's `Application.onCreate`. Release builds
+compile without any Necto dependency. Add a matching setup for other build types as
+needed.
+
+### Capturing OkHttp requests
+
+Add `necto-okhttp-capture-plugin` to the debug dependencies and wire the same instance
+to the bridge and the app's client:
+
+```kotlin
+val network = OkHttpNetworkPlugin()
+NectoAndroid.start(app, listOf(network))
+val client = OkHttpClient.Builder()
+    .addInterceptor(network.interceptor)
+    .build()
+```
+
+Add the interceptor after any interceptor that checks a request body's type. For
+manual logging, use `necto-network-plugin` on its own.
+
+## What connecting involves
+
+- **iOS simulator**: the Mac reaches the app over loopback.
+- **iOS device**: over the USB cable, through `usbmuxd`.
+- **Android device or emulator**: over ADB, to a private Unix socket in the app. A
+  device connects over USB.
+- The iOS SDK listens on a local TCP port. If another simulator app holds it, the SDK
+  looks for a free port within its port range. Necto does not use Bonjour or multicast.
+- Two apps, or the same app on two devices, connect side by side and are told
+  apart in the sidebar and in `necto-cli` (`--app`, `--device`).

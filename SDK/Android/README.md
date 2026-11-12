@@ -36,45 +36,133 @@ The device appears as `android:<serial>`, labelled `Android <version>`.
 
 ## Modules
 
-| Module | Contents | iOS counterpart |
-| --- | --- | --- |
-| `necto-core` (plain JVM) | Protocol models, JSON and schema validation, framed message transport, coroutine SDK runtime, the shared part of the Events, Network, Performance, Files and UI Control plugins, web panels | `NectoModel`, `NectoTransport`, `NectoSDK`, the individual plugin modules |
-| `necto-android` | The ADB listener, app identity from `Context`, DataStore Preferences plugin, process sampler (CPU, PSS, FPS, threads), UI Control for Views and Jetpack Compose, default Files roots | `NectoProcessMetricPlugin`, the UIKit parts |
-| `necto-okhttp` | Network capture with an OkHttp `Interceptor` | `NectoURLSessionCapturePlugin` |
+`necto-android` supplies the Android connection and depends only on `necto-core` and
+coroutines. It carries no feature panels, DataStore, OkHttp or Compose. Add and register
+only the plugins the app needs; `NectoAndroid.start(context)` alone starts the bridge
+without registering any plugins.
 
-The Maven group and package root is `im.toss.necto`.
+| Artifact | Contents / entry point |
+| --- | --- |
+| `necto-core` | Protocol models, transport, plugin contracts and SDK runtime (plain JVM) |
+| `necto-android` | ADB listener and app identity: `NectoAndroid.start(context, plugins)` |
+| `necto-events-plugin` | Events reporting and panel: `NectoEventsPlugin` |
+| `necto-network-plugin` | Network reporting and panel: `NectoNetworkPlugin`; no capture dependency |
+| `necto-okhttp-capture-plugin` | Optional OkHttp capture: `OkHttpNetworkPlugin` or `NectoOkHttpInterceptor`; depends on `necto-network-plugin` |
+| `necto-files-plugin` | Files panel and selected roots: `NectoFilesPlugin(context)` or `NectoFilesPlugin(roots)` |
+| `necto-performance-plugin` | Custom metric reporting and panel: `NectoPerformancePlugin`; no process sampler |
+| `necto-process-metric-plugin` | Optional Android process sampling: `NectoProcessMetricPlugin(context)`; depends on `necto-performance-plugin` |
+| `necto-ui-control-plugin` | Views and optional Compose UI Control: `NectoAndroidControlPlugin(context)` |
+| `necto-datastore-preferences-plugin` | DataStore Preferences and panel: `NectoDataStorePreferencesPlugin(stores)` |
 
-## Usage
+`necto-plugin-support` is an implementation dependency shared by the feature modules.
+It contains resource loading, stream fan-out and text decoding helpers, with no panel
+or capture mechanism. Apps do not need to declare it directly. Each feature artifact
+carries only its own panel. Compose remains `compileOnly` in Control.
+
+The Kotlin package root is `im.toss.necto`. JitPack publishes the modules under
+`com.github.toss.necto`; local publications default to `im.toss.necto`.
+
+## JitPack
+
+The root `jitpack.yml` uses JDK 17 and runs `publishToMavenLocal` in `SDK/Android`.
+Every module with a Maven publication is included; the sample app is not published.
+The build uses JitPack's group and requested tag/commit for both the publications and
+their inter-module dependencies, including Gradle module metadata.
+
+Add JitPack to `settings.gradle.kts`:
 
 ```kotlin
-val Context.settings by preferencesDataStore("settings")
-
-class App : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        if (BuildConfig.DEBUG) {
-            val events = NectoEventsPlugin()
-            val network = NectoNetworkPlugin()
-            NectoAndroid.start(
-                this,
-                NectoAndroidPlugins.defaults(this, events, network, dataStores = mapOf("settings" to settings)),
-            )
-
-            okHttpClient = OkHttpClient.Builder()
-                .addInterceptor(NectoOkHttpInterceptor(network))
-                .build()
-            events.report(NectoEvent(NectoEvent.Level.INFO, "App", "started"))
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeGroup("com.github.toss.necto") }
         }
     }
 }
 ```
+
+Use a commit containing the Android SDK or a tag made from it. Pin that version for
+all selected modules. Use the individual module coordinates below; JitPack's aggregate
+`com.github.toss:necto` dependency includes every module and defeats selective adoption.
+See [JitPack's multi-module documentation](https://docs.jitpack.io/building/#multi-module-projects).
+
+## Usage
+
+For example, to include Events in debug builds only:
+
+```kotlin
+// app/build.gradle.kts
+val nectoVersion = "COMMIT_OR_TAG"
+dependencies {
+    debugImplementation("com.github.toss.necto:necto-android:$nectoVersion")
+    debugImplementation("com.github.toss.necto:necto-events-plugin:$nectoVersion")
+}
+```
+
+Keep SDK references in the debug source set. A `BuildConfig.DEBUG` condition in
+`src/main` does not remove those references from release compilation.
+
+```kotlin
+// src/debug/kotlin/com/example/NectoSetup.kt
+package com.example
+
+import android.app.Application
+import im.toss.necto.android.NectoAndroid
+import im.toss.necto.plugins.NectoEventsPlugin
+
+object NectoSetup {
+    fun start(app: Application) {
+        NectoAndroid.start(app, listOf(NectoEventsPlugin()))
+    }
+}
+```
+
+```kotlin
+// src/release/kotlin/com/example/NectoSetup.kt
+package com.example
+
+import android.app.Application
+
+object NectoSetup {
+    fun start(app: Application) = Unit
+}
+```
+
+Call `NectoSetup.start(this)` from the app's `Application.onCreate`. Release builds
+compile without any Necto dependency. Add a matching setup for other build types as
+needed. For network capture, add `necto-okhttp-capture-plugin` to the debug
+dependencies and wire the same instance to the bridge and the app's client:
+
+```kotlin
+val network = OkHttpNetworkPlugin()
+NectoAndroid.start(app, listOf(network))
+val client = OkHttpClient.Builder()
+    .addInterceptor(network.interceptor)
+    .build()
+```
+
+To inspect DataStore, add `necto-datastore-preferences-plugin` and register
+`NectoDataStorePreferencesPlugin(mapOf("settings" to app.settings))` with the app's own
+store. Neither the connection nor other plugins bring DataStore into the app.
+
+### Migrating the Android preview
+
+The former `NectoAndroidPlugins` factory and automatic defaults are removed. Select
+artifacts and pass an explicit plugin list. Replace `files(context)` with
+`NectoFilesPlugin(context)`, `control(context)` with `NectoAndroidControlPlugin(context)`,
+and `performance(context)` with `NectoProcessMetricPlugin(context)`. Activity tracking
+now belongs to Control and starts only when that plugin is created. Existing reporting
+plugin classes and wire contracts are unchanged.
 
 Add the interceptor after any interceptor that checks a request body's type, such as
 one that adds fields to a `FormBody`: the interceptor wraps the body to copy the bytes
 OkHttp sends, so interceptors after it see the wrapper. An interceptor before it that
 compresses the body is captured compressed.
 
-`necto-android` declares no permissions. Custom plugins take the same shape as on iOS:
+The SDK modules declare no permissions. Custom plugins take the same shape as on iOS:
 
 ```kotlin
 class ThingsPlugin : NectoPlugin {
@@ -137,7 +225,7 @@ One session is served at a time.
   - The build generates them from the built iOS panels in
     `SDK/iOS/Sources/<PluginModule>/Panels`.
   - It overrides only the Control and Preferences manifests, which describe Android
-    behaviour. They live in `necto-core/src/main/panel-manifests`, and the build fails
+    behaviour. They live in each owning plugin's `src/main/panel-manifests`, and the build fails
     when their contracts drift from the iOS ones.
 - **Requests from Necto** are bounded by the 64 KiB inbound frame, which reaches
   `files.write` and `preferences.set` with a large string. A larger request closes
@@ -177,4 +265,16 @@ minSdk 26, compileSdk 35, Kotlin 2.0.21, AGP 8.7.3, JDK 17.
 ## Verification
 
 [docs/verification.md](docs/verification.md) lists what the automated tests cover, and
-what was checked against a running app.
+what was checked against a running app. From the repository root,
+`script/test-android-consumer` publishes to a local test repository and builds independent,
+minified apps selecting only the bridge, OkHttp, DataStore, Control or all plugins without
+Compose. It checks resolved dependencies, packaged panels and a release build without
+Necto. To verify a remote JitPack build without publishing locally, run:
+
+```bash
+script/test-android-consumer --jitpack COMMIT_OR_TAG
+```
+
+For a local coordinate check, pass `-- -Pnecto.group=com.github.toss.necto
+-Pnecto.version=jitpack-test`. The same check validates the generated Maven dependencies
+before pushing a commit.

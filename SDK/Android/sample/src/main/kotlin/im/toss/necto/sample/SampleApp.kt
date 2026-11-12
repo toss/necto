@@ -15,7 +15,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import im.toss.necto.android.NectoAndroid
-import im.toss.necto.android.NectoAndroidPlugins
+import im.toss.necto.android.NectoAndroidControlPlugin
+import im.toss.necto.plugins.NectoFilesPlugin
 import im.toss.necto.android.NectoDataStorePreferencesPlugin
 import im.toss.necto.okhttp.NectoOkHttpInterceptor
 import im.toss.necto.plugins.NectoNetworkPlugin
@@ -68,8 +69,8 @@ class SampleApp : Application() {
                     ExampleTelemetry.events,
                     ExampleTelemetry.performance(this),
                     NectoDataStorePreferencesPlugin(mapOf("settings" to settings)),
-                    NectoAndroidPlugins.files(this),
-                    NectoAndroidPlugins.control(this),
+                    NectoFilesPlugin(this),
+                    NectoAndroidControlPlugin(this),
                 ),
             )
             ExampleTelemetry.start()
