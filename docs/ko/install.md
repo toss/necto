@@ -46,10 +46,10 @@ open Build/Products/Debug/Necto.app
 
 ## 앱 연결하기
 
-**내 앱** — [setup.md](setup.md)대로 SDK를 연결했다면, 시뮬레이터에서
+**내 앱** — [setup.md](setup.md)대로 SDK를 연결했다면, 시뮬레이터나 에뮬레이터에서
 실행하거나 실기기를 USB로 연결하세요. 연결되면 Necto 사이드바에 앱이 나타나요.
 
-**아직 앱이 없다면** — 시뮬레이터에서 예제 앱을 실행해요.
+**아직 앱이 없다면** — iOS 시뮬레이터에서 예제 앱을 실행해요.
 
 ```bash
 xcrun simctl list devices available          # 디바이스 id를 하나 골라요
@@ -57,6 +57,15 @@ xcrun simctl boot <device-id>
 xcodebuild -project Necto.xcodeproj -scheme ExampleApp -destination "id=<device-id>" SYMROOT="$PWD/Build/Products" build
 xcrun simctl install <device-id> Build/Products/Debug-iphonesimulator/ExampleApp.app
 xcrun simctl launch <device-id> im.toss.necto.example
+```
+
+Android 샘플을 에뮬레이터나 USB 기기에서 실행해도 돼요. JDK 17과 Android SDK가
+필요해요.
+
+```bash
+SDK/Android/gradlew -p SDK/Android :sample:assembleDebug
+adb install -r SDK/Android/sample/build/outputs/apk/debug/sample-debug.apk
+adb shell am start -n im.toss.necto.sample/.MainActivity
 ```
 
 ## 첫 요청 확인하기
@@ -78,6 +87,10 @@ xcrun simctl launch <device-id> im.toss.necto.example
   Xcode의 Signing & Capabilities를 확인하세요. SDK 연결보다 앞선 단계의 문제예요.
 - 실기기에서 `connectionRefused`가 나오면 터널은 기기까지 연결됐지만 앱이
   수신 대기 중이지 않다는 뜻이에요. 앱이 실행 중이 아닐 때의 정상 응답이에요.
+- Android 앱은 Necto가 `adb`를 찾을 수 있어야 해요. `ANDROID_HOME`, `ANDROID_SDK_ROOT`,
+  `~/Library/Android/sdk` 순서로 찾아요. `adb devices`에 기기가 `device` 상태로
+  보여야 하고, USB 기기나 로컬 에뮬레이터만 연결해요. 무선 ADB는 쓰지 않아요.
+  debuggable 빌드가 아니면 SDK가 아무 일도 하지 않으니 디버그 빌드인지 확인하세요.
 - 전체 체크리스트는 [verification.md](verification.md)에 있어요.
 
 ## 다음 단계

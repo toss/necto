@@ -79,8 +79,15 @@ class NectoAndroidControlRuntimeTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
+    /**
+     * Compose keeps one UI dispatcher for the whole process, while Robolectric empties the
+     * main looper between tests. Ending the activity and letting the looper finish keeps a
+     * composition from one test from leaving work queued there for the next.
+     */
     @After
     fun tearDown() {
+        controller?.close()
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
         Dispatchers.resetMain()
     }
 

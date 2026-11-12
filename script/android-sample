@@ -2,12 +2,15 @@
 # Builds the Android sample and a separate Necto.app, installs the sample on a USB device
 # or a local emulator, and runs that Necto until Ctrl-C. Necto finds the sample through
 # ADB itself, as it finds any debuggable app that carries the SDK.
+#
+# --sdk-only installs and launches an already built sample and stops there, for checks
+# that speak to the SDK directly and need no Mac.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-serial="${1:?Usage: script/android-sample ADB_SERIAL [--no-build]}"
+serial="${1:?Usage: script/android-sample ADB_SERIAL [--no-build|--sdk-only]}"
 mode="${2:-build}"
-case "$mode" in build|--no-build) ;; *) echo "Unknown option: $mode" >&2; exit 2 ;; esac
+case "$mode" in build|--no-build|--sdk-only) ;; *) echo "Unknown option: $mode" >&2; exit 2 ;; esac
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
 adb="$sdk/platform-tools/adb"
 [[ -x "$adb" ]] || { echo "Set ANDROID_HOME to an installed Android SDK." >&2; exit 1; }
@@ -47,9 +50,23 @@ fi
 
 host="$out/Products/Debug/Necto.app/Contents/MacOS/Necto"
 cli="$PWD/NectoMac/.build/debug/necto-cli"
-[[ -x "$host" && -x "$cli" ]] || { echo "Build first: run without --no-build." >&2; exit 1; }
+if [[ "$mode" != --sdk-only ]]; then
+    [[ -x "$host" && -x "$cli" ]] || { echo "Build first: run without --no-build." >&2; exit 1; }
+fi
 run install "$adb" -s "$serial" install -r SDK/Android/sample/build/outputs/apk/debug/sample-debug.apk
 run launch "$adb" -s "$serial" shell am start -W -n im.toss.necto.sample/.MainActivity
+
+if [[ "$mode" == --sdk-only ]]; then
+    cat >"$out/current-run.json" <<JSON
+{
+  "serial": "$serial",
+  "applicationID": "im.toss.necto.sample",
+  "adb": "$adb"
+}
+JSON
+    echo "The sample is running without a Necto host."
+    exit 0
+fi
 
 # A home of its own, so this Necto's settings and control socket leave the usual one alone.
 home="$(mktemp -d /tmp/necto-android.XXXXXX)"

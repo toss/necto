@@ -71,8 +71,9 @@ their existing behavior.
 
 A plugin reaches Necto one of two ways, and the way is decided by what it binds:
 
-- **Device plugins.** Anything that binds `necto.device.*` ships inside the Swift
-  package that implements it, as a `Panel` resource next to the code. The app links
+- **Device plugins.** Anything that binds `necto.device.*` ships inside the package
+  that implements it, a Swift package on iOS or a Gradle module on Android, as a
+  `Panel` resource next to the code. The app links
   the package and registers the plugin; Necto fetches the panel over the wire when the
   app connects and shows it for as long as the app offers it. The panel and its
   implementation are distributed together. Rebuild committed web assets when their
@@ -92,7 +93,7 @@ without rebuilding the app.
 Use a stable lowercase reverse-domain ID, for example `com.example.notes`. This is
 a convention, not domain verification: `[A-Za-z0-9._-]+` remains the accepted format,
 short IDs remain compatible, and UUIDs are not required in manifests. Changing an
-ID creates a different plugin, not an update. Keep the Swift and manifest IDs equal.
+ID creates a different plugin, not an update. Keep the plugin's ID in code and in the manifest equal.
 
 | Source | Permission identity | Who establishes trust? |
 | --- | --- | --- |

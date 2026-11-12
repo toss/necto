@@ -110,7 +110,7 @@ Waits check observable state with deadlines, not fixed startup delays or perform
 thresholds. Build logs, command output and the test result bundle are in `Build/E2E/Logs`.
 E2E is opt-in locally and is not part of the default `script/test` run.
 
-CI runs `Simulator Connection & CLI E2E` after the Mac and SDK jobs. The Mac job
+CI runs `iOS Simulator Connection & CLI E2E` after the Mac and iOS SDK jobs. The Mac job
 uploads the app, CLI and test bundle; the SDK job uploads ExampleApp. E2E downloads
 those artifacts from the same workflow run and uses `test-without-building`.
 The CI jobs pin Xcode 26.6. E2E disables parallel testing and uses
@@ -166,8 +166,12 @@ until Ctrl-C. While it runs, from another terminal:
 | --- | --- |
 | `script/test-android-sample` | Every shipped panel's operations through `necto-cli`, a stream cancelled and resubscribed, invalid input, then a force stop that removes the target and a relaunch that brings it back |
 | `script/test-android-security` | Malformed peers on the private socket: a silent handshake, frames outside the limits, deep nesting, a stalled frame, too many requests. Each is dropped and the next connection works |
-| `script/test-android-artifacts` | No SDK AAR declares a permission, each plugin module carries only its own panel, the packaged panels equal the built ones, and only the debug sample is debuggable. Needs a full Gradle build, not a running app |
+| `script/test-android-artifacts` | No SDK AAR declares a permission, and each plugin module carries only its own panel. Needs a full Gradle build, not a running app |
 | `script/test-android-consumer` | Five independent minified apps built from the published Maven artifacts resolve only the modules they select and package only those panels. `--jitpack <tag-or-commit>` checks JitPack's artifacts instead of a local publication. Needs no running app |
+
+`script/android-sample <serial> --sdk-only` installs and launches an already built
+sample without a Necto host. `script/test-android-security` runs against that too, which
+is how CI checks the SDK on an emulator without a Mac.
 
 ## Verifying a plugin
 
@@ -289,6 +293,10 @@ are reused; conflicting files stop the run for review. An upload failure leaves
 the release unpublished. Use **Re-run failed jobs** to retry publishing with the
 same build artifacts, retained for seven days.
 
+After publishing, the `Android SDK on JitPack` job asks JitPack to build the new tag and
+runs `script/test-android-consumer --jitpack <version>` against the result. The release
+is already public by then, so a failure there calls for a fixed release, not a retry.
+
 ### Local checks
 
 `script/test release` runs the release script in temporary fixtures with build,
@@ -327,13 +335,17 @@ read this bundle value, not an independent source-code version.
 
 Public CI uses GitHub-hosted runners. The Mac job ad-hoc signs its app and test
 bundle; the SDK job builds ExampleApp without signing.
-`Check` runs six jobs: `Mac Build & Tests`, `SDK Build & Tests`,
-`Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`,
-`Android SDK Build & Tests`, and `Documentation Build`.
-Mac, SDK and E2E use Xcode 26.6 on `macos-26`; web, Android and documentation builds use
-`ubuntu-24.04`. The Android job uses Temurin JDK 17 and runs `./gradlew build` in
-`SDK/Android`, then `script/test-android-artifacts` and `script/test-android-consumer`. The four non-E2E jobs use Node 22.12.0, and web and documentation
-builds use Yarn 4.6.0.
+`Check` runs seven jobs: `Mac Build & Tests`, `iOS SDK Build & Tests`,
+`iOS Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`,
+`Android SDK Build & Tests`, `Android Emulator Connection E2E`, and `Documentation Build`.
+The Mac, iOS SDK and iOS E2E jobs use Xcode 26.6 on `macos-26`; the web, Android and
+documentation jobs use `ubuntu-24.04`. The Android job uses Temurin JDK 17 and runs
+`./gradlew build` in `SDK/Android`, then `script/test-android-artifacts` and
+`script/test-android-consumer`. The Android E2E job boots an API 35 emulator, starts the
+sample with `script/android-sample emulator-5554 --sdk-only` and runs
+`script/test-android-security`. It speaks to the SDK directly: the Necto host needs
+macOS, and hosted Mac runners cannot run an emulator. The Mac, iOS SDK, web and
+documentation jobs use Node 22.12.0, and web and documentation builds use Yarn 4.6.0.
 Documentation deployment remains a separate manual workflow. GitHub Pages must be
 configured to deploy from Actions.
 Workflow files alone do not prove a successful run on those machines.

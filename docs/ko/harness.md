@@ -47,6 +47,9 @@ Mac host  ── runtime ──┬─ host bridge      storage, targets, shell
 
 **검사** — Swift 패키지의 실제 의존성과 외부 패키지에서의 SDK 사용을 확인해요.
 기능별 모듈 분리는 코드 리뷰에서 확인하며, 주석이나 식별자 표기를 테스트하지는 않아요.
+Android는 `script/test-android-consumer`가 게시된 의존성 그래프와 독립 소비자 앱의
+패널을 확인해요. `necto-core`와 `necto-android`는 기능 모듈에 의존하면 안 되고,
+보고용 플러그인이 선택 사항인 캡처 어댑터를 끌어오면 안 돼요.
 
 ```bash
 node --test script/tests/package.test.mjs

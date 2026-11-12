@@ -6,8 +6,9 @@ root. Attach it to a GitHub release; building and packaging do not require macOS
 Someone installs it by pasting your repository address into Necto, under
 Settings → Desktop Plugins.
 
-Device plugins are not published this way. They reach an app through the Swift
-package at your tag, so for those the tag is the release.
+Device plugins are not published this way. They reach an app through the package it
+links at your tag, a Swift package or a Gradle module, so for those the tag is the
+release.
 
 ## From a tag
 
@@ -45,7 +46,7 @@ necto-cli plugin pack dist
 ```
 
 The `pack` command supports desktop plugins only and rejects `necto.device.*`
-bindings. Device plugins ship in the app's Swift package.
+bindings. Device plugins ship in the package the app links.
 After validation, it prints the `gh` command to run next.
 
 To try a built plugin locally before publishing, keep Necto running and use

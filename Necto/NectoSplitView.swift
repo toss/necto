@@ -72,6 +72,44 @@ struct NectoSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresentabl
             }
         }
 
+        override func viewDidLayout() {
+            super.viewDidLayout()
+            if scrollerStyleObservation == nil {
+                configureSidebarList(in: sidebarHost.view)
+            }
+        }
+
+        private func configureSidebarList(in view: NSView) {
+            if let scrollView = view as? NSScrollView,
+               let table = scrollView.documentView as? NSTableView {
+                // List restores the system style after inserting rows. Observe the
+                // scroll view so initial connections also keep overlay scrollbars.
+                scrollerStyleObservation = scrollView.observe(\.scrollerStyle, options: [.initial, .new]) { scrollView, _ in
+                    MainActor.assumeIsolated {
+                        if scrollView.scrollerStyle != .overlay {
+                            scrollView.scrollerStyle = .overlay
+                        }
+                    }
+                }
+                // SwiftUI's plain List uses AppKit's fullWidth style, which adds
+                // padding outside the row's own insets. Settings has only our insets.
+                tableStyleObservation = table.observe(\.style, options: [.initial, .new]) { table, _ in
+                    MainActor.assumeIsolated {
+                        if table.style != .plain {
+                            table.style = .plain
+                        }
+                        table.intercellSpacing.width = 0
+                    }
+                }
+                return
+            }
+            for child in view.subviews where scrollerStyleObservation == nil {
+                configureSidebarList(in: child)
+            }
+        }
+
+        private var scrollerStyleObservation: NSKeyValueObservation?
+        private var tableStyleObservation: NSKeyValueObservation?
         private var hasPlacedDivider = false
 
         @available(*, unavailable)

@@ -1,10 +1,14 @@
 # Part 2 — Your first device plugin
 
 In [Part 1](tutorial-desktop.md) the plugin ran entirely on the Mac; this one rides in
-the app. A device plugin is one Swift package that carries both the implementation and
-its web panel: the app links the package and registers the plugin, and the panel
-appears in Necto while the app is connected. Nothing is installed on the Mac side —
-[plugin-manifest.md](plugin-manifest.md) explains the two kinds.
+the app. On iOS, a device plugin is one Swift package that carries both the
+implementation and its web panel: the app links the package and registers the plugin,
+and the panel appears in Necto while the app is connected. Nothing is installed on the
+Mac side — [plugin-manifest.md](plugin-manifest.md) explains the two kinds.
+
+The steps below write the plugin in Swift. For an Android app, build the same contract
+and panel, then answer them in Kotlin with
+[The same plugin on Android](#the-same-plugin-on-android).
 
 We build **Uptime**: a panel that shows how long the app has been running. Two
 operations, one of each kind —
@@ -422,6 +426,127 @@ The checks from [verification.md](verification.md) that apply here:
 
 When contributing a plugin or changing a bridge, follow the implementation rules
 and verification steps in [harness.md](harness.md).
+
+## The same plugin on Android
+
+An Android app carries the plugin as Kotlin code and Java resources instead of a Swift
+package. [The contract](#the-contract) and [the panel](#the-panel) stay as they are:
+the Kotlin plugin uses the same id and answers the same two operations, so one built
+panel serves both platforms.
+
+Add `necto-android` to the debug build, with JitPack configured as in
+[setup.md](setup.md#android). It brings in `necto-core`, which holds the plugin API, so
+a plugin of your own needs no other module.
+
+```kotlin
+// app/build.gradle.kts
+val nectoVersion = "COMMIT_OR_TAG"
+dependencies {
+    debugImplementation("com.github.toss.necto:necto-android:$nectoVersion")
+}
+```
+
+[`NectoPlugin`](https://github.com/toss/necto/blob/main/SDK/Android/necto-core/src/main/kotlin/im/toss/necto/sdk/NectoPlugin.kt)
+asks for the same things as in Swift: an `id` and `register(necto)`, plus a `panel` that
+defaults to `null`. Keep the class in the debug source set, next to the dependency.
+
+`app/src/debug/kotlin/com/example/UptimePlugin.kt`:
+
+```kotlin
+package com.example
+
+import im.toss.necto.model.jsonObject
+import im.toss.necto.model.jsonOf
+import im.toss.necto.sdk.NectoPlugin
+import im.toss.necto.sdk.NectoPluginPanel
+import im.toss.necto.sdk.NectoRegistrar
+import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.Instant
+
+/** How long the app has been running, asked once or watched live. */
+class UptimePlugin : NectoPlugin {
+    override val id = "uptime"
+
+    private val startedAt = Instant.now()
+
+    override val panel: NectoPluginPanel =
+        NectoPluginPanel.resources("panels/uptime", UptimePlugin::class.java.classLoader!!)
+
+    override fun register(necto: NectoRegistrar) {
+        necto.handle("uptime.get") {
+            jsonObject(
+                "startedAt" to jsonOf(startedAt.toString()),
+                "uptimeSeconds" to jsonOf(uptimeSeconds()),
+            )
+        }
+
+        necto.stream("uptime.observe") { _, out ->
+            while (true) {
+                out.send(jsonObject("uptimeSeconds" to jsonOf(uptimeSeconds())))
+                delay(1000)
+            }
+        }
+    }
+
+    private fun uptimeSeconds(): Double =
+        Duration.between(startedAt, Instant.now()).toMillis() / 1000.0
+}
+```
+
+Here the method picks the kind: `handle` answers once, and `stream` answers until its
+body returns or the caller stops listening, which cancels the coroutine running the
+body and ends the loop. Payloads are `NectoJsonValue`, built with `jsonObject` and
+`jsonOf`.
+
+### Carry the panel
+
+`NectoPluginPanel.resources("panels/uptime", …)` reads the panel from the app's Java
+resources. Resource folders cannot be listed at run time, so it needs an index:
+`panels/uptime/files.txt`, naming each panel file by its path relative to that folder,
+one per line.
+
+The modules Necto ships generate both with
+[`NectoPanelResources`](https://github.com/toss/necto/blob/main/SDK/Android/buildSrc/src/main/kotlin/NectoPanelResources.kt),
+a Gradle task in the repository's own `buildSrc` that is not published. In your own
+app, copy the built panel into the debug resources and write the index yourself, from
+the app project's root:
+
+```bash
+panel=app/src/debug/resources/panels/uptime
+mkdir -p "$panel"
+cp -R <path-to>/necto-uptime-plugin/Sources/NectoUptimePlugin/Panel/. "$panel"
+(cd "$panel" && find . -type f ! -name '.*' ! -name files.txt | sed 's|^\./||' | sort > files.txt)
+```
+
+`files.txt` now lists `index.html`, `manifest.json` and the files under `assets/`. Run
+this again after every panel build: a file missing from the index is not served, and a
+listed file that does not exist fails the whole panel. The
+[sample app](https://github.com/toss/necto/blob/main/SDK/Android/sample/build.gradle.kts)
+shows the Gradle task doing the same for an app's own panel.
+
+### Register and run
+
+Pass the plugin to `NectoAndroid.start` in the debug `NectoSetup` from
+[setup.md](setup.md#android). It registers the listed plugins and starts listening; in
+a build that is not debuggable it only logs a warning.
+
+```kotlin
+// app/src/debug/kotlin/com/example/NectoSetup.kt
+NectoAndroid.start(app, listOf(UptimePlugin()))
+```
+
+Install the debug build on an emulator or a USB device, then launch the app:
+
+```bash
+./gradlew :app:installDebug
+```
+
+With Necto running, the app appears in the sidebar, and **Uptime** with it. If it does
+not, [install.md](install.md) lists what Necto needs to find an Android app. The checks
+in [Verify the plugin](#verify-the-plugin) apply with two differences. The order is
+panel build, copy and index, then reinstall the app. And an emulator's ADB transport is
+not USB, so run the plugin on a device before calling the USB path verified.
 
 ## Where next
 

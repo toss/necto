@@ -116,6 +116,9 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--necto-base-05); f
 
 /* Settings sits at the foot of the sidebar, away from the things that change. */
 .side-foot { margin-top: auto; padding-top: var(--necto-space-2); border-top: 1px solid var(--necto-border); }
+.update-dot { display: inline-block; flex: none; margin-left: auto; margin-right: var(--necto-space-2); width: calc(var(--necto-space-1) * 1.5); height: calc(var(--necto-space-1) * 1.5); border-radius: 50%; background: var(--necto-danger); }
+.necto-trailing + .update-dot { margin-left: 0; }
+.necto-sidebar-item .update-dot { margin-right: 0; }
 
 /* An icon reads as part of the name, not as its own column. */
 .named { display: inline-flex; align-items: center; gap: 6px; }
@@ -127,7 +130,7 @@ h3.stepped { margin: var(--necto-space-5) 0 var(--necto-space-1); font-size: 14p
   .gallery-network-list th:nth-child(n+4),
   .gallery-network-list td:nth-child(n+4) { display: none; }
 }
-.gallery-plugin-group { display:flex; align-items:center; justify-content:space-between; }
+.gallery-plugin-group { display:flex; align-items:center; justify-content:space-between; padding-right:var(--necto-space-5); }
 .gallery-plugin-search { margin-left:auto; display:flex; padding:0; border:0; background:none; color:inherit; cursor:pointer; }
 .gallery-plugin-search-popover {
   width:280px;

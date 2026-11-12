@@ -168,6 +168,15 @@ surface, not both.
 `--necto-selected` plus an ink bar down the leading edge. Selection is never colour
 alone.
 
+Sidebar group labels scroll with their rows; they do not use pinned, blurred headers.
+Device, plugin, and Settings rows share an 8pt outer inset. Inner padding is 8pt
+on the leading edge and 16pt on the trailing edge, leaving room beside versions
+and status dots. The native list adds no extra horizontal inset.
+The sidebar uses slim native overlay scrollbars, so switching between short and
+long lists does not shift their trailing content.
+Settings body rows have 8pt padding on all sides, with separators spanning the
+row width outside that padding.
+
 **Tables** are compact, fixed layout, and truncate with an ellipsis rather than
 wrapping. Headers are caption sized, secondary coloured, sticky, and not uppercased.
 
@@ -183,6 +192,16 @@ ship an icon set through the bridge.
 disconnected targets, including simulators. The icon beside the name identifies
 the target type.
 
+**Update availability** uses a red dot at the trailing edge of Settings and the
+matching settings page: General for the app, Desktop Plugins for plugins. General
+also marks the Necto row under About. Desktop plugin updates mark their row under
+Available updates; plugin navigation rows keep their versions aligned without dots. Dots share the connection indicator's fixed size. Leave
+space between each dot and the edge.
+Opening a page does not clear it. Pair the dot with an accessible update label and
+the update action on that page. Progress appears only in the Necto row under General.
+App downloads show byte-based progress; unknown lengths and later installation steps
+use a native indeterminate bar. See `docs/design/updater.html`.
+
 **Buttons** are quiet until needed. A destructive action reads as plain text and only
 colours itself when the pointer is on it.
 
@@ -194,6 +213,12 @@ actions outside the scrolling editor so the data gets the usable area.
 
 **Empty state** says what is missing and what to do next, in two lines at most. It
 never advertises features.
+
+**Copy** uses short labels and explains the effect of a control in one sentence
+where possible. Korean descriptions use the polite conversational form; buttons
+and status labels stay brief. Keep permissions and consequences in confirmation
+dialogs, and avoid repeating implementation details in settings descriptions.
+Keep placeholders, command names, and error codes intact when localizing.
 
 **Search and filters** belong on growing logs and lookup-heavy lists. Search matches
 the summary text already in memory; it never fetches detail payloads as an index.
