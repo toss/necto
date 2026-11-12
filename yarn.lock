@@ -741,6 +741,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@necto-plugin/http-exporter-example@workspace:WebPackages/HTTPExporter/example":
+  version: 0.0.0-use.local
+  resolution: "@necto-plugin/http-exporter-example@workspace:WebPackages/HTTPExporter/example"
+  dependencies:
+    "@necto/bridge": "workspace:*"
+    "@necto/http-exporter": "workspace:*"
+    typescript: "npm:^5.7.3"
+    vite: "npm:^6.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@necto-plugin/network-logger@workspace:WebPackages/BuiltInPlugins/src/network-logger":
   version: 0.0.0-use.local
   resolution: "@necto-plugin/network-logger@workspace:WebPackages/BuiltInPlugins/src/network-logger"
@@ -800,6 +811,19 @@ __metadata:
     tsup: "npm:^8.3.5"
     typescript: "npm:^5.7.3"
     vitest: "npm:^3.2.7"
+  languageName: unknown
+  linkType: soft
+
+"@necto/http-exporter@workspace:*, @necto/http-exporter@workspace:WebPackages/HTTPExporter":
+  version: 0.0.0-use.local
+  resolution: "@necto/http-exporter@workspace:WebPackages/HTTPExporter"
+  dependencies:
+    "@necto/bridge": "workspace:*"
+    tsup: "npm:^8.3.5"
+    typescript: "npm:^5.7.3"
+    vitest: "npm:^3.2.7"
+  peerDependencies:
+    "@necto/bridge": "*"
   languageName: unknown
   linkType: soft
 

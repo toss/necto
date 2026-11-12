@@ -4,6 +4,7 @@
 
 import Foundation
 import NectoMacService
+import NectoModel
 import Testing
 
 @Suite("Shell approval controller", .timeLimit(.minutes(1)))
@@ -22,6 +23,59 @@ struct NectoShellAccessControllerTests {
             try #require(ContinuousClock.now < deadline, "Timed out waiting for approval state")
             try await Task.sleep(for: .milliseconds(1))
         }
+    }
+
+    @Test("Installation rollback restores the prior grant and preserves unrelated policy changes")
+    func rollsBackOnlyInstallationGrant() async throws {
+        let original = NectoShellGrant(
+            principal: a, level: .commandApproval, approvedCommands: ["echo old"], contentIdentity: "old content"
+        )
+        let initial = NectoShellPolicySnapshot(grants: [original])
+        var saved: [NectoShellPolicySnapshot] = []
+        let controller = NectoShellAccessController(snapshot: initial) { saved.append($0) }
+        let noShell = await controller.policy.review(interpretedOperations: [], for: a)
+
+        #expect(try await controller.applyInstallationChoice(review: noShell, level: nil, for: a) == nil)
+        #expect(saved.isEmpty)
+
+        let review = await controller.policy.review(interpretedOperations: shellOperations, for: a)
+        let applied = try await controller.applyInstallationChoice(review: review, level: .fullAccess, for: a)
+        let change = try #require(applied)
+        #expect(saved.count == 1)
+        #expect(saved.last?.grants.first?.level == .fullAccess)
+        #expect(controller.snapshot == saved.last)
+
+        await controller.setFullAccessEnabled(true)
+        try await controller.approve("echo B", for: b)
+        await controller.rollbackInstallationChoice(change)
+
+        let expected = NectoShellPolicySnapshot(isFullAccessEnabled: true, grants: [
+            original, NectoShellGrant(principal: b, level: .commandApproval, approvedCommands: ["echo B"]),
+        ])
+        #expect(saved.last == expected)
+        #expect(controller.snapshot == expected)
+        #expect(await controller.policy.snapshot() == expected)
+    }
+
+    @Test("Installation rollback removes a new grant only while that grant is unchanged",
+          arguments: [false, true])
+    func rollsBackNewGrant(keepLaterChange: Bool) async throws {
+        var saved: [NectoShellPolicySnapshot] = []
+        let controller = NectoShellAccessController(snapshot: .init()) { saved.append($0) }
+        let review = await controller.policy.review(interpretedOperations: shellOperations)
+        let applied = try await controller.applyInstallationChoice(review: review, level: .fullAccess, for: a)
+        let change = try #require(applied)
+        if keepLaterChange {
+            await controller.setAccessLevel(.protected, for: a)
+        }
+
+        await controller.rollbackInstallationChoice(change)
+
+        let expected = NectoShellPolicySnapshot(grants: keepLaterChange ? [NectoShellGrant(principal: a)] : [])
+        #expect(saved.count == 2)
+        #expect(saved.last == expected)
+        #expect(controller.snapshot == expected)
+        #expect(await controller.policy.snapshot() == expected)
     }
 
     @Test("Cancelled dialog actions cannot approve or dismiss the next request", arguments: 0..<20)
@@ -140,5 +194,21 @@ struct NectoShellAccessControllerTests {
         controller.denyPendingRequest(id: nextID)
         #expect(!(await next.value).approved)
         #expect(await controller.policy.access(for: b).level == .protected)
+    }
+
+    private var shellOperations: [NectoShellOperationInterpreter.Operation] {
+        let descriptor = NectoShellContracts.authorization
+        return NectoShellOperationInterpreter.interpret(operations: [
+            NectoOperation(
+                id: "shell.request",
+                title: "Request shell access",
+                description: "Request shell access to read diagnostics.",
+                kind: descriptor.kind,
+                binding: descriptor.binding,
+                inputSchema: descriptor.inputSchema,
+                outputSchema: descriptor.outputSchema,
+                timeoutMs: 5_000
+            ),
+        ])
     }
 }

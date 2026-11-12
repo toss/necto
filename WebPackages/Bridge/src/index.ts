@@ -18,11 +18,13 @@ import type {
   NectoSubscription,
 } from "./types";
 import { createTranslator, locale } from "./localization";
+import { diagnostics, registerExporter } from "./exporter";
 
 export type * from "./types";
 export type * from "./localization";
 export { NectoBridgeUnavailableError };
 export { createTranslator, locale };
+export { diagnostics, registerExporter };
 
 installStreamReceivers();
 
@@ -55,6 +57,14 @@ export function context(): Promise<NectoPluginContext> {
  */
 export async function ready(): Promise<void> {
   await callHost<null>("ready");
+}
+
+/** Records a usage event without waiting for a reply or exposing delivery failures. */
+export function log(eventName: string, params: NectoJSONObject = {}): void {
+  if (!isHostAvailable()) return;
+  void callHost<null>("log", { input: { eventName, params } }).catch(() => {
+    console.warn("Necto could not record an event.");
+  });
 }
 
 /**
@@ -139,9 +149,12 @@ export const necto = {
   isAvailable: isNectoAvailable,
   context,
   ready,
+  log,
   locale,
   createTranslator,
   isOperationAvailable,
+  registerExporter,
+  diagnostics,
 
   /** Answered by the connected app, on a device or a simulator. */
   device: side(),

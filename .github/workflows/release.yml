@@ -64,6 +64,7 @@ jobs:
             Build/Necto-${{ inputs.version }}.dmg.sha256
             Build/necto-bridge-${{ inputs.version }}.tgz
             Build/create-necto-plugin-${{ inputs.version }}.tgz
+            Build/necto-http-exporter-${{ inputs.version }}.tgz
           if-no-files-found: error
           retention-days: 7
 

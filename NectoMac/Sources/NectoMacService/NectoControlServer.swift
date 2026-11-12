@@ -17,6 +17,10 @@ public protocol NectoControlHandling: Sendable {
     func plugins(app: String?, device: String?, desktop: Bool, pluginID: String?, operationID: String?) async throws -> NectoJSONValue
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue
     func deletePlugin(id: String) async throws -> NectoJSONValue
+    func reviewExporter() async throws -> NectoJSONValue
+    func approveExporter(_ approval: NectoExporterApproval) async throws -> NectoJSONValue
+    func rejectExporter() async throws -> NectoJSONValue
+    func exporterWarning() async -> NectoJSONValue?
     func invoke(
         pluginID: String,
         operationID: String,
@@ -44,6 +48,16 @@ public extension NectoControlHandling {
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue {
         throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support plugin installation.")
     }
+    func reviewExporter() async throws -> NectoJSONValue {
+        throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support exporter review.")
+    }
+    func approveExporter(_ approval: NectoExporterApproval) async throws -> NectoJSONValue {
+        throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support exporter approval.")
+    }
+    func rejectExporter() async throws -> NectoJSONValue {
+        throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support exporter rejection.")
+    }
+    func exporterWarning() async -> NectoJSONValue? { nil }
 }
 
 /// Listens on a Unix socket for control connections.
@@ -258,6 +272,10 @@ public final class NectoControlServer: @unchecked Sendable {
         handler: any NectoControlHandling,
         responder: Responder
     ) async {
+        if request.kind.supportsWarnings, request.includeWarnings == true,
+           let value = await handler.exporterWarning(), !Task.isCancelled {
+            await responder.sendWarning(id: request.id, value: value)
+        }
         do {
             switch request.kind {
             case .targets:
@@ -278,6 +296,22 @@ public final class NectoControlServer: @unchecked Sendable {
             case .deletePlugin:
                 let deletion = try NectoPluginDeletion(pluginID: request.pluginID ?? "")
                 let value = try await handler.deletePlugin(id: deletion.pluginID)
+                responder.send(.init(id: request.id, kind: .result, value: value))
+
+            case .reviewExporter:
+                try validateExporterRequest(request)
+                let value = try await handler.reviewExporter()
+                responder.send(.init(id: request.id, kind: .result, value: value))
+
+            case .approveExporter:
+                try validateExporterRequest(request)
+                let approval = try NectoExporterApproval(input: request.input ?? .null)
+                let value = try await handler.approveExporter(approval)
+                responder.send(.init(id: request.id, kind: .result, value: value))
+
+            case .rejectExporter:
+                try validateExporterRequest(request)
+                let value = try await handler.rejectExporter()
                 responder.send(.init(id: request.id, kind: .result, value: value))
 
             case .invoke:
@@ -322,6 +356,16 @@ public final class NectoControlServer: @unchecked Sendable {
         }
     }
 
+    private static func validateExporterRequest(_ request: NectoControlRequest) throws {
+        guard request.pluginID == nil, request.operationID == nil, request.app == nil,
+              request.device == nil, request.desktop == nil else {
+            throw NectoBridgeError(code: .invalidInput, message: "Exporter commands do not accept plugin, operation, app, device, or desktop selectors.")
+        }
+        if request.kind != .approveExporter, let input = request.input, input != .object([:]) {
+            throw NectoBridgeError(code: .invalidInput, message: "Exporter review and rejection do not accept input.")
+        }
+    }
+
     /// The handler's synchronous event callback feeds one bounded async writer.
     private final class Responder: Sendable {
         private let session: NectoMessageSession
@@ -346,6 +390,15 @@ public final class NectoControlServer: @unchecked Sendable {
                 session.close()
                 stop()
             }
+        }
+
+        func sendWarning(id: String, value: NectoJSONValue) async {
+            // Socket writes are serialized. Send this before the handler can produce
+            // output, without occupying an event buffer slot or inheriting cancellation
+            // from the request (a cancelled write closes the shared connection).
+            await Task { [session] in
+                try? await session.send(NectoControlResponse(id: id, kind: .warning, value: value))
+            }.value
         }
 
         func stop() {

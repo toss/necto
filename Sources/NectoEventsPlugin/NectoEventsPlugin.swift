@@ -80,6 +80,8 @@ public final class NectoEventsPlugin: NectoPlugin, NectoEventReporting, @uncheck
     public init() {}
 
     public func register(_ necto: NectoRegistrar) {
+        let logger = necto.logger
+
         necto.handle("events.list") { [self] input in
             let limit = Int(input["limit"]?.numberValue ?? 500)
             let wanted = input["level"]?.stringValue.flatMap(NectoEvent.Level.init(rawValue:))
@@ -89,16 +91,30 @@ public final class NectoEventsPlugin: NectoPlugin, NectoEventReporting, @uncheck
                     .filter { wanted == nil || $0.level == wanted }
                     .prefix(limit)
             }
-            return ["events": .array(page.map(Self.summary))]
+            let summaries = page.map(Self.summary)
+            logger.log(
+                "events.operation",
+                params: ["operation": "list", "result": "success"]
+            )
+            return ["events": .array(summaries)]
         }
 
         necto.handle("events.detail") { [self] input in
+            var result: NectoJSONValue = "failure"
+            defer {
+                logger.log(
+                    "events.operation",
+                    params: ["operation": "detail", "result": result]
+                )
+            }
+
             guard let eventID = input["eventID"]?.stringValue else {
                 throw NectoBridgeError(code: .invalidInput, message: "eventID is required")
             }
             guard let event = lock.withLock({ events.first { $0.id == eventID } }) else {
                 throw NectoBridgeError(code: .operationUnavailable, message: "No event '\(eventID)'")
             }
+            result = "success"
             return ["event": Self.detail(event)]
         }
 
@@ -106,6 +122,7 @@ public final class NectoEventsPlugin: NectoPlugin, NectoEventReporting, @uncheck
             let token = UUID()
             lock.withLock { listeners[token] = out }
             defer { lock.withLock { _ = listeners.removeValue(forKey: token) } }
+            logger.log("events.subscription_started")
 
             // Held open until the caller stops listening; `report` does the sending.
             while !Task.isCancelled {
@@ -115,6 +132,10 @@ public final class NectoEventsPlugin: NectoPlugin, NectoEventReporting, @uncheck
 
         necto.handle("events.clear") { [self] _ in
             lock.withLock { events.removeAll() }
+            logger.log(
+                "events.operation",
+                params: ["operation": "clear", "result": "success"]
+            )
             return ["cleared": .bool(true)]
         }
     }

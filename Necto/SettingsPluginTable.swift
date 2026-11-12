@@ -75,7 +75,7 @@ private struct PluginRow: View {
             // be — at the same inset, or the column looks ragged.
             Group {
                 if plugin.source == .installed {
-                    Button(NectoL10n.text("Remove")) { model.remove(plugin) }
+                    Button(NectoL10n.text("Remove")) { model.remove(plugin.package) }
                         .buttonStyle(NectoButtonStyle(scale: scale, quiet: true, danger: true))
                 } else {
                     Text("—")
@@ -89,7 +89,7 @@ private struct PluginRow: View {
         .frame(height: NectoTheme.rowHeight * scale)
         .contextMenu {
             if plugin.source == .installed {
-                Button(NectoL10n.text("Update from file…")) { model.beginInstallFromFile(updating: plugin) }
+                Button(NectoL10n.text("Update from file…")) { model.beginInstallFromFile(updating: plugin.package) }
             }
         }
     }

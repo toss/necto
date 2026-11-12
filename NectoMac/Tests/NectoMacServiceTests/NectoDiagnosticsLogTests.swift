@@ -9,6 +9,51 @@ import Testing
 
 @Suite("Diagnostics log")
 struct NectoDiagnosticsLogTests {
+    @Test("an open exporter log receives existing and new entries", .timeLimit(.minutes(1)))
+    func liveExporterEntries() async {
+        let log = NectoDiagnosticsLog()
+        await log.append(.info, .exporter, "ready")
+        await log.append(.info, .connection, "connected")
+        var updates = await log.updates(source: .exporter).makeAsyncIterator()
+        #expect(await updates.next()?.map(\.message) == ["ready"])
+
+        await log.append(.warning, .exporter, "retrying", detail: "Attempt 2")
+        let latest = await updates.next()
+        #expect(latest?.map(\.message) == ["retrying", "ready"])
+        #expect(latest?.first?.detail == "Attempt 2")
+
+        await log.clear()
+        #expect(await updates.next()?.isEmpty == true)
+    }
+
+    @Test("slow readers receive the latest retained snapshot", .timeLimit(.minutes(1)))
+    func coalescesUpdates() async {
+        let log = NectoDiagnosticsLog()
+        var updates = await log.updates().makeAsyncIterator()
+        #expect(await updates.next()?.isEmpty == true)
+
+        for index in 0 ... NectoDiagnosticsLog.capacity {
+            await log.append(.info, .exporter, "line \(index)")
+        }
+        let latest = await updates.next()
+        #expect(latest?.count == NectoDiagnosticsLog.capacity)
+        #expect(latest?.first?.message == "line \(NectoDiagnosticsLog.capacity)")
+        #expect(latest?.last?.message == "line 1")
+    }
+
+    @Test("other sources evict stale entries from an open filtered log", .timeLimit(.minutes(1)))
+    func filteredEviction() async {
+        let log = NectoDiagnosticsLog()
+        await log.append(.info, .exporter, "ready")
+        var updates = await log.updates(source: .exporter).makeAsyncIterator()
+        #expect(await updates.next()?.count == 1)
+
+        for _ in 0 ..< NectoDiagnosticsLog.capacity {
+            await log.append(.info, .connection, "connected")
+        }
+        #expect(await updates.next()?.isEmpty == true)
+    }
+
     @Test("reads newest first")
     func newestFirst() async {
         let log = NectoDiagnosticsLog()
@@ -112,6 +157,34 @@ struct NectoDiagnosticsLogTests {
         #expect(lines.count == 2)
         #expect(lines[0].hasSuffix("info  connection  started"))
         #expect(lines[1].hasSuffix("warning  target  app disconnected"))
+    }
+
+    @Test("exporter copies contain only exporter diagnostics in chronological order")
+    func exporterTranscript() async {
+        let log = NectoDiagnosticsLog()
+        await log.append(.info, .exporter, "registered", detail: "com.example.exporter")
+        await log.append(.failure, .connection, "unrelated connection failure")
+        await log.append(.warning, .exporter, "retry scheduled", detail: "attempt 2")
+
+        let lines = await log.transcript(source: .exporter).split(separator: "\n")
+        #expect(lines.count == 4)
+        #expect(lines[0].hasSuffix("info  exporter  registered"))
+        #expect(lines[1] == "    com.example.exporter")
+        #expect(lines[2].hasSuffix("warning  exporter  retry scheduled"))
+        #expect(lines[3] == "    attempt 2")
+        #expect(await log.transcript().contains("unrelated connection failure"))
+        #expect(await log.recent(source: .exporter).map(\.message) == ["retry scheduled", "registered"])
+        #expect(await log.unreadIssueCount() == 1)
+    }
+
+    @Test("filtered copies do not attribute global evictions to an exporter")
+    func filteredTranscriptDoesNotClaimGlobalEvictions() async {
+        let log = NectoDiagnosticsLog()
+        for _ in 0...NectoDiagnosticsLog.capacity {
+            await log.append(.info, .connection, "connection diagnostic")
+        }
+        #expect(await log.transcript(source: .exporter).isEmpty)
+        #expect(await log.transcript().hasPrefix("1 earlier lines dropped."))
     }
 
     @Test("puts a detail on its own indented line")

@@ -15,12 +15,32 @@ public struct NectoPluginRegistration: Sendable, Hashable, Codable {
     /// key still decode — a plugin without a panel is simply one the host has to be
     /// given a panel for.
     public let panel: NectoPanelStamp?
+    /// Whether the plugin is present in the app. This is registration state, not
+    /// permission to collect or export its events. Omitted by older SDKs.
+    public let isRegistered: Bool?
 
-    public init(pluginID: String, catalog: NectoBridgeCatalog, panel: NectoPanelStamp? = nil) {
+    public init(
+        pluginID: String,
+        catalog: NectoBridgeCatalog,
+        panel: NectoPanelStamp? = nil,
+        isRegistered: Bool? = nil
+    ) {
         self.pluginID = pluginID
         self.catalog = catalog
         self.panel = panel
+        self.isRegistered = isRegistered
     }
+
+    /// Older SDKs used an empty catalog without a panel to announce removal.
+    public var isActive: Bool {
+        isRegistered ?? (!catalog.bridges.isEmpty || panel != nil)
+    }
+}
+
+/// Where a host invocation originated.
+public enum NectoInvocationChannel: String, Sendable, Hashable, Codable {
+    case web
+    case cli
 }
 
 /// App to host. An SDK plugin pushing data that a host adapter accumulates.
@@ -31,11 +51,19 @@ public struct NectoPluginEvent: Sendable, Hashable, Codable {
     public let pluginID: String
     public let channel: String
     public let payload: NectoJSONValue
+    /// The host channel, if the event was logged in an invocation's execution context.
+    public let invocationChannel: NectoInvocationChannel?
 
-    public init(pluginID: String, channel: String, payload: NectoJSONValue) {
+    public init(
+        pluginID: String,
+        channel: String,
+        payload: NectoJSONValue,
+        invocationChannel: NectoInvocationChannel? = nil
+    ) {
         self.pluginID = pluginID
         self.channel = channel
         self.payload = payload
+        self.invocationChannel = invocationChannel
     }
 }
 
@@ -46,19 +74,22 @@ public struct NectoPluginInvocation: Sendable, Hashable, Codable {
     public let version: Int
     public let kind: NectoOperationKind
     public let input: NectoJSONValue
+    public let invocationChannel: NectoInvocationChannel?
 
     public init(
         requestID: String,
         name: String,
         version: Int,
         kind: NectoOperationKind,
-        input: NectoJSONValue
+        input: NectoJSONValue,
+        invocationChannel: NectoInvocationChannel? = nil
     ) {
         self.requestID = requestID
         self.name = name
         self.version = version
         self.kind = kind
         self.input = input
+        self.invocationChannel = invocationChannel
     }
 }
 

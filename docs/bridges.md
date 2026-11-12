@@ -54,6 +54,102 @@ can reach. Anything belonging to the app under test is an app bridge, including
 the ones Necto ships: `NectoNetworkPlugin` declares its own contracts and answers them
 from the app's own records, and nothing here knows it by name.
 
+### HTTP — `necto.desktop.http.request`
+
+Version 1, `once`. Executes HTTPS requests on the Mac using `URLSession`, so a
+server does not need to allow the plugin's WebView origin through CORS. Event
+exporters and other plugins use the same bridge. Bind it in the manifest and call
+the plugin's operation ID through `necto.desktop.send(...)`. Desktop installation
+approval includes this binding; there is no per-request permission prompt.
+
+| Direction | Field | Meaning |
+| --- | --- | --- |
+| Input | `url` | Required absolute HTTPS URL |
+| Input | `method` | Required HTTP method, such as `POST` or `GET` |
+| Input | `headers?` | Object with HTTP header names and string values |
+| Input | `bodyBase64?` | Request bytes encoded as Base64; omit for no body |
+| Output | `status` | Final HTTP status code |
+| Output | `headers` | Response header names and string values; casing is not guaranteed |
+| Output | `bodyBase64` | Response bytes encoded as Base64; an empty body is `""` |
+
+Base64 is only the representation used across the JSON bridge. The server receives
+the decoded bytes. The plugin owns JSON/Protobuf encoding, content type and
+authentication headers. HTTP framing and redirect behavior follow `URLSession`;
+this is not a raw socket API. Normal system TLS verification applies. There is no
+client-certificate selection or custom certificate-trust API. HTTP URLs, including
+localhost, are rejected; the app does not add an ATS exception for this bridge.
+
+HTTPS redirects are followed automatically, using the native client's method and
+header handling. Redirects to HTTP or another scheme fail with `PROVIDER_FAILED`.
+The final response is returned, including 4xx and 5xx statuses: the bridge does not
+retry HTTP failures or decide whether delivery succeeded. Malformed
+input returns `INVALID_INPUT`; connection and TLS failures return `PROVIDER_FAILED`.
+Network error details contain only `urlErrorCode`, not URLs, headers or body data.
+
+The manifest's `timeoutMs` applies to the whole operation, including redirects and
+reading the response body. Zero means no operation deadline. There is no separate
+timeout input. A timeout returns `TIMEOUT` and cancels the network request. Existing
+caller cancellation and page teardown also cancel it. `send()` has no additional
+JavaScript cancellation API. Cancellation cannot undo data already received by the
+server.
+
+The provider reuses one ephemeral session across requests. Automatic cookie storage
+and sending are disabled, including during redirects. A plugin can explicitly set
+`Cookie` or other authentication headers; a response's `Set-Cookie` is returned as
+header data without being saved. Cached responses and stored credentials are also
+disabled. Cancelling one request does not invalidate the session or cancel other
+requests. The registry enforces each operation's overall timeout.
+
+Request and response bodies are held in memory; choose batch sizes in the exporter.
+Batching, retry, persistence and shutdown handling are not part of this bridge.
+
+For example, declare this operation in `operations`:
+
+```json
+{
+  "id": "events.send",
+  "title": "Send events",
+  "description": "Send a batch to the configured collection service",
+  "kind": "once",
+  "binding": { "name": "necto.desktop.http.request", "version": 1 },
+  "inputSchema": {
+    "type": "object",
+    "required": ["url", "method"],
+    "properties": {
+      "url": { "type": "string" },
+      "method": { "type": "string" },
+      "headers": { "type": "object" },
+      "bodyBase64": { "type": "string" }
+    },
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["status", "headers", "bodyBase64"],
+    "properties": {
+      "status": { "type": "integer" },
+      "headers": { "type": "object" },
+      "bodyBase64": { "type": "string" }
+    }
+  },
+  "timeoutMs": 30000
+}
+```
+
+Then send a batch without changing the bridge's JavaScript API:
+
+```ts
+const bytes = new TextEncoder().encode(JSON.stringify(batch));
+const bodyBase64 = btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(""));
+const response = await necto.desktop.send("events.send", {
+  url: "https://collector.example.com/events",
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  bodyBase64,
+});
+// The exporter decides what response.status means and whether to retry.
+```
+
 ### Storage — `necto.desktop.storage.*`
 
 Isolated by plugin principal, and by selected target when there is one. No other
@@ -179,6 +275,17 @@ approval mode the string must exactly equal one entry approved for that principa
 Protected mode refuses every command; per-plugin Full access accepts every command for
 that principal. The global Full Access switch temporarily accepts every caller without
 rewriting their saved settings.
+
+Before installation, the host can interpret operations with
+`NectoShellOperationInterpreter.interpret(operations:)` and pass the result to
+`NectoShellPolicy.review(interpretedOperations:for:)`. Interpreter and providers
+share `NectoShellContracts`; binding matching uses the existing descriptor comparison.
+The interpreter selects the contract's command field, and the general JSON Schema
+reader extracts its directly declared string enum. Dynamic, malformed or unsupported
+declarations remain explicit in the result. Policy decides whether complete
+command approval can be offered and reports existing access without changing it.
+These are host APIs, not new plugin bridges. They do not replace Registry routing,
+execute commands or grant permissions. UI and CLI integration is subsequent work.
 
 `authorization.request` uses a native Necto dialog when new approval is needed;
 already permitted requests can return without a dialog. JavaScript cannot add an

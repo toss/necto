@@ -72,3 +72,37 @@ export interface NectoSubscription {
   readonly id: string;
   unsubscribe(): Promise<void>;
 }
+
+/** The common envelope the host adds to every exported usage event. */
+interface NectoEventEnvelope {
+  eventId: string;
+  /** Time the host accepted the event, in milliseconds since the Unix epoch. */
+  occurredAt: number;
+  installationId: string;
+  nectoVersion: string;
+  /** WebView activity uses web, including timers; unrelated native activity omits it. */
+  channel?: "web" | "cli";
+  eventName: string;
+  params: NectoJSONObject;
+}
+
+/** Usage data delivered to an exporter, with identity established by the host. */
+export type NectoEvent = NectoEventEnvelope & (
+  | { origin: "device"; pluginId: string; pluginVersion?: string }
+  | { origin: "desktop"; pluginId: string; pluginVersion: string }
+  | { origin: "necto"; relatedPluginId?: string }
+);
+
+export interface NectoExporterShutdownContext {
+  /** Host deadline for normal app shutdown, in milliseconds since the Unix epoch. */
+  deadlineAt: number;
+}
+
+export interface NectoExporterOptions {
+  /** Handle a newly accepted event. Persistence and external delivery belong to the exporter. */
+  onEvent: (event: NectoEvent) => void | Promise<void>;
+  /** Finish work the exporter owns during normal app shutdown. The host waits up to five seconds. */
+  onShutdown?: (context: NectoExporterShutdownContext) => void | Promise<void>;
+}
+
+export type NectoDiagnosticLevel = "info" | "warning" | "failure";

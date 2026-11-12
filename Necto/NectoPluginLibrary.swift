@@ -19,6 +19,14 @@ struct NectoPluginLibrary {
     private static let deviceOrderKey = "devicePluginOrder"
     private static let shellPolicyKey = "shellPolicy"
     private static let installationsKey = "localPluginInstallations"
+    private static let rejectedExporterContentHashesKey = "rejectedExporterContentHashes"
+
+    /// Explicit rejections suppress CLI reminders for the same package bytes only.
+    /// They never approve collection or remove the candidate from manual review.
+    static var rejectedExporterContentHashes: [String: String] {
+        get { UserDefaults.standard.dictionary(forKey: rejectedExporterContentHashesKey) as? [String: String] ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: rejectedExporterContentHashesKey) }
+    }
 
     static var installations: [String: NectoLocalPluginInstallation] {
         get {
@@ -41,10 +49,10 @@ struct NectoPluginLibrary {
         return directory
     }
 
-    static func loadInstalled() -> NectoPluginLoader.Scan {
-        var scan = NectoPluginLoader.loadAll(in: directory, source: .installed)
+    static func loadInstalled() -> NectoPackageLoader.Scan {
+        var scan = NectoPackageLoader.loadAll(in: directory, source: .installed)
         let records = installations
-        scan.plugins = scan.plugins.map { plugin in
+        scan.packages = scan.packages.map { plugin in
             var plugin = plugin
             if let record = records[plugin.id], record.matches(pluginID: plugin.id, directoryPath: plugin.rootURL.path) {
                 plugin.installation = record
@@ -131,7 +139,7 @@ struct NectoPluginLibrary {
 
     /// To the trash rather than deleted outright: a plugin can hold hours of someone's
     /// configuration, and the folder is the only copy on this Mac.
-    static func remove(_ plugin: NectoInstalledPlugin) throws {
+    static func remove(_ plugin: NectoInstalledPackage) throws {
         guard plugin.source == .installed else { return }
         try FileManager.default.trashItem(at: plugin.rootURL, resultingItemURL: nil)
 

@@ -263,7 +263,7 @@ Packaging uses the workflow's release script while testing and building the tagg
 source, so releases from before this workflow was added can be completed.
 
 The publishing job verifies the DMG checksum, creates the tag and a draft if needed,
-uploads all four files, and compares their sizes and SHA-256 digests before
+uploads the release artifacts, and compares their sizes and SHA-256 digests before
 publishing. An existing published version is refused. Identical files in a draft
 are reused; conflicting files stop the run for review. An upload failure leaves
 the release unpublished. Use **Re-run failed jobs** to retry publishing with the
@@ -316,7 +316,8 @@ Documentation deployment remains a separate manual workflow. GitHub Pages must b
 configured to deploy from Actions.
 Workflow files alone do not prove a successful run on those machines.
 
-`script/release` attaches the DMG, its `.sha256` file and two developer-package tarballs.
+`script/release` attaches the DMG, its `.sha256` file, and tarballs for `@necto/bridge`,
+`create-necto-plugin`, and `@necto/http-exporter` when that package exists in the release source.
 The checksum uses `shasum -a 256` format with the DMG's filename, without a directory.
 The updater reads the version tag from a `HEAD /releases/latest` redirect, then fetches
 the checksum and DMG from that exact release. It does not call the GitHub API or use

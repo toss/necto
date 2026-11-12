@@ -23,6 +23,8 @@ struct SettingsScreen: View {
     @AppStorage(NectoLanguage.key) private var language = NectoLanguage.system.rawValue
     @AppStorage("settingsNavWidth") private var navWidth = Double(NectoNav<Page>.defaultWidth)
     @State private var page = Page.general
+    @State private var eventPluginSearch = ""
+    @State private var showingExporterDiagnostics = false
     @State private var selectedShellCaller: NectoShellCaller?
 
     private var scale: CGFloat {
@@ -36,12 +38,7 @@ struct SettingsScreen: View {
         NectoLanguage(rawValue: language) ?? .system
     }
 
-    enum Page: Hashable {
-        case general
-        case shellAccess
-        case plugins
-        case diagnostics
-    }
+    typealias Page = NectoUsageLogger.SettingsPage
 
     @State private var entries: [NectoDiagnosticsLog.Entry] = []
     @State private var droppedLines = 0
@@ -54,6 +51,7 @@ struct SettingsScreen: View {
                     (.general, NectoL10n.text("General"), "slider.horizontal.3"),
                     (.shellAccess, NectoL10n.text("Shell Access"), "terminal"),
                     (.plugins, NectoL10n.text("Desktop Plugins"), "square.grid.2x2"),
+                    (.eventExporter, NectoL10n.text("Usage data collection"), "arrow.up.doc"),
                     (.diagnostics, NectoL10n.text("Log"), "text.alignleft"),
                 ],
                 selection: page,
@@ -77,6 +75,14 @@ struct SettingsScreen: View {
                             selectedCaller: $selectedShellCaller
                         )
                     case .plugins: plugins
+                    case .eventExporter:
+                        if showingExporterDiagnostics {
+                            SettingsExporterDiagnostics(log: model.diagnostics, scale: scale) {
+                                showingExporterDiagnostics = false
+                            }
+                        } else {
+                            eventExporter
+                        }
                     case .diagnostics: diagnostics
                     }
                 }
@@ -86,6 +92,10 @@ struct SettingsScreen: View {
         }
         .padding(.leading, 12)
         .background(NectoTheme.background)
+        .onChange(of: page, initial: true) { _, page in
+            if page != .eventExporter { showingExporterDiagnostics = false }
+            model.usageLogger.settingsOpened(page: page)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             if page == .general {
                 model.cliInstaller.refresh()
@@ -93,10 +103,6 @@ struct SettingsScreen: View {
             }
         }
         .task(id: page) {
-            if page == .general {
-                model.cliInstaller.refresh()
-                model.agentSkills.refresh()
-            }
             if page != .shellAccess { selectedShellCaller = nil }
             if page == .plugins { await model.checkPluginUpdates() }
             guard page == .diagnostics else { return }
@@ -129,7 +135,11 @@ struct SettingsScreen: View {
                 "",
                 selection: Binding(
                     get: { selectedLanguage },
-                    set: { language = $0.rawValue }
+                    set: { newLanguage in
+                        guard newLanguage != NectoL10n.language else { return }
+                        language = newLanguage.rawValue
+                        model.usageLogger.languageChanged(to: newLanguage)
+                    }
                 )
             ) {
                 ForEach(NectoLanguage.allCases) { option in
@@ -241,7 +251,10 @@ struct SettingsScreen: View {
                         Button(NectoL10n.text(model.agentSkills.installing == agent ? "Installing…"
                             : model.agentSkills.updates.contains(agent) ? "Update"
                             : model.agentSkills.installed.contains(agent) ? "Installed" : "Add")) {
-                            Task { await model.agentSkills.install(agent) }
+                            Task {
+                                guard let result = await model.agentSkills.install(agent) else { return }
+                                model.usageLogger.agentSkillInstallCompleted(agent: agent, result: result)
+                            }
                         }
                         .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
                         .disabled(model.agentSkills.installing != nil
@@ -348,11 +361,74 @@ struct SettingsScreen: View {
     }
 
     @ViewBuilder
+    private var eventExporter: some View {
+        HStack(alignment: .firstTextBaseline) {
+            NectoSectionTitle(NectoL10n.text("Usage data collection"), scale: scale, isFirst: true)
+            Spacer(minLength: 12)
+            Button(NectoL10n.text("View diagnostics")) { showingExporterDiagnostics = true }
+                .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+                .accessibilityIdentifier("settings.exporter-diagnostics.open")
+        }
+
+        if let exporter = model.eventExporter {
+            NectoRow(
+                label: exporter.manifest.name,
+                hint: [exporter.id, exporter.manifest.version, exporter.installation?.origin?.label ?? exporter.rootURL.path].joined(separator: " · "),
+                scale: scale
+            ) {
+                Button(NectoL10n.text("Remove")) { model.remove(exporter.package) }
+                    .buttonStyle(NectoButtonStyle(scale: scale, quiet: true, danger: true))
+            }
+            .contextMenu {
+                Button(NectoL10n.text("Update from file…")) {
+                    model.beginInstallFromFile(updating: exporter.package)
+                }
+            }
+            Text(NectoL10n.text("Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection."))
+                .font(.necto(.caption, scale: scale))
+                .foregroundStyle(NectoTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, 8)
+        } else {
+            Text(NectoL10n.text("No event exporter installed. Install one to allow collection. Plugin exclusions are preserved."))
+                .font(.necto(.label, scale: scale))
+                .foregroundStyle(NectoTheme.textSecondary)
+                .padding(.vertical, 8)
+        }
+
+        NectoSectionTitle(NectoL10n.text("Plugin events"), scale: scale)
+
+        if !model.eventCollectionPlugins.isEmpty {
+            NectoField(placeholder: NectoL10n.text("Search plugin IDs"), text: $eventPluginSearch, scale: scale)
+                .accessibilityIdentifier("settings.event-collection.search")
+                .padding(.vertical, 8)
+
+            ForEach(model.eventCollectionPlugins.filter {
+                eventPluginSearch.isEmpty || $0.id.localizedStandardContains(eventPluginSearch)
+                    || $0.name.localizedStandardContains(eventPluginSearch)
+            }) { plugin in
+                NectoRow(label: plugin.name, hint: "\(plugin.id) · \(plugin.detail)", scale: scale) {
+                    NectoSwitch(isOn: !model.eventCollectionPolicy.excludedPluginIDs.contains(plugin.id)) { included in
+                        Task { await model.setEventCollection(plugin.id, included: included) }
+                    }
+                    .accessibilityLabel(NectoL10n.format("Include %@ in event collection", plugin.id))
+                    .accessibilityIdentifier("settings.event-collection.\(plugin.id)")
+                }
+            }
+            Text(NectoL10n.text("Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent."))
+                .font(.necto(.caption, scale: scale))
+                .foregroundStyle(NectoTheme.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
+        }
+
+    }
+
+    @ViewBuilder
     private var plugins: some View {
         NectoSectionTitle(NectoL10n.text("Installed plugins"), scale: scale, isFirst: true)
 
         PluginTable(model: model, scale: scale)
-
 
 
         NectoSectionTitle(NectoL10n.text("Install and manage"), scale: scale)
@@ -434,9 +510,9 @@ struct SettingsScreen: View {
                 .padding(.top, 12)
         }
 
-        if !model.pluginsAwaitingApproval.isEmpty {
+        if !model.packagesAwaitingApproval.isEmpty {
             NectoSectionTitle(NectoL10n.text("Review required"), scale: scale)
-            ForEach(model.pluginsAwaitingApproval) { plugin in
+            ForEach(model.packagesAwaitingApproval) { plugin in
                 NectoRow(
                     label: plugin.manifest.name,
                     hint: NectoL10n.text("Review the source before running new or changed files."),

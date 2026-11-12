@@ -37,6 +37,55 @@ import Testing
     #expect(decoded.payload == payload)
 }
 
+@Test func invocationChannelRoundTripsOnInvocationsAndEvents() throws {
+    for (channel, wireValue) in [(NectoInvocationChannel.web, "web"), (.cli, "cli")] {
+        let invocation = NectoPluginInvocation(
+            requestID: "r1",
+            name: "necto.device.example",
+            version: 1,
+            kind: .once,
+            input: [:],
+            invocationChannel: channel
+        )
+        let event = NectoPluginEvent(
+            pluginID: "com.example.logger",
+            channel: "necto.usage",
+            payload: ["eventName": "example.called", "params": [:]],
+            invocationChannel: channel
+        )
+        let invokeEnvelope = try NectoEnvelope(type: .pluginInvoke, encoding: invocation)
+        let eventEnvelope = try NectoEnvelope(type: .pluginEvent, encoding: event)
+
+        #expect(invokeEnvelope.payload["invocationChannel"] == .string(wireValue))
+        #expect(eventEnvelope.payload["invocationChannel"] == .string(wireValue))
+        #expect(eventEnvelope.payload["channel"] == "necto.usage")
+        #expect(try invokeEnvelope.decode(NectoPluginInvocation.self) == invocation)
+        #expect(try eventEnvelope.decode(NectoPluginEvent.self) == event)
+    }
+}
+
+@Test func legacyInvocationsAndEventsOmitInvocationChannel() throws {
+    let invokeEnvelope = NectoEnvelope(type: .pluginInvoke, payload: [
+        "requestID": "r1",
+        "name": "necto.device.example",
+        "version": 1,
+        "kind": "once",
+        "input": [:],
+    ])
+    let eventEnvelope = NectoEnvelope(type: .pluginEvent, payload: [
+        "pluginID": "com.example.logger",
+        "channel": "necto.usage",
+        "payload": ["eventName": "example.called", "params": [:]],
+    ])
+    let invocation = try invokeEnvelope.decode(NectoPluginInvocation.self)
+    let event = try eventEnvelope.decode(NectoPluginEvent.self)
+
+    #expect(invocation.invocationChannel == nil)
+    #expect(event.invocationChannel == nil)
+    #expect(try NectoEnvelope(type: .pluginInvoke, encoding: invocation) == invokeEnvelope)
+    #expect(try NectoEnvelope(type: .pluginEvent, encoding: event) == eventEnvelope)
+}
+
 @Test func streamResultsAreNotFinalUntilTheLastOne() throws {
     let event = NectoPluginResult(requestID: "r1", output: ["n": 1], isFinal: false)
     let end = NectoPluginResult(requestID: "r1")
@@ -77,4 +126,44 @@ import Testing
     #expect(decoded.catalog.catalogVersion == 1)
     #expect(decoded.catalog.bridges.first?.version == 2)
     #expect(decoded.catalog.bridges.first?.identity == "necto.device.com.example.variables@2")
+}
+
+@Test func registrationPresenceDistinguishesLoggerOnlyPluginsFromRemoval() throws {
+    let catalog = NectoBridgeCatalog(bridges: [])
+    for isRegistered in [true, false] {
+        let registration = NectoPluginRegistration(
+            pluginID: "com.example.logger", catalog: catalog, isRegistered: isRegistered
+        )
+        let decoded = try NectoEnvelope(type: .pluginRegister, encoding: registration)
+            .decode(NectoPluginRegistration.self)
+        #expect(decoded.isRegistered == isRegistered)
+        #expect(decoded.isActive == isRegistered)
+    }
+    let removed = NectoPluginRegistration(
+        pluginID: "com.example.logger", catalog: catalog,
+        panel: NectoPanelStamp(hash: "previous-panel"), isRegistered: false
+    )
+    #expect(!removed.isActive)
+}
+
+@Test func legacyRegistrationsStillUseTheirCatalogForPresence() throws {
+    let catalog = NectoBridgeCatalog(bridges: [
+        NectoBridgeDescriptor(binding: NectoBridgeBinding(name: "necto.device.example", version: 1), kind: .once),
+    ])
+    for (catalog, active) in [(catalog, true), (NectoBridgeCatalog(bridges: []), false)] {
+        let old = NectoPluginRegistration(pluginID: "com.example.legacy", catalog: catalog)
+        let data = try JSONEncoder().encode(old)
+        #expect(try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])["isRegistered"] == nil)
+        let decoded = try JSONDecoder().decode(NectoPluginRegistration.self, from: data)
+        #expect(decoded.isRegistered == nil)
+        #expect(decoded.isActive == active)
+    }
+    let panelOnly = NectoPluginRegistration(
+        pluginID: "com.example.legacy", catalog: NectoBridgeCatalog(bridges: []),
+        panel: NectoPanelStamp(hash: "legacy-panel")
+    )
+    let decodedPanel = try NectoEnvelope(type: .pluginRegister, encoding: panelOnly)
+        .decode(NectoPluginRegistration.self)
+    #expect(decodedPanel.isRegistered == nil)
+    #expect(decodedPanel.isActive)
 }

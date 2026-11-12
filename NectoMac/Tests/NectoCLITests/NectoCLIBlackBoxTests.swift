@@ -11,12 +11,120 @@ import Testing
 
 @Suite("CLI process interface", .timeLimit(.minutes(1)))
 struct NectoCLIBlackBoxTests {
+    private static let exporterWarning: NectoJSONValue = [
+        "exporters": [["id": "sample", "name": "Sample\u{1b}\u{202e}\u{2028}\n\t Collector", "requestsShellAccess": true]],
+    ]
+    private static let warningLine = "Warning: Exporter 'Sample Collector' is awaiting approval for event collection and shell access. Run `necto exporter review` and ask the user before approving.\n"
+
+    @Test("exporter review shows collection and shell details and preserves the JSON payload", arguments: [false, true])
+    func exporterReview(json: Bool) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let review: NectoJSONValue = [
+            "pending": true,
+            "exporter": ["id": "sample", "name": "Sample", "version": "1.0.0", "author": "Example\u{1b}",
+                         "description": "Example exporter", "source": "/tmp/exporter", "contentHash": "abc123"],
+            "collection": ["includesNecto": true, "includesCurrentAndFuturePlugins": true, "preservesExclusions": true],
+            "shellAccess": [
+                "requested": true, "globalFullAccess": false, "currentLevel": "protected",
+                "availableChoices": ["full", "commands", "none"],
+                "operations": [
+                    ["id": "execute", "kind": "once", "binding": ["name": "shell.execute", "version": 1],
+                     "description": "Run a declared command", "status": "commands", "commands": ["git status"]],
+                    ["id": "ask", "status": "authorizationRequest"],
+                    ["id": "dynamic", "status": "unavailable", "reason": "enumNotDeclared"],
+                    ["id": "unknown", "status": "unsupportedContract", "reason": "Unsupported version."],
+                ],
+            ],
+        ]
+        let server = fixture.respond { request, session in
+            #expect(request.kind == .reviewExporter)
+            #expect(request.input == nil)
+            #expect(request.includeWarnings == nil)
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: review))
+        }
+        let result = try await fixture.run(["exporter", "review"] + (json ? ["--json"] : []))
+        try await server.value
+        #expect(result.status == 0)
+        #expect(result.error.isEmpty)
+        if json {
+            #expect(try result.json() == review)
+        } else {
+            for expected in ["Sample", "Example", "abc123", "Includes Necto activity", "current and future plugins",
+                             "Preserves plugin exclusions", "Requested", "Global Full Access Off", "Protected",
+                             "full  Run any shell command", "commands  Run only the exact commands", "none  Block",
+                             "shell.execute v1, once", "git status", "Can request authorization", "The command input does not list exact commands.",
+                             "Unsupported shell contract.", "Unsupported version.", "necto exporter approve --shell-access"] {
+                #expect(result.output.contains(expected))
+            }
+            #expect(!result.output.contains("\u{1b}"))
+        }
+    }
+
+    @Test("exporter approve forwards only the selected shell option and emits the result", arguments: [
+        NectoExporterApproval.ShellAccess?.none, .full, .commands, .some(.none),
+    ])
+    func exporterApprove(choice: NectoExporterApproval.ShellAccess?) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let installed: NectoJSONValue = ["installed": true, "pluginID": "sample", "name": "Sample", "version": "1.0.0", "enabled": true]
+        let server = fixture.respond { request, session in
+            #expect(request.kind == .approveExporter)
+            #expect(request.input == choice.map { ["shellAccess": .string($0.rawValue)] } ?? .object([:]))
+            #expect(request.pluginID == nil && request.operationID == nil)
+            #expect(request.app == nil && request.device == nil && request.desktop == nil)
+            #expect(request.includeWarnings == nil)
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: installed))
+        }
+        let options = choice.map { ["--shell-access", $0.rawValue] } ?? []
+        let result = try await fixture.run(["exporter", "approve", "--json"] + options)
+        try await server.value
+        #expect(result.status == 0)
+        #expect(result.error.isEmpty)
+        #expect(try result.json() == installed)
+    }
+
+    @Test("exporter reject sends no input and emits the rejection result")
+    func exporterReject() async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let rejected: NectoJSONValue = ["rejected": true, "pluginID": "sample"]
+        let server = fixture.respond { request, session in
+            #expect(request.kind == .rejectExporter)
+            #expect(request.input == nil)
+            #expect(request.includeWarnings == nil)
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: rejected))
+        }
+        let result = try await fixture.run(["exporter", "reject", "--json"])
+        try await server.value
+        #expect(result.status == 0)
+        #expect(result.error.isEmpty)
+        #expect(try result.json() == rejected)
+    }
+
+    @Test("exporter rejects extra selectors and unknown shell choices before contacting Necto", arguments: [
+        ["review", "sample"], ["approve", "/tmp/exporter"], ["reject", "--desktop"],
+        ["approve", "--shell-access", "protected"], ["review", "--shell-access", "none"],
+    ])
+    func invalidExporterArguments(arguments: [String]) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let result = try await fixture.run(["exporter"] + arguments)
+        #expect(result.status != 0)
+        #expect(result.output.isEmpty)
+        #expect(result.error.contains("Usage:"))
+    }
+
     @Test("device discovery prints usable identifiers grouped by device")
     func deviceDiscovery() async throws {
         let fixture = try CLIProcessFixture()
         defer { fixture.close() }
         let server = fixture.respond { request, session in
             #expect(request.kind == .targets)
+            #expect(request.includeWarnings == true)
             try await session.send(NectoControlResponse(id: request.id, kind: .result, value: [
                 "targets": .array([
                     ["deviceID": "sim-1", "deviceName": "Phone", "appBundleID": "com.example.one", "appName": "One"],
@@ -44,6 +152,7 @@ struct NectoCLIBlackBoxTests {
         defer { fixture.close() }
         let server = fixture.respond { request, session in
             #expect(request.kind == .plugins)
+            #expect(request.includeWarnings == true)
             #expect(request.device == "sim-2")
             #expect(request.app == "com.example.two")
             #expect(request.pluginID == (arguments.count > 2 ? "sample" : nil))
@@ -124,6 +233,12 @@ struct NectoCLIBlackBoxTests {
         let server = fixture.respond { request, session in
             #expect(request.kind == .invoke)
             #expect(request.input == expected)
+            #expect(request.includeWarnings == true)
+            try await session.send(NectoControlResponse(id: "other", kind: .warning, value: [
+                "exporters": [["id": "other", "name": "Another request's warning", "requestsShellAccess": false]],
+            ]))
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
             try await session.send(NectoControlResponse(id: request.id, kind: .result, value: request.input))
         }
         let result = try await fixture.run([
@@ -132,6 +247,7 @@ struct NectoCLIBlackBoxTests {
         try await server.value
         #expect(result.status == 0)
         #expect(try result.json() == expected)
+        #expect(result.error == Self.warningLine)
     }
 
     @Test("remote errors and abrupt stream disconnects are failures", arguments: [false, true])
@@ -139,6 +255,7 @@ struct NectoCLIBlackBoxTests {
         let fixture = try CLIProcessFixture()
         defer { fixture.close() }
         let server = fixture.respond { request, session in
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
             if !disconnect {
                 try await session.send(NectoControlResponse(id: request.id, kind: .error,
                     error: .init(code: "PERMISSION_DENIED", message: "Approval was declined.")))
@@ -146,10 +263,10 @@ struct NectoCLIBlackBoxTests {
         }
         let result = try await fixture.run(["plugin", disconnect ? "subscribe" : "send", "sample", "read", "--desktop"])
         try await server.value
-        #expect(result.status != 0)
+        #expect(result.status == 1)
         #expect(result.output.isEmpty)
-        #expect(!result.error.isEmpty)
-        if !disconnect { #expect(result.error.contains("PERMISSION_DENIED")) }
+        #expect(result.error.hasPrefix(Self.warningLine))
+        #expect(result.error.contains(disconnect ? "Necto disconnected" : "PERMISSION_DENIED: Approval was declined."))
     }
 
     @Test("stream limit prints JSONL and closes its connection")
@@ -157,7 +274,9 @@ struct NectoCLIBlackBoxTests {
         let fixture = try CLIProcessFixture()
         defer { fixture.close() }
         let server = fixture.respond { request, session in
+            #expect(request.includeWarnings == true)
             for value in 1...2 {
+                try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
                 try await session.send(NectoControlResponse(id: request.id, kind: .event, value: ["tick": .number(Double(value))]))
             }
             // Keep the stream open: reaching the limit must close it from the client side.
@@ -166,7 +285,7 @@ struct NectoCLIBlackBoxTests {
         let result = try await fixture.run(["plugin", "subscribe", "sample", "observe", "--desktop", "--limit", "2"])
         try await server.value
         #expect(result.status == 0)
-        #expect(result.error.isEmpty)
+        #expect(result.error == Self.warningLine)
         let lines = result.output.split(separator: "\n")
         let events = try lines.map { try JSONDecoder().decode(NectoJSONValue.self, from: Data($0.utf8)) }
         #expect(events == [["tick": 1], ["tick": 2]])
@@ -176,13 +295,59 @@ struct NectoCLIBlackBoxTests {
     func streamTimeout() async throws {
         let fixture = try CLIProcessFixture()
         defer { fixture.close() }
-        let server = fixture.respond { _, session in
+        let server = fixture.respond { request, session in
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
             await #expect(throws: (any Error).self) { try await session.receive(NectoControlRequest.self) }
         }
-        let result = try await fixture.run(["plugin", "subscribe", "sample", "observe", "--desktop", "--timeout", "100ms"])
+        let result = try await fixture.run(["plugin", "subscribe", "sample", "observe", "--desktop", "--timeout", "1s"])
         try await server.value
         #expect(result.status == 0)
         #expect(result.output.isEmpty)
+        #expect(result.error == Self.warningLine)
+    }
+
+    @Test("plugin installation and deletion advise resolving multiple exporters in Settings", arguments: [false, true])
+    func pluginMutationWarnings(install: Bool) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let first: NectoJSONValue = ["id": "first", "name": "First", "requestsShellAccess": false]
+        let second: NectoJSONValue = ["id": "second", "name": "Second", "requestsShellAccess": true]
+        let warning: NectoJSONValue = [
+            "exporters": .array(install ? [first, second] : [second]),
+            "multipleCandidates": .bool(!install),
+        ]
+        let reply: NectoJSONValue = [install ? "installed" : "deleted": true, "pluginID": "sample"]
+        let server = fixture.respond { request, session in
+            #expect(request.kind == (install ? .installPlugin : .deletePlugin))
+            #expect(request.includeWarnings == true)
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: warning))
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: reply))
+        }
+        let arguments = install ? ["install", "example/sample"] : ["delete", "sample"]
+        let result = try await fixture.run(["plugin"] + arguments + ["--json"])
+        try await server.value
+        #expect(result.status == 0)
+        #expect(try result.json() == reply)
+        #expect(result.error.components(separatedBy: "Warning: ").count == 2)
+        #expect(result.error.contains("Exporter 'First' is awaiting approval for event collection.") == install)
+        #expect(result.error.contains("Exporter 'Second' is awaiting approval for event collection and shell access."))
+        #expect(result.error.contains("Necto Settings"))
+        #expect(!result.error.contains("necto exporter review"))
+    }
+
+    @Test("a broken stderr pipe cannot fail an otherwise successful command")
+    func warningWithBrokenStderr() async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let reply: NectoJSONValue = ["targets": []]
+        let server = fixture.respond { request, session in
+            try await session.send(NectoControlResponse(id: request.id, kind: .warning, value: Self.exporterWarning))
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: reply))
+        }
+        let result = try await fixture.run(["targets", "--json"], brokenStderr: true)
+        try await server.value
+        #expect(result.status == 0)
+        #expect(try result.json() == reply)
     }
 
     @Test("natural stream completion succeeds without requiring a bound")
@@ -365,7 +530,7 @@ private final class CLIProcessFixture: @unchecked Sendable {
     }
 
     func run(_ arguments: [String], input: String? = nil, interruptAfterOutput: Bool = false,
-             executable: URL? = nil, path: String? = nil) async throws -> Result {
+             executable: URL? = nil, path: String? = nil, brokenStderr: Bool = false) async throws -> Result {
         let process = Process()
         process.executableURL = try executable ?? Self.executable()
         process.arguments = arguments
@@ -382,6 +547,11 @@ private final class CLIProcessFixture: @unchecked Sendable {
         defer { try? output.close(); try? error.close() }
         process.standardOutput = output
         process.standardError = error
+        if brokenStderr {
+            let errorPipe = Pipe()
+            try errorPipe.fileHandleForReading.close()
+            process.standardError = errorPipe.fileHandleForWriting
+        }
         let pipe = Pipe()
         process.standardInput = pipe
         try process.run()

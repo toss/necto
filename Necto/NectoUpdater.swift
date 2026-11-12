@@ -151,7 +151,13 @@ final class NectoUpdater {
             try process.run()
             // The helper owns cleanup and must observe our exit before replacing or opening anything.
             handedOff = true
-            NSApplication.shared.terminate(nil)
+            // Deferred termination runs a nested AppKit loop. Leave this main-queue
+            // job first so the exporter's MainActor cleanup can continue in that loop.
+            RunLoop.main.perform(inModes: [.common]) {
+                MainActor.assumeIsolated {
+                    NSApplication.shared.terminate(nil)
+                }
+            }
         } catch {
             if let mountpoint = mountedImage {
                 do {

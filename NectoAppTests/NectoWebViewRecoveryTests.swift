@@ -13,7 +13,7 @@ private struct CheckFailed: Error { let message: String }
 @Suite("WebView recovery", .serialized, .timeLimit(.minutes(1)))
 @MainActor
 struct NectoWebViewRecoveryTests {
-    private func page() -> NectoPluginPage {
+    private func page() -> NectoWebPage {
         let id = "com.example.recovery-" + UUID().uuidString.lowercased()
         let manifest = NectoPluginManifest(id: id, name: "Recovery fixture", description: "Local fixture",
             version: "1.0.0", author: "Necto", icon: .init(systemName: "testtube.2"),
@@ -22,7 +22,7 @@ struct NectoWebViewRecoveryTests {
             data: Data("<html><script>window.fixtureLoad = Math.random().toString(36);</script></html>".utf8))])
         let plugin = NectoInstalledPlugin(manifest: manifest, rootURL: URL(filePath: NSTemporaryDirectory()),
             source: .installed, archive: archive, contentIdentity: archive.contentHash)
-        let page = NectoPluginPage(plugin: plugin, registry: NectoPluginRegistry(), target: nil)
+        let page = NectoWebPage(package: plugin.package, registry: NectoPluginRegistry(), target: nil)
         page.setVisible(false, find: nil, scale: 1)
         return page
     }

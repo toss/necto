@@ -70,9 +70,12 @@ public struct NectoPluginPanel: Sendable {
 
 /// Collects what a plugin answers.
 ///
-/// Only useful for the length of `register(_:)`. Nothing is called back through it, so
-/// a plugin never has to hold on to it.
+/// Used for the length of `register(_:)`. Keep its `logger` when the plugin needs
+/// to send events later; the registrar itself does not need to be retained.
 public final class NectoRegistrar: @unchecked Sendable {
+    /// A reusable app-event logger bound to this plugin's registration.
+    public let logger: NectoPluginLogger
+
     /// One registration: the contract and the work, in one place, so a name is written
     /// once rather than declared in one list and switched on in another.
     struct Registration {
@@ -88,7 +91,9 @@ public final class NectoRegistrar: @unchecked Sendable {
     private(set) var registrations: [String: Registration] = [:]
     private(set) var hasDuplicateContracts = false
 
-    init() {}
+    init(logger: NectoPluginLogger = NectoPluginLogger()) {
+        self.logger = logger
+    }
 
     /// Answers once. Whatever it returns is the answer.
     ///

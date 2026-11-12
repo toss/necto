@@ -14,6 +14,7 @@ const head = "a".repeat(40);
 const older = "b".repeat(40);
 const version = "0.1.0";
 const root = "repos/toss/necto/";
+const exporterPackage = "WebPackages/HTTPExporter/package.json";
 const download = "[**Download Necto**](https://github.com/toss/necto/releases/download/0.1.0/Necto-0.1.0.dmg)";
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -21,6 +22,7 @@ function fixture(t, options = {}) {
   const directory = mkdtempSync(join(tmpdir(), "necto-github-release-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const names = [`Necto-${version}.dmg`, `Necto-${version}.dmg.sha256`, `necto-bridge-${version}.tgz`, `create-necto-plugin-${version}.tgz`];
+  if (!options.olderSource) names.push(`necto-http-exporter-${version}.tgz`);
   names.forEach((name) => writeFileSync(join(directory, name), name));
   writeFileSync(join(directory, names[1]), `${hash(readFileSync(join(directory, names[0])))}  ${names[0]}\n`);
   const state = { tag: options.tag ?? null, draft: options.draft, assets: options.assets ?? [], calls: [], uploads: 0 };
@@ -30,6 +32,10 @@ function fixture(t, options = {}) {
     state.calls.push([tool, args, input]);
     if (tool === "git") {
       if (args[0] === "merge-base") return options.unrelated ? fail("not an ancestor") : ok();
+      if (args[0] === "ls-tree") {
+        assert.deepEqual(args, ["ls-tree", "--name-only", options.tag ?? head, "--", exporterPackage]);
+        return ok(options.olderSource ? "" : exporterPackage);
+      }
       if (args[1] === "HEAD") return ok(head);
       if (args[2] === `refs/tags/${version}^{commit}`) return options.tag ? ok(options.tag) : fail("no local tag");
       if (args[2]?.endsWith("^{commit}")) return ok(options.draftCommit ?? head);
@@ -81,7 +87,7 @@ test("preparation selects main or an existing tag without mutating GitHub", (t) 
   }
 });
 
-test("publishing creates a tag and draft, verifies all four uploads, then publishes", (t) => {
+test("publishing creates a tag and draft, verifies all uploads, then publishes", (t) => {
   const f = fixture(t);
   assert.equal(release("publish", version, head, f), "https://github.com/toss/necto/releases/tag/0.1.0");
   assert.equal(f.state.tag, head);
@@ -92,10 +98,11 @@ test("publishing creates a tag and draft, verifies all four uploads, then publis
 });
 
 test("an existing tag and draft resume without recreating either", (t) => {
-  const f = fixture(t, { tag: older, draft: { ...draft, target_commitish: older, body: "Existing release notes" } });
+  const f = fixture(t, { tag: older, draft: { ...draft, target_commitish: older, body: "Existing release notes" }, olderSource: true });
   release("publish", version, older, f);
   assert.equal(f.state.tag, older);
   assert.equal(f.state.draft.body, `${download}\n\nExisting release notes`);
+  assert.deepEqual(f.state.assets.map((item) => item.name), f.names);
   assert.ok(!f.state.calls.some(([, args]) => args.includes("POST")));
 });
 
@@ -106,8 +113,15 @@ test("identical draft assets are reused on retry", (t) => {
   release("publish", version, head, f);
   const upload = f.state.calls.find(([, args]) => args[0] === "release")[1];
   assert.ok(!upload.includes(join(f.directory, f.names[0])));
-  assert.equal(f.state.assets.length, 4);
+  assert.equal(f.state.assets.length, f.names.length);
   assert.equal(f.state.draft.body, `${download}\n\nExisting release notes`);
+});
+
+test("a missing HTTP exporter tarball prevents publication of a commit that contains it", (t) => {
+  const f = fixture(t);
+  rmSync(join(f.directory, f.names.at(-1)));
+  assert.throws(() => release("publish", version, head, f), /necto-http-exporter/);
+  assert.ok(f.state.calls.every(([, args]) => !args.includes("POST") && !args.includes("PATCH") && args[0] !== "release"));
 });
 
 for (const [name, options, error] of [

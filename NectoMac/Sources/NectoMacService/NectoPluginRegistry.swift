@@ -77,9 +77,14 @@ public actor NectoPluginRegistry {
     /// Shared with the target bridges, so a handle issued here is the same one a
     /// plugin may pass back to `necto.targets.*`.
     public let targetHandles: NectoTargetHandles
+    private let eventDispatcher: NectoEventDispatcher?
 
-    public init(targetHandles: NectoTargetHandles = NectoTargetHandles()) {
+    public init(
+        targetHandles: NectoTargetHandles = NectoTargetHandles(),
+        eventDispatcher: NectoEventDispatcher? = nil
+    ) {
         self.targetHandles = targetHandles
+        self.eventDispatcher = eventDispatcher
     }
 
     deinit {
@@ -196,16 +201,19 @@ public actor NectoPluginRegistry {
 
     /// What a plugin offers *now*, replacing whatever it offered before.
     ///
-    /// An app registers by declaring its whole catalog rather than adding to one, so a
-    /// plugin the app removed leaves with an empty catalog and no message of its own.
-    /// Re-registering after a reconnection is the same call and stays correct.
+    /// Explicit registration also retains plugins with no operations or panel.
+    /// Without that flag, an empty catalog keeps the legacy removal behavior.
     public func setDeviceProviders(
         _ providers: [any NectoOperationProvider],
         for target: NectoTarget,
-        pluginID: String
+        pluginID: String,
+        isRegistered: Bool? = nil
     ) {
-        guard !providers.isEmpty else {
+        guard isRegistered ?? !providers.isEmpty else {
             deviceProviders[target]?.removeValue(forKey: pluginID)
+            if deviceProviders[target]?.isEmpty == true {
+                deviceProviders.removeValue(forKey: target)
+            }
             return
         }
 
@@ -258,12 +266,56 @@ public actor NectoPluginRegistry {
         )
     }
 
+    /// Records usage explicitly; ordinary operation calls never generate events.
+    /// The host supplies the authenticated caller and the recording channel.
+    /// Exporters register directly with the dispatcher, not with this registry.
+    public func recordEvent(
+        pluginID: String,
+        input: NectoJSONValue,
+        target: NectoTarget?,
+        expectedPrincipal: NectoPluginPrincipal,
+        channel: NectoInvocationChannel? = nil
+    ) async throws {
+        guard let plugin = plugin(id: pluginID, target: target) else {
+            throw NectoBridgeError(code: .operationNotFound, message: "The recording plugin is not installed")
+        }
+        guard expectedPrincipal == plugin.principal else {
+            throw NectoBridgeError(code: .permissionDenied, message: "The recording plugin installation changed")
+        }
+        let eventInput = try NectoEvent.Input(jsonValue: input)
+        let source: NectoEvent.Source
+        switch plugin.source {
+        case .device:
+            source = .device(id: plugin.manifest.id, version: plugin.manifest.version)
+        case .desktop:
+            source = .desktop(id: plugin.manifest.id, version: plugin.manifest.version)
+        }
+        await eventDispatcher?.record(eventInput, source: source, channel: channel)
+    }
+
+    /// Records app usage from a plugin registered by this exact connected target.
+    /// A panel is optional; only its carried manifest can establish a version.
+    public func recordDeviceEvent(_ event: NectoPluginEvent, from target: NectoTarget) async throws {
+        guard deviceProviders[target]?[event.pluginID] != nil else {
+            throw NectoBridgeError(
+                code: .operationNotFound,
+                message: "The recording plugin is not registered"
+            )
+        }
+        let input = try NectoEvent.Input(jsonValue: event.payload)
+        let version = deviceInstalled[target]?[event.pluginID]?.manifest.version
+        await eventDispatcher?.record(
+            input, source: .device(id: event.pluginID, version: version), channel: event.invocationChannel
+        )
+    }
+
     public func invoke(
         pluginID: String,
         operationID: String,
         input: NectoJSONValue = .object([:]),
         target: NectoTarget?,
-        expectedPrincipal: NectoPluginPrincipal? = nil
+        expectedPrincipal: NectoPluginPrincipal? = nil,
+        channel: NectoInvocationChannel? = nil
     ) async throws -> NectoJSONValue {
         let resolved = try resolve(
             pluginID: pluginID,
@@ -276,7 +328,8 @@ public actor NectoPluginRegistry {
 
         let context = NectoInvocationContext(
             principal: resolved.plugin.principal,
-            target: target
+            target: target,
+            channel: channel
         )
 
         let output: NectoJSONValue
@@ -313,7 +366,8 @@ public actor NectoPluginRegistry {
         operationID: String,
         input: NectoJSONValue = .object([:]),
         target: NectoTarget?,
-        expectedPrincipal: NectoPluginPrincipal? = nil
+        expectedPrincipal: NectoPluginPrincipal? = nil,
+        channel: NectoInvocationChannel? = nil
     ) async throws -> AsyncThrowingStream<NectoJSONValue, any Error> {
         let resolved = try resolve(
             pluginID: pluginID,
@@ -326,7 +380,8 @@ public actor NectoPluginRegistry {
 
         let context = NectoInvocationContext(
             principal: resolved.plugin.principal,
-            target: target
+            target: target,
+            channel: channel
         )
         try Task.checkCancellation()
         let id = UUID()

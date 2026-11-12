@@ -16,6 +16,8 @@ import UIKit
 /// and handed the payload untouched, so adding a permission to an app never means
 /// changing this file.
 final class NectoSDKRuntime: @unchecked Sendable {
+    @TaskLocal private static var invocationChannel: NectoInvocationChannel?
+
     private let lock = NSLock()
     private var listener: NectoDeviceListener?
     private var task: Task<Void, Never>?
@@ -26,6 +28,7 @@ final class NectoSDKRuntime: @unchecked Sendable {
     private var statusContinuations: [UUID: AsyncStream<NectoSDK.Status>.Continuation] = [:]
     private var registered: [any NectoPlugin] = []
     private var registeringIDs: Set<String> = []
+    private var registrationTokens: [String: UUID] = [:]
     private var requests: [String: (token: UUID, task: Task<Void, Never>)] = [:]
     private var registrationUpdates: AsyncStream<NectoPluginRegistration>.Continuation?
     private var registrationWriter: Task<Void, Never>?
@@ -87,7 +90,11 @@ final class NectoSDKRuntime: @unchecked Sendable {
         guard reserved else { return false }
         defer { _ = lock.withLock { registeringIDs.remove(id) } }
 
-        let collector = NectoRegistrar()
+        let token = UUID()
+        let logger = NectoPluginLogger { [weak self] eventName, params in
+            self?.log(eventName, params: params, pluginID: id, token: token)
+        }
+        let collector = NectoRegistrar(logger: logger)
         plugin.register(collector)
         guard !collector.hasDuplicateContracts else { return false }
         let registrations = collector.registrations
@@ -104,6 +111,7 @@ final class NectoSDKRuntime: @unchecked Sendable {
             let existing = Set(handlers.values.flatMap { $0.keys })
             guard existing.isDisjoint(with: registrations.keys) else { return false }
             registered.append(plugin)
+            registrationTokens[id] = token
             handlers[plugin.id] = registrations
             panels[plugin.id] = archive
             enqueueRegistrationLocked(registrationLocked(for: plugin.id))
@@ -115,12 +123,13 @@ final class NectoSDKRuntime: @unchecked Sendable {
     /// Takes a plugin away, from the app and from the host.
     ///
     /// The host is told with the same message as a registration, carrying an empty
-    /// catalog: what an app last said about a plugin is the whole truth about it, so
-    /// removal needs no message of its own and no new wire type.
+    /// catalog and `isRegistered: false`. Explicit presence also lets a plugin
+    /// register only a logger, without handlers or a panel.
     func unregister(id: String) {
         lock.withLock {
             guard let index = registered.firstIndex(where: { $0.id == id }) else { return }
             handlers.removeValue(forKey: id)
+            registrationTokens.removeValue(forKey: id)
             panels.removeValue(forKey: id)
             registered.remove(at: index)
             enqueueRegistrationLocked(registrationLocked(for: id))
@@ -359,7 +368,10 @@ final class NectoSDKRuntime: @unchecked Sendable {
         switch registration.body {
         case let .once(body):
             do {
-                await send(NectoPluginResult(requestID: invocation.requestID, output: try await body(invocation.input)))
+                let output = try await Self.$invocationChannel.withValue(invocation.invocationChannel) {
+                    try await body(invocation.input)
+                }
+                await send(NectoPluginResult(requestID: invocation.requestID, output: output))
             } catch {
                 await send(NectoPluginResult(requestID: invocation.requestID, error: bridgeError(from: error)))
             }
@@ -374,7 +386,9 @@ final class NectoSDKRuntime: @unchecked Sendable {
                 }
 
                 do {
-                    try await body(invocation.input, out)
+                    try await Self.$invocationChannel.withValue(invocation.invocationChannel) {
+                        try await body(invocation.input, out)
+                    }
                     await send(NectoPluginResult(requestID: invocation.requestID))
                 } catch is CancellationError {
                     // The caller stopped listening. Nothing to report.
@@ -392,7 +406,6 @@ final class NectoSDKRuntime: @unchecked Sendable {
         lock.withLock {
             guard self.session === session, !Task.isCancelled else { return }
             let initial = registered.map { registrationLocked(for: $0.id) }
-                .filter { !$0.catalog.bridges.isEmpty || $0.panel != nil }
             let updates = AsyncStream<NectoPluginRegistration>.makeStream(bufferingPolicy: .bufferingOldest(64))
             registrationUpdates = updates.continuation
             registrationWriter = Task { [weak self] in
@@ -416,7 +429,8 @@ final class NectoSDKRuntime: @unchecked Sendable {
         NectoPluginRegistration(
             pluginID: id,
             catalog: NectoBridgeCatalog(bridges: (handlers[id] ?? [:]).values.map(\.descriptor)),
-            panel: panels[id]?.stamp
+            panel: panels[id]?.stamp,
+            isRegistered: registrationTokens[id] != nil
         )
     }
 
@@ -444,6 +458,34 @@ final class NectoSDKRuntime: @unchecked Sendable {
     }
 
     // MARK: Sending
+
+    private func log(
+        _ eventName: String,
+        params: [String: NectoJSONValue],
+        pluginID: String,
+        token: UUID
+    ) {
+        let destination = lock.withLock { () -> NectoMessageSession? in
+            // Registration updates exist only after this session's handshake was accepted.
+            guard registrationTokens[pluginID] == token, registrationUpdates != nil else { return nil }
+            return session
+        }
+        guard let destination else { return }
+        let event = NectoPluginEvent(
+            pluginID: pluginID,
+            channel: "necto.usage",
+            payload: ["eventName": .string(eventName), "params": .object(params)],
+            invocationChannel: Self.invocationChannel
+        )
+        Task { [weak self] in
+            guard let self,
+                  self.lock.withLock({
+                      self.session === destination && self.registrationTokens[pluginID] == token
+                  }),
+                  let envelope = try? NectoEnvelope(type: .pluginEvent, encoding: event) else { return }
+            try? await self.send(envelope: envelope, through: destination)
+        }
+    }
 
     private func send(_ result: NectoPluginResult, through session: NectoMessageSession) async {
         guard !Task.isCancelled, lock.withLock({ self.session === session }) else { return }

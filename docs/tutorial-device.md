@@ -208,6 +208,100 @@ See [bridges.md](bridges.md#app-bridges) for handler registration details.
 Payloads use `NectoJSONValue` and are validated against the manifest schema.
 Sharing a payload struct would couple the app and host versions.
 
+## Recording usage events
+
+Inside `register(_:)`, obtain the logger once and call it where the plugin considers
+an action worth recording. For example, the existing get handler can record a request:
+
+```swift
+let logger = necto.logger
+necto.handle("uptime.get") { _ in
+    logger.log("uptime.requested")
+    return [
+        "startedAt": .string(ISO8601DateFormatter().string(from: startedAt)),
+        "uptimeSeconds": .number(Date().timeIntervalSince(startedAt)),
+    ]
+}
+```
+
+Keep the existing observe handler as well. The logger can be retained independently
+of the registrar for later callbacks. Pass only an event name and optional JSON
+parameters; the SDK binds the plugin identity and Necto applies collection policy.
+No event schema or logging operation needs to be added to the manifest.
+
+Logging never waits for delivery or throws into the feature. Disconnected records
+are dropped and are not replayed after reconnection. A removed plugin's logger cannot
+be reused by a replacement registration with the same ID. A plugin without a panel
+can log too; Necto omits its version when no manifest is available.
+
+Logs inside a handler automatically retain the caller's `web` or `cli` channel.
+Awaited work and child tasks that inherit the handler's task context keep it too.
+A retained logger used independently, a detached task, or an unrelated callback
+omits the channel. You do not pass a channel to `logger.log()`.
+See [usage event delivery](architecture.md#usage-event-delivery) for transport,
+registration and metadata rules.
+
+### Built-in operation examples
+
+The built-in plugins record selected operations with the same `necto.logger` API.
+They obtain the logger once during registration and call it in the handler, so web
+and CLI requests produce the same event with their respective invocation channel.
+These event names and fields are plugin conventions, not a required logging schema.
+
+| Plugin | Event | `operation` values |
+| --- | --- | --- |
+| Network | `network.operation` | `list`, `detail`, `clear` |
+| Events | `events.operation` | `list`, `detail`, `clear` |
+| Files | `files.operation` | `list`, `preview`, `write`, `delete` |
+| UserDefaults | `preferences.operation` | `list`, `detail`, `set`, `remove` |
+| Performance | `performance.operation` | `series`, `snapshot`, `memory` |
+| Control | `control.operation` | `actionTargets`, `readAccessibility`, `tap`, `input`, `swipe`, `back` |
+
+Each selected handler records one event with `result: success` or `failure`, while
+preserving its normal output and error. Failure refers to work inside that handler;
+host-side schema or authorization refusals that never reach it are not included.
+Network, Events and Performance also record one `<prefix>.subscription_started`
+event when their observation handler establishes a subscription. They do not log
+each delivered record, periodic sample, cancellation or stream completion.
+
+For example, a successful network list call produces:
+
+```json
+{"eventName":"network.operation","params":{"operation":"list","result":"success"}}
+```
+
+The narrow additional fields are Files preview `format` (`text`, `image`, `binary`),
+UserDefaults set `valueType` (a known stored type, otherwise `Other`), and a Control
+action's `contentChanged` boolean when its response supplies one. Inputs, record IDs,
+URLs, headers, bodies, file paths, preference keys and values, search terms, typed
+text, and error messages are not copied into these usage events.
+
+Counts describe operation execution, not unique user clicks: opening a panel,
+refreshing after a write, or running a CLI command can reach the same read handler.
+Split by the host-provided `web`/`cli` channel when interpreting usage. Host-side
+`necto.plugin.opened` already records panel exposure.
+
+The built-in panels also use `necto.log()` for actions completed entirely in the
+web UI. They do not repeat the common operation logs above:
+
+| Event | Parameters and trigger |
+| --- | --- |
+| `network.detail_tab_changed` | `tab`: `summary`, `request`, `response`, `curl`; an actual tab change. |
+| `network.copied` | `kind`: `request_body`, `response_body`, `curl`; only after copying succeeds. |
+| `events.filter_changed` | `filter`: `search`, `level`, `category`; `enabled`: boolean. |
+| `files.path_copied` | No parameters; only after copying succeeds. |
+| `preferences.value_copied` | No parameters; only after copying succeeds. |
+| `performance.window_changed` | `window`: `1m`, `5m`, `1h`; an actual range change. |
+| `control.mode_changed` | `mode`: `actions`, `reading`; an accepted mode change. |
+
+Search logs only transitions between empty and nonempty trimmed input, not every
+keystroke. Level and category selectors log actual selection changes, including a
+change from one active selection to another, without the selected value. Initial
+rendering, repeated selection of the same tab or range, and blocked mode changes do
+not log. Copy failures and the Network panel's missing-cURL placeholder do not count
+as successful copies. These events contain no clipboard contents, paths, queries,
+category names, response bodies or command strings.
+
 ## The panel
 
 The panel is a web page that calls operations by their manifest ids. This example

@@ -63,7 +63,7 @@ final class NectoDevicePluginStore {
             let staging = parent.appending(path: ".necto-install-\(UUID().uuidString)")
             defer { try? manager.removeItem(at: staging) }
             try archive.write(into: staging)
-            let staged = try NectoPluginLoader.load(from: staging)
+            let staged = try NectoPackageLoader.load(from: staging)
             guard staged.manifest.id == pluginID else {
                 throw NectoDevicePluginError.wrongID(manifest: staged.manifest.id, registered: pluginID)
             }
@@ -90,7 +90,7 @@ final class NectoDevicePluginStore {
             }
         }
 
-        let plugin = try NectoPluginLoader.load(
+        let plugin = try NectoPackageLoader.load(
             from: root,
             source: .device(appName: appName, appBundleID: appBundleID)
         )
@@ -102,7 +102,7 @@ final class NectoDevicePluginStore {
         guard plugin.contentIdentity == root.lastPathComponent else {
             throw NectoDevicePluginError.hashMismatch(pluginID)
         }
-        return plugin
+        return NectoInstalledPlugin(package: plugin)
     }
 }
 

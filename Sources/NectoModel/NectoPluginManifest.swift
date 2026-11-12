@@ -4,6 +4,11 @@
 
 import Foundation
 
+/// An optional plugin role declared in `manifest.json`.
+public enum NectoPluginType: String, Sendable, Hashable, Codable {
+    case eventExporter = "event-exporter"
+}
+
 /// The typed form of `manifest.json`.
 ///
 /// See `docs/plugin-manifest.md` for the specification.
@@ -20,6 +25,7 @@ public struct NectoPluginManifest: Sendable, Hashable, Codable {
     }
 
     public let schemaVersion: Int
+    public let type: NectoPluginType?
     public let id: String
     public let name: String
     public let description: String
@@ -32,13 +38,14 @@ public struct NectoPluginManifest: Sendable, Hashable, Codable {
     public let operations: [NectoOperation]
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, id, name, description, version, author
+        case schemaVersion, type, id, name, description, version, author
         case authorURL = "authorUrl"
         case icon, assets, allowedOrigins, operations
     }
 
     public init(
         schemaVersion: Int = NectoPluginManifest.currentSchemaVersion,
+        type: NectoPluginType? = nil,
         id: String,
         name: String,
         description: String,
@@ -51,6 +58,7 @@ public struct NectoPluginManifest: Sendable, Hashable, Codable {
         operations: [NectoOperation]
     ) {
         self.schemaVersion = schemaVersion
+        self.type = type
         self.id = id
         self.name = name
         self.description = description
@@ -85,6 +93,7 @@ public enum NectoManifestValidationError: Sendable, Error, Equatable, CustomStri
     case unknownBridgeOwner(operationID: String, name: String)
     case duplicateBinding(operationID: String, name: String)
     case invalidOrigin(String)
+    case eventExporterRequiresDesktop
 
     public var description: String {
         switch self {
@@ -109,6 +118,8 @@ public enum NectoManifestValidationError: Sendable, Error, Equatable, CustomStri
             "Operation '\(operationID)' binds to '\(name)', which another operation already binds to."
         case let .invalidOrigin(value):
             "allowedOrigins entry '\(value)' must be 'self' or an https origin."
+        case .eventExporterRequiresDesktop:
+            "An event exporter must be a desktop plugin and cannot bind to device bridges."
         }
     }
 }
@@ -120,6 +131,9 @@ public extension NectoPluginManifest {
     func validate() throws(NectoManifestValidationError) {
         guard schemaVersion == Self.currentSchemaVersion else {
             throw .unsupportedSchemaVersion(schemaVersion)
+        }
+        guard type != .eventExporter || !requiresTarget else {
+            throw .eventExporterRequiresDesktop
         }
         guard Self.isValidIdentifier(id) else { throw .invalidIdentifier(id) }
 

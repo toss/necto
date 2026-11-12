@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AF3000000000000000000000 /* NectoExporterRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF3000000000000000000001 /* NectoExporterRuntime.swift */; };
+		AF3000000000000000000002 /* NectoBackgroundPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF3000000000000000000003 /* NectoBackgroundPanels.swift */; };
 		AF1000000000000000000018 /* NectoAgentSkills.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000019 /* NectoAgentSkills.swift */; };
 		AF1000000000000000000016 /* NectoCLIInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000017 /* NectoCLIInstaller.swift */; };
 		AF1000000000000000000000 /* NectoDevicePluginStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000001 /* NectoDevicePluginStore.swift */; };
@@ -28,9 +30,17 @@
 		BA00000000000000000000004 /* NectoFilesPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000004 /* NectoFilesPlugin */; };
 		BA00000000000000000000005 /* NectoPreferencesPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000005 /* NectoPreferencesPlugin */; };
 		BA00000000000000000000006 /* NectoUIControlPlugin in Frameworks */ = {isa = PBXBuildFile; productRef = BB00000000000000000000006 /* NectoUIControlPlugin */; };
+		AF2000000000000000000000 /* NectoPluginInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000001 /* NectoPluginInstaller.swift */; };
+		AF2000000000000000000002 /* NectoPluginLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000003 /* NectoPluginLibrary.swift */; };
+		AF2000000000000000000004 /* InstallCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000005 /* InstallCoordinator.swift */; };
+		AF4000000000000000000000 /* NectoInstalledPackage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF4000000000000000000001 /* NectoInstalledPackage.swift */; };
+		AF4000000000000000000010 /* NectoInstalledExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF4000000000000000000011 /* NectoInstalledExporter.swift */; };
+		AF5000000000000000000000 /* Necto/NectoUsageLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF5000000000000000000001 /* Necto/NectoUsageLogger.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AF3000000000000000000001 /* NectoExporterRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoExporterRuntime.swift; sourceTree = SOURCE_ROOT; };
+		AF3000000000000000000003 /* NectoBackgroundPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoBackgroundPanels.swift; sourceTree = SOURCE_ROOT; };
 		AF1000000000000000000019 /* NectoAgentSkills.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoAgentSkills.swift; sourceTree = SOURCE_ROOT; };
 		AE00000000000000000001 /* NectoE2ETests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NectoE2ETests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF1000000000000000000017 /* NectoCLIInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoCLIInstaller.swift; sourceTree = SOURCE_ROOT; };
@@ -48,6 +58,12 @@
 		25CF17BF6F214F22D88B9758 /* ExampleApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ExampleApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3284D23DEBBF44C6D6C76925 /* toss-necto */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "toss-necto"; path = .; sourceTree = SOURCE_ROOT; };
 		B7B65F74B879EC9BB4A82269 /* Necto.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Necto.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AF2000000000000000000001 /* NectoPluginInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoPluginInstaller.swift; sourceTree = SOURCE_ROOT; };
+		AF2000000000000000000003 /* NectoPluginLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoPluginLibrary.swift; sourceTree = SOURCE_ROOT; };
+		AF2000000000000000000005 /* InstallCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/InstallCoordinator.swift; sourceTree = SOURCE_ROOT; };
+		AF4000000000000000000001 /* NectoInstalledPackage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoInstalledPackage.swift; sourceTree = SOURCE_ROOT; };
+		AF4000000000000000000011 /* NectoInstalledExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoInstalledExporter.swift; sourceTree = SOURCE_ROOT; };
+		AF5000000000000000000001 /* Necto/NectoUsageLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoUsageLogger.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -104,6 +120,7 @@
 				AA00000000000000000001 /* Necto */,
 				AA00000000000000000002 /* ExampleApp */,
 				AF00000000000000000005 /* NectoAppTests */,
+				AF5000000000000000000001 /* Necto/NectoUsageLogger.swift */,
 				AE00000000000000000002 /* NectoE2ETests */,
 				9794CFC36CF998818A1564B1 /* Packages */,
 				D9F327EE657F7B4405B9E7FE /* Products */,
@@ -284,9 +301,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF3000000000000000000000 /* NectoExporterRuntime.swift in Sources */,
+				AF3000000000000000000002 /* NectoBackgroundPanels.swift in Sources */,
+				AF2000000000000000000000 /* NectoPluginInstaller.swift in Sources */,
+				AF2000000000000000000002 /* NectoPluginLibrary.swift in Sources */,
+				AF2000000000000000000004 /* InstallCoordinator.swift in Sources */,
 				AF00000000000000000001 /* NectoShellAccessController.swift in Sources */,
 				AF1000000000000000000000 /* NectoDevicePluginStore.swift in Sources */,
 				AF1000000000000000000002 /* NectoInstalledPlugin.swift in Sources */,
+				AF4000000000000000000010 /* NectoInstalledExporter.swift in Sources */,
+				AF4000000000000000000000 /* NectoInstalledPackage.swift in Sources */,
 				AF1000000000000000000004 /* NectoPluginWebView.swift in Sources */,
 				AF1000000000000000000006 /* NectoPluginSchemeHandler.swift in Sources */,
 				AF1000000000000000000008 /* NectoFindBar.swift in Sources */,
@@ -295,6 +319,7 @@
 				AF1000000000000000000014 /* NectoControls.swift in Sources */,
 				AF1000000000000000000016 /* NectoCLIInstaller.swift in Sources */,
 				AF1000000000000000000018 /* NectoAgentSkills.swift in Sources */,
+				AF5000000000000000000000 /* Necto/NectoUsageLogger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

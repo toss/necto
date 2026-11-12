@@ -12,9 +12,8 @@ import Foundation
 /// nothing at all — an app that never appears looked exactly like an app nobody
 /// launched.
 public actor NectoDiagnosticsLog {
-    /// Counted rather than measured in bytes, unlike `NectoChannelBuffer`. A log line is
-    /// a sentence Necto wrote about itself, so its size is bounded by construction; a
-    /// channel payload is whatever the app under test sent.
+    /// Retains the most recent diagnostic entries, including exporter diagnostics.
+    /// This is an entry count, not a byte limit; callers should keep details concise.
     public static let capacity = 500
 
     public enum Severity: String, Sendable, CaseIterable {
@@ -29,6 +28,7 @@ public actor NectoDiagnosticsLog {
         case plugin
         case bridge
         case target
+        case exporter
     }
 
     public struct Entry: Sendable, Equatable, Identifiable {
@@ -60,6 +60,7 @@ public actor NectoDiagnosticsLog {
     private var entries: [Entry] = []
     private var droppedCount = 0
     private var acknowledgedFailures = 0
+    private var observers: [UUID: (source: Source?, continuation: AsyncStream<[Entry]>.Continuation)] = [:]
 
     public init() {}
 
@@ -79,6 +80,30 @@ public actor NectoDiagnosticsLog {
             acknowledgedFailures = max(0, acknowledgedFailures)
             droppedCount += removed.count
             entries.removeFirst(removed.count)
+        }
+        publishUpdates()
+    }
+
+    /// Starts with the current entries, then keeps an open log view up to date.
+    /// Slow readers only need the latest snapshot, which includes retained entries.
+    public func updates(source: Source? = nil) -> AsyncStream<[Entry]> {
+        let (stream, continuation) = AsyncStream<[Entry]>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let id = UUID()
+        observers[id] = (source, continuation)
+        continuation.yield(recent(source: source))
+        continuation.onTermination = { [weak self] _ in
+            Task { await self?.removeObserver(id) }
+        }
+        return stream
+    }
+
+    private func removeObserver(_ id: UUID) {
+        observers.removeValue(forKey: id)
+    }
+
+    private func publishUpdates() {
+        for observer in observers.values {
+            observer.continuation.yield(recent(source: observer.source))
         }
     }
 
@@ -105,14 +130,14 @@ public actor NectoDiagnosticsLog {
         acknowledgedFailures = entries.count { $0.severity == .failure }
     }
 
-    /// The whole log as text, for pasting into a bug report.
+    /// The log, optionally limited to one source, for pasting into a bug report.
     ///
     /// Timestamped in full, unlike the screen: a line read days later and somewhere
     /// else needs more than "15:39". Oldest first, because that is the order the
     /// events happened in and the order someone reading the report will follow.
-    public func transcript() -> String {
+    public func transcript(source: Source? = nil) -> String {
         let stamp = ISO8601DateFormatter()
-        var lines = entries.map { entry -> String in
+        var lines = entries.filter { source == nil || $0.source == source }.map { entry -> String in
             let head = [
                 stamp.string(from: entry.at),
                 entry.severity.rawValue,
@@ -125,7 +150,8 @@ public actor NectoDiagnosticsLog {
         }
 
         // Said first, so a transcript that is missing its beginning says so.
-        if droppedCount > 0 {
+        // The eviction count covers all sources, so do not attribute it to a filtered source.
+        if source == nil, droppedCount > 0 {
             lines.insert("\(droppedCount) earlier lines dropped.", at: 0)
         }
         return lines.joined(separator: "\n")
@@ -135,5 +161,6 @@ public actor NectoDiagnosticsLog {
         entries.removeAll()
         droppedCount = 0
         acknowledgedFailures = 0
+        publishUpdates()
     }
 }

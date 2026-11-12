@@ -397,6 +397,7 @@ const settingsNav = (current, updates = false) => `
     <button type="button" class="necto-nav-item" aria-selected="${current === "general"}">${gearIcon}<span>General</span>${updates ? updateDot : ""}</button>
     <button type="button" class="necto-nav-item" aria-selected="${current === "shell"}">${logIcon}<span>Shell Access</span></button>
     <button type="button" class="necto-nav-item" aria-selected="${current === "plugins"}">${sampleIcon}<span>Desktop Plugins</span>${updates ? updateDot : ""}</button>
+    <button type="button" class="necto-nav-item" aria-selected="${current === "exporter" || current === "exporter-diagnostics"}">${logIcon}<span>Usage data collection</span></button>
     <button type="button" class="necto-nav-item" aria-selected="false">${logIcon}<span>Log</span></button>
   </div>`;
 
@@ -477,6 +478,46 @@ const generalPage = (updates = false) => `
         <p class="necto-row-hint">Use Necto from Claude Code.</p>
       </div>
       <button type="button" class="necto-button necto-button-quiet">Add</button>
+    </div>
+  </div>`;
+
+const eventExporterPage = () => `
+  <div class="necto-body" style="padding: var(--necto-space-3)">
+    <div style="display:flex;align-items:baseline;justify-content:space-between">
+      <h3 class="necto-section-title">Usage data collection</h3>
+      <button type="button" class="necto-button necto-button-quiet" data-exporter-diagnostics>View diagnostics</button>
+    </div>
+    <div class="necto-row">
+      <div class="necto-row-label">Example Exporter
+        <p class="necto-row-hint">com.example.exporter · 1.0.0 · github.com/example/exporter</p>
+      </div>
+      <button type="button" class="necto-button necto-button-quiet necto-button-danger">Remove</button>
+    </div>
+    <p class="necto-caption">Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection.</p>
+    <h3 class="necto-section-title">Plugin events</h3>
+    <input class="necto-field" type="search" placeholder="Search plugin IDs" aria-label="Search plugin IDs" />
+    ${[
+      ["Target Notes", "com.example.target-notes", "1.0.0, 2.0.0", true],
+      ["com.example.absent", "com.example.absent", "Not currently installed or connected", false],
+    ].map(([name, id, detail, included]) => `
+      <div class="necto-row">
+        <div class="necto-row-label">${name}<p class="necto-row-hint">${id} · ${detail}</p></div>
+        <button type="button" class="necto-switch" role="switch" aria-checked="${included}" aria-label="Include ${id} in event collection"></button>
+      </div>`).join("")}
+    <p class="necto-caption">Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent.</p>
+  </div>`;
+
+const exporterDiagnosticsPage = () => `
+  <div class="necto-body" style="padding: var(--necto-space-3)">
+    <button type="button" class="necto-button necto-button-quiet" data-exporter-back>‹ Usage data collection</button>
+    <div style="display:flex;align-items:baseline;justify-content:space-between">
+      <h3 class="necto-section-title">Exporter diagnostics</h3>
+      <button type="button" class="necto-button necto-button-quiet">Copy all</button>
+    </div>
+    <div class="necto-row">
+      <span class="necto-caption">14:32:01</span>
+      <span class="necto-caption">exporter</span>
+      <div class="necto-row-label">Event exporter registered<p class="necto-row-hint">com.example.exporter</p></div>
     </div>
   </div>`;
 
@@ -608,12 +649,22 @@ const settingsPane = (page = "general", updates = false) => `
     <div class="win-bar"><span class="win-heading">${gearIcon}<span>Settings</span></span></div>
     <div style="display: flex; min-height: 0; flex: 1; padding-left: var(--necto-space-3)">
       ${settingsNav(page, updates)}
-      ${page === "general" ? generalPage(updates) : page === "plugins" ? pluginsPage(updates) : page === "shell-detail" ? shellDetailPage() : shellAccessPage()}
+      ${page === "general" ? generalPage(updates) : page === "plugins" ? pluginsPage(updates) : page === "exporter" ? eventExporterPage() : page === "exporter-diagnostics" ? exporterDiagnosticsPage() : page === "shell-detail" ? shellDetailPage() : shellAccessPage()}
     </div>
   </div>`;
 
 document.getElementById("settings").innerHTML = `<div class="win">${sidebar(true, true)}${settingsPane("general", true)}</div>`;
 document.getElementById("settings-plugins").innerHTML = `<div class="win">${sidebar(true, true)}${settingsPane("plugins", true)}</div>`;
+document.getElementById("settings-exporter").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("exporter")}</div>`;
+document.getElementById("settings-exporter-diagnostics").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("exporter-diagnostics")}</div>`;
+for (const id of ["settings-exporter", "settings-exporter-diagnostics"]) {
+  const frame = document.getElementById(id);
+  frame.addEventListener("click", (event) => {
+    const page = event.target.closest("[data-exporter-diagnostics]") ? "exporter-diagnostics"
+      : event.target.closest("[data-exporter-back]") ? "exporter" : null;
+    if (page) frame.innerHTML = `<div class="win">${sidebar(true)}${settingsPane(page)}</div>`;
+  });
+}
 document.getElementById("settings-shell").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("shell")}</div>`;
 document.getElementById("settings-shell-detail").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("shell-detail")}</div>`;
 
@@ -688,50 +739,101 @@ const grants = [
   ["necto.desktop.targets.list", "Necto", "Which apps and devices are connected."],
 ];
 
-const approvePane = () => `
+const exporterShellGrant = `
+  <div class="necto-grant" style="display:block">
+    <div class="necto-grant-key">Run shell commands</div>
+    <p class="necto-grant-what">Runs Bash commands on this Mac, subject to the Shell Access policy in Settings.</p>
+    <div style="margin-top:var(--necto-space-2)">
+      <p class="necto-caption">Purpose · provided by the author</p>
+      <p class="necto-grant-what">Checks the Git status of your workspace.</p>
+    </div>
+    <div style="margin-top:var(--necto-space-2)">
+      <p class="necto-caption">Requested commands</p>
+      <code>/usr/bin/git status --short</code>
+    </div>
+    <div style="margin-top:var(--necto-space-2)">
+      <p class="necto-caption">Capability identifier</p>
+      <code class="necto-caption">necto.desktop.shell.execute</code>
+    </div>
+  </div>`;
+
+const exporterShellChoices = `
+  <h3 class="necto-section-title" id="exporter-shell-choices">Choose Shell Access</h3>
+  <div role="radiogroup" aria-labelledby="exporter-shell-choices">
+    ${[
+      ["full", "Full access", "Run any shell command without confirmation."],
+      ["commands", "Command approval", "Run only the exact commands listed in the details below."],
+      ["protected", "Protected", "Block this exporter's shell requests."],
+    ].map(([value, name, hint]) => `
+      <label class="necto-row">
+        <input type="radio" name="exporter-shell-access" value="${value}">
+        <span class="necto-row-label">${name}<span class="necto-row-hint" style="display:block">${hint}</span></span>
+      </label>`).join("")}
+  </div>`;
+
+const approvePane = (exporterShell = null) => {
+  const exporter = exporterShell !== null;
+  const titleID = exporter ? `grant-exporter-${exporterShell}-title` : "grant-title";
+  return `
   <div class="necto-app">
     <div class="win-bar"><span class="win-heading">${gearIcon}<span>Settings</span></span></div>
     <div class="necto-dialog-scrim">
-      <div class="necto-dialog" role="dialog" aria-modal="true" aria-labelledby="grant-title">
+      <div class="necto-dialog" role="dialog" aria-modal="true" aria-labelledby="${titleID}">
         <div class="necto-dialog-head">
-          <div class="necto-dialog-title" id="grant-title">Update Target Notes?</div>
-          <p class="necto-caption">
-            0.1.0 by Example Author · web assets only, no native code
-          </p>
+          <div class="necto-dialog-title" id="${titleID}">${exporter ? "Install Example Exporter?" : "Update Target Notes?"}</div>
         </div>
 
-        <div class="necto-dialog-body">
-          <div class="necto-notice necto-notice-danger" style="margin-bottom: var(--necto-space-3)">
+        <div class="necto-dialog-body" style="max-height:400px;overflow-y:auto">
+          <p class="necto-caption" style="margin:0 0 var(--necto-space-2)">
+            0.1.0 by Example Author · web assets only, no native code
+          </p>
+          ${exporter ? `<div class="necto-notice" style="margin-bottom: var(--necto-space-3)"><div>
+            <span class="necto-notice-title">Allow event collection</span>
+            <p>Necto activity and usage events from current and future plugins will be shared with this exporter.
+            Existing plugin exclusions are preserved. You can exclude individual plugins at any time.
+            Remove the exporter to stop all collection.</p>
+          </div></div>` : `<div class="necto-notice necto-notice-danger" style="margin-bottom: var(--necto-space-3)">
             <div>
               <span class="necto-notice-title">Update Target Notes</span>
               <p>The ID matches, but Necto cannot verify the author of local files.
               Only update if you trust their source. This keeps existing permissions
               and settings, including Shell Access.</p>
             </div>
-          </div>
+          </div>`}
 
-          <p class="necto-caption" style="margin: 0 0 var(--necto-space-2)">com.example.target-notes</p>
-          <p class="necto-caption" style="margin: 0 0 var(--necto-space-2)">/Users/me/Downloads/target-notes.zip</p>
 
-          ${grants.map(([name, owner, what]) => `
-            <div class="necto-grant">
-              <span class="necto-caption">${owner}</span>
-              <span class="necto-grant-key">${name}<p class="necto-grant-what">${what}</p></span>
+          ${exporterShell === "global" ? `<div class="necto-notice necto-notice-danger" style="margin-bottom: var(--necto-space-2)"><div>
+            <span class="necto-notice-title">Global Full Access is enabled</span>
+            <p>The global setting lets this exporter run any shell command. Registering it keeps its individual Shell Access settings.</p>
+          </div></div>` : ""}
+          ${exporterShell === "choose" ? exporterShellChoices : ""}
+          ${exporterShell === "choose" || exporterShell === "global" ? exporterShellGrant : ""}
+
+          ${(exporter ? [] : grants).map(([name, owner, what]) => `
+            <div class="necto-grant" style="display:block">
+              <p class="necto-grant-what">${what}</p>
+              <p class="necto-caption" style="margin-top:var(--necto-space-2)">Capability identifier</p>
+              <code class="necto-caption">${name}</code>
             </div>`).join("")}
 
-          <p class="necto-caption" style="margin: var(--necto-space-3) 0">
-            Installing is the agreement. Declining installs nothing, and an update that
-            binds to something new asks again.
-          </p>
+          <div style="margin-top:var(--necto-space-3)">
+            <div class="necto-label">${exporter ? "Exporter ID" : "Plugin ID"}</div>
+            <p class="necto-caption" style="margin:var(--necto-space-1) 0">Identifies this package across versions.</p>
+            <p class="necto-caption" style="margin:0 0 var(--necto-space-2)"><code>${exporter ? "com.example.exporter" : "com.example.target-notes"}</code></p>
+            <div class="necto-label">Installation source</div>
+            <p class="necto-caption" style="margin:var(--necto-space-1) 0">${exporter ? "github.com/example/exporter v1.0.0" : "/Users/me/Downloads/target-notes.zip"}</p>
+          </div>
         </div>
 
+        <p class="necto-caption approval-hint" style="text-align:right;padding:0 var(--necto-space-4);margin:var(--necto-space-2) 0 0">${exporterShell === "choose" ? "Choose Shell Access to enable installation." : "Installing is the agreement. An update that binds to something new asks again."}</p>
         <div class="necto-dialog-actions">
-          <button type="button" class="necto-button necto-button-quiet">Cancel</button>
-          <button type="button" class="necto-button necto-button-primary">Update</button>
+          <button type="button" class="necto-button necto-button-quiet">${exporter ? "Reject" : "Cancel"}</button>
+          <button type="button" class="necto-button necto-button-primary"${exporterShell === "choose" ? " disabled" : ""}>${exporter ? "Install and allow collection" : "Update"}</button>
         </div>
       </div>
     </div>
   </div>`;
+};
 
 const failedPane = () => `
   <div class="necto-app">
@@ -762,6 +864,16 @@ const failedPane = () => `
 
 document.getElementById("plugins-manage").innerHTML = `<div class="win">${sidebar(true)}${settingsPane("plugins")}</div>`;
 document.getElementById("plugins-approve").innerHTML = `<div class="win">${sidebar(true)}${approvePane()}</div>`;
+document.getElementById("plugins-approve-exporter").innerHTML = `<div class="win">${sidebar(true)}${approvePane("none")}</div>`;
+const exporterShellFrame = document.getElementById("plugins-approve-exporter-shell");
+exporterShellFrame.innerHTML = `<div class="win">${sidebar(true)}${approvePane("choose")}</div>`;
+exporterShellFrame.addEventListener("change", (event) => {
+  if (event.target.name === "exporter-shell-access") {
+    exporterShellFrame.querySelector(".necto-button-primary").disabled = false;
+    exporterShellFrame.querySelector(".approval-hint").textContent = "Installing is the agreement. An update that binds to something new asks again.";
+  }
+});
+document.getElementById("plugins-approve-exporter-global").innerHTML = `<div class="win">${sidebar(true)}${approvePane("global")}</div>`;
 document.getElementById("plugins-failed").innerHTML = `<div class="win">${sidebar(true)}${failedPane()}</div>`;
 
 // -- copy buttons on code blocks -------------------------------------------

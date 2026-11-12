@@ -20,6 +20,18 @@ import Foundation
 /// Unsupported keywords are ignored. Constraints a schema cannot express remain
 /// the provider's responsibility.
 public enum NectoJSONSchema {
+    public enum StringValues: Sendable, Equatable {
+        case values([String])
+        case unavailable(StringValuesUnavailableReason)
+    }
+
+    public enum StringValuesUnavailableReason: Sendable, Equatable {
+        case unsupportedSchema
+        case propertyNotDeclared
+        case enumNotDeclared
+        case notStringEnum
+    }
+
     public struct ValidationFailure: Sendable, Hashable, Error, CustomStringConvertible {
         /// Where validation failed. Empty for the root value.
         public let path: String
@@ -33,6 +45,22 @@ public enum NectoJSONSchema {
         public var description: String {
             path.isEmpty ? reason : "\(path): \(reason)"
         }
+    }
+
+    /// Reads the string enum directly declared under `properties` for the given property.
+    /// Preserves the declared values and order without interpreting other schema keywords.
+    public static func declaredStringValues(for property: String, in schema: NectoJSONValue) -> StringValues {
+        guard let schema = schema.objectValue else { return .unavailable(.unsupportedSchema) }
+        guard let properties = schema["properties"] else { return .unavailable(.propertyNotDeclared) }
+        guard let properties = properties.objectValue else { return .unavailable(.unsupportedSchema) }
+        guard let propertySchema = properties[property] else { return .unavailable(.propertyNotDeclared) }
+        guard let propertySchema = propertySchema.objectValue else { return .unavailable(.unsupportedSchema) }
+        guard let declaration = propertySchema["enum"] else { return .unavailable(.enumNotDeclared) }
+        guard let entries = declaration.arrayValue else { return .unavailable(.notStringEnum) }
+
+        let values = entries.compactMap(\.stringValue)
+        guard values.count == entries.count else { return .unavailable(.notStringEnum) }
+        return .values(values)
     }
 
     /// Validates a value against a schema, reporting only the first failure.

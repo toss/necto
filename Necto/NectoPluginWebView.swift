@@ -7,6 +7,7 @@ import NectoMacService
 import Foundation
 import SwiftUI
 import WebKit
+import os
 
 /// Loads a plugin's web assets and forwards its `NectoBridge` requests to the registry.
 struct NectoPluginWebView: NSViewRepresentable {
@@ -24,8 +25,8 @@ struct NectoPluginWebView: NSViewRepresentable {
     var find: NectoFindSession?
     var isVisible = true
 
-    func makeCoordinator() -> NectoPluginPage {
-        NectoPluginPage(plugin: plugin, registry: registry, target: target, find: find,
+    func makeCoordinator() -> NectoWebPage {
+        NectoWebPage(package: plugin.package, registry: registry, target: target, find: find,
                         uiFontFamily: uiFontFamily, codeFontFamily: codeFontFamily,
                         locale: locale, isDark: colorScheme == .dark)
     }
@@ -38,36 +39,57 @@ struct NectoPluginWebView: NSViewRepresentable {
         context.coordinator.setVisible(isVisible, find: find, scale: textScale)
     }
 
-    static func dismantleNSView(_ webView: WKWebView, coordinator: NectoPluginPage) { coordinator.invalidate() }
+    static func dismantleNSView(_ webView: WKWebView, coordinator: NectoWebPage) { coordinator.invalidate() }
 }
 
 /// A document and its bridge have one lifetime, even when their presenting window changes.
 @MainActor
-final class NectoPluginPage {
+final class NectoWebPage {
     let webView: WKWebView
     private let bridge: NectoBridgeCoordinator
     private var invalidated = false
 
-    init(plugin: NectoInstalledPlugin, registry: NectoPluginRegistry, target: NectoTarget?,
-         find: NectoFindSession? = nil,
-         uiFontFamily: String = NectoFontPreference.defaultUI,
-         codeFontFamily: String = NectoFontPreference.defaultCode,
-         locale: String = "en", isDark: Bool = false,
-         websiteDataStore: WKWebsiteDataStore? = nil) {
-        let originHost = plugin.principal.map(NectoPluginSchemeHandler.originHost(for:))
+    init(
+        package: NectoInstalledPackage,
+        registry: NectoPluginRegistry,
+        target: NectoTarget?,
+        find: NectoFindSession? = nil,
+        uiFontFamily: String = NectoFontPreference.defaultUI,
+        codeFontFamily: String = NectoFontPreference.defaultCode,
+        locale: String = "en",
+        isDark: Bool = false,
+        websiteDataStore: WKWebsiteDataStore? = nil,
+        inactiveSchedulingPolicy: WKPreferences.InactiveSchedulingPolicy = .suspend,
+        eventDispatcher: NectoEventDispatcher? = nil,
+        diagnostics: NectoDiagnosticsLog? = nil,
+        usageLogger: NectoUsageLogger? = nil
+    ) {
+        let originHost = package.principal.map(NectoPluginSchemeHandler.originHost(for:))
             ?? UUID().uuidString.lowercased()
-        bridge = NectoBridgeCoordinator(plugin: plugin, originHost: originHost, registry: registry, target: target, find: find,
-                                        uiFontFamily: uiFontFamily, codeFontFamily: codeFontFamily,
-                                        locale: locale, isDarkAppearance: isDark)
+        bridge = NectoBridgeCoordinator(
+            package: package,
+            originHost: originHost,
+            registry: registry,
+            target: target,
+            find: find,
+            uiFontFamily: uiFontFamily,
+            codeFontFamily: codeFontFamily,
+            locale: locale,
+            isDarkAppearance: isDark,
+            eventDispatcher: eventDispatcher,
+            diagnostics: diagnostics,
+            usageLogger: usageLogger
+        )
         let controller = WKUserContentController()
         controller.addUserScript(NectoBridgeCoordinator.localeUserScript(locale))
         controller.addScriptMessageHandler(bridge, contentWorld: .page, name: NectoBridgeCoordinator.handlerName)
         let configuration = WKWebViewConfiguration()
         // Unregistered previews must not inherit or persist another installation's data.
-        configuration.websiteDataStore = plugin.principal == nil ? .nonPersistent() : (websiteDataStore ?? .default())
+        configuration.websiteDataStore = package.principal == nil ? .nonPersistent() : (websiteDataStore ?? .default())
         configuration.userContentController = controller
+        configuration.preferences.inactiveSchedulingPolicy = inactiveSchedulingPolicy
         configuration.setURLSchemeHandler(
-            NectoPluginSchemeHandler(originHost: originHost, archive: plugin.archive),
+            NectoPluginSchemeHandler(originHost: originHost, archive: package.archive),
             forURLScheme: NectoPluginSchemeHandler.scheme
         )
         webView = WKWebView(frame: .zero, configuration: configuration)
@@ -117,15 +139,29 @@ final class NectoPluginPage {
         webView.loadHTMLString("", baseURL: nil)
         webView.removeFromSuperview()
     }
+
+    func shutdownExporter(deadlineAt: Date) async throws {
+        guard !invalidated else { return }
+        try await bridge.shutdownExporter(deadlineAt: deadlineAt)
+    }
 }
 
 @MainActor
 final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, WKNavigationDelegate {
     static let handlerName = "necto"
 
-    private let plugin: NectoInstalledPlugin
+    private let package: NectoInstalledPackage
     private let originHost: String
     private let registry: NectoPluginRegistry
+    private let eventDispatcher: NectoEventDispatcher?
+    private let diagnostics: NectoDiagnosticsLog?
+    private let usageLogger: NectoUsageLogger?
+    private var exporterRegistrationID: UUID?
+    private var exporterRegistrationPending = false
+    private let exporterShutdown = OSAllocatedUnfairLock(initialState: false)
+    private var exporterShuttingDown: Bool { exporterShutdown.withLock { $0 } }
+    private var documentID = UUID()
+    private var exporterCleanup: Task<Void, Never>?
     weak var find: NectoFindSession?
     private var target: NectoTarget?
 
@@ -162,7 +198,7 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
     weak var webView: WKWebView?
 
     init(
-        plugin: NectoInstalledPlugin,
+        package: NectoInstalledPackage,
         originHost: String,
         registry: NectoPluginRegistry,
         target: NectoTarget?,
@@ -170,11 +206,17 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         uiFontFamily: String,
         codeFontFamily: String,
         locale: String,
-        isDarkAppearance: Bool
+        isDarkAppearance: Bool,
+        eventDispatcher: NectoEventDispatcher? = nil,
+        diagnostics: NectoDiagnosticsLog? = nil,
+        usageLogger: NectoUsageLogger? = nil
     ) {
-        self.plugin = plugin
+        self.package = package
         self.originHost = originHost
         self.registry = registry
+        self.eventDispatcher = eventDispatcher
+        self.diagnostics = diagnostics
+        self.usageLogger = usageLogger
         self.target = target
         self.find = find
         self.uiFontFamily = uiFontFamily
@@ -184,6 +226,9 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
     }
 
     deinit {
+        if let registrationID = exporterRegistrationID, let eventDispatcher {
+            Task { await eventDispatcher.unregisterExporter(registrationID: registrationID) }
+        }
         recoveryTask?.cancel()
         for task in invokeTasks.values { task.cancel() }
         for task in streamTasks.values { task.cancel() }
@@ -222,6 +267,7 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         resetPage()
         recoveryTask?.cancel()
         recoveryTask = nil
+        guard !exporterShuttingDown else { return }
         let now = ContinuousClock().now
         if let lastTermination, now - lastTermination >= .seconds(60) {
             recentTerminations = 0
@@ -229,7 +275,7 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         lastTermination = now
         recentTerminations += 1
         guard recentTerminations <= 3 else {
-            NSLog("Necto: automatic recovery stopped for %@ after repeated content-process termination. Disable and enable the plugin to retry.", plugin.id)
+            NSLog("Necto: automatic recovery stopped for %@ after repeated content-process termination. Disable and enable the plugin to retry.", package.id)
             return
         }
         let delay = 1 << (recentTerminations - 1)
@@ -275,12 +321,48 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
     }
 
     private func resetPage() {
+        documentID = UUID()
+        exporterRegistrationPending = false
+        if let registrationID = exporterRegistrationID, let eventDispatcher {
+            exporterRegistrationID = nil
+            let previousCleanup = exporterCleanup
+            exporterCleanup = Task {
+                await previousCleanup?.value
+                await eventDispatcher.unregisterExporter(registrationID: registrationID)
+            }
+        }
         isReady = false
         bufferedEvents.removeAll()
         for task in invokeTasks.values { task.cancel() }
         invokeTasks.removeAll()
         for task in streamTasks.values { task.cancel() }
         streamTasks.removeAll()
+    }
+
+    func shutdownExporter(deadlineAt: Date) async throws {
+        guard !exporterShuttingDown else { return }
+        exporterShutdown.withLock { $0 = true }
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        let document = documentID
+        if let registrationID = exporterRegistrationID, let eventDispatcher {
+            exporterRegistrationID = nil
+            await eventDispatcher.unregisterExporter(registrationID: registrationID)
+        }
+        await exporterCleanup?.value
+        // The receiver enqueues accepted events on this queue. Submit their JS
+        // deliveries before submitting the shutdown callback, without a replay queue.
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        try Task.checkCancellation()
+        guard documentID == document, let webView else { return }
+        _ = try await webView.callAsyncJavaScript(
+            "await window.__nectoExporterShutdown?.({ deadlineAt }); return null;",
+            arguments: ["deadlineAt": deadlineAt.timeIntervalSince1970 * 1000],
+            in: nil,
+            contentWorld: .page
+        )
     }
 
     /// A device plugin carries the stylesheet from the app that built it. Reasserting
@@ -350,9 +432,9 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         switch type {
         case "context":
             let context = await registry.context(
-                pluginID: plugin.manifest.id,
+                pluginID: package.manifest.id,
                 target: target,
-                expectedPrincipal: plugin.principal
+                expectedPrincipal: package.principal
             )
             return Self.successReply(context)
 
@@ -365,17 +447,27 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
             }
             return Self.successReply(NectoJSONValue.null)
 
+        case "log":
+            return await recordEvent(body)
+
+        case "registerExporter":
+            return await registerExporter()
+
+        case "diagnostic":
+            return await recordDiagnostic(body)
+
         case "invoke":
             guard let operationID = body["operationID"] as? String else {
                 return Self.failureReply(.init(code: .invalidInput, message: "operationID is missing"))
             }
             do {
                 let output = try await registry.invoke(
-                    pluginID: plugin.manifest.id,
+                    pluginID: package.manifest.id,
                     operationID: operationID,
                     input: Self.jsonValue(from: body["input"]),
                     target: target,
-                    expectedPrincipal: plugin.principal
+                    expectedPrincipal: package.principal,
+                    channel: .web
                 )
                 return Self.successReply(output)
             } catch {
@@ -399,17 +491,123 @@ final class NectoBridgeCoordinator: NSObject, WKScriptMessageHandlerWithReply, W
         }
     }
 
+    private func recordEvent(_ body: [String: Any]) async -> [String: Any] {
+        guard let principal = package.principal else {
+            return Self.failureReply(
+                .init(
+                    code: .operationUnavailable,
+                    message: "Only an installed plugin can record usage events"
+                )
+            )
+        }
+        do {
+            try await registry.recordEvent(
+                pluginID: package.id,
+                input: Self.jsonValue(from: body["input"]),
+                target: target,
+                expectedPrincipal: principal,
+                channel: .web
+            )
+            return Self.successReply(NectoJSONValue.null)
+        } catch {
+            return Self.failureReply(Self.bridgeError(from: error, operationID: "log"))
+        }
+    }
+
+    /// The exporter runtime supplies this dispatcher only to its installed page.
+    /// Registration goes directly to the dispatcher, not through registry subscriptions.
+    private func registerExporter() async -> [String: Any] {
+        guard package.source == .installed, package.principal != nil,
+              package.manifest.type == .eventExporter, let eventDispatcher else {
+            return Self.failureReply(.init(code: .operationUnavailable,
+                message: "Only an installed event exporter can receive usage events"))
+        }
+        guard !exporterShuttingDown else {
+            return Self.failureReply(
+                .init(
+                    code: .operationUnavailable,
+                    message: "The exporter is shutting down"
+                )
+            )
+        }
+        guard exporterRegistrationID == nil, !exporterRegistrationPending else {
+            return Self.failureReply(.init(code: .operationUnavailable,
+                message: "This exporter is already registered"))
+        }
+        exporterRegistrationPending = true
+        let document = documentID
+        await exporterCleanup?.value
+        guard documentID == document, !exporterShuttingDown, !Task.isCancelled else {
+            return Self.failureReply(.init(code: .operationUnavailable, message: "The exporter document was closed"))
+        }
+        do {
+            let registrationID = try await eventDispatcher.registerExporter { [weak self, exporterShutdown] event in
+                guard let self else { return }
+                // Close delivery even if shutdown starts before registration returns.
+                // Holding the lock through enqueue also makes the shutdown barrier
+                // follow every accepted delivery on the serial main queue.
+                exporterShutdown.withLock { shuttingDown in
+                    guard !shuttingDown else { return }
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self, self.documentID == document else { return }
+                        self.evaluate("window.__nectoExporterReceive?.(\(Self.jsObject(event.jsonValue)))")
+                    }
+                }
+            }
+            guard documentID == document, !exporterShuttingDown, !Task.isCancelled else {
+                await eventDispatcher.unregisterExporter(registrationID: registrationID)
+                return Self.failureReply(.init(code: .operationUnavailable, message: "The exporter document was closed"))
+            }
+            exporterRegistrationID = registrationID
+            exporterRegistrationPending = false
+            await usageLogger?.appStartedIfNeeded(registrationID: registrationID)
+            await diagnostics?.append(.info, .exporter, "Event exporter registered", detail: package.id)
+            return Self.successReply(NectoJSONValue.null)
+        } catch {
+            if documentID == document { exporterRegistrationPending = false }
+            await diagnostics?.append(.failure, .exporter, "Event exporter registration failed",
+                                      detail: "\(package.id): \(error)")
+            return Self.failureReply(Self.bridgeError(from: error, operationID: "registerExporter"))
+        }
+    }
+
+    private func recordDiagnostic(_ body: [String: Any]) async -> [String: Any] {
+        guard package.source == .installed, package.principal != nil,
+              package.manifest.type == .eventExporter, let diagnostics else {
+            return Self.failureReply(.init(code: .operationUnavailable,
+                message: "Exporter diagnostics are not available to this page"))
+        }
+        guard let level = body["level"] as? String,
+              let severity = NectoDiagnosticsLog.Severity(rawValue: level),
+              let message = body["message"] as? String, !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return Self.failureReply(.init(code: .invalidInput, message: "A diagnostic requires a level and message"))
+        }
+        var detail = package.id
+        if let metadata = body["metadata"] {
+            guard metadata is [String: Any], JSONSerialization.isValidJSONObject(metadata),
+                  let data = try? JSONSerialization.data(withJSONObject: metadata, options: [.sortedKeys]),
+                  let json = String(data: data, encoding: .utf8) else {
+                return Self.failureReply(.init(code: .invalidInput, message: "Diagnostic metadata must be a JSON object"))
+            }
+            detail += "\n" + json
+        }
+        // Local diagnostics never enter the usage event dispatcher.
+        await diagnostics.append(severity, .exporter, message, detail: detail)
+        return Self.successReply(NectoJSONValue.null)
+    }
+
     private func startSubscription(operationID: String, body: [String: Any]) async -> [String: Any] {
         nextSubscriptionNumber += 1
         let subscriptionID = "s\(nextSubscriptionNumber)"
 
         do {
             let stream = try await registry.subscribe(
-                pluginID: plugin.manifest.id,
+                pluginID: package.manifest.id,
                 operationID: operationID,
                 input: Self.jsonValue(from: body["input"]),
                 target: target,
-                expectedPrincipal: plugin.principal
+                expectedPrincipal: package.principal,
+                channel: .web
             )
 
             streamTasks[subscriptionID] = Task { [weak self] in

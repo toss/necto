@@ -84,6 +84,7 @@ listPane.setAttribute("aria-labelledby", actionTab.id);
 function changeMode(next: typeof mode): void {
   if (acting || loading || mode === next) return;
   mode = next;
+  necto.log("control.mode_changed", { mode });
   query = "";
   filter.value = "";
   filter.placeholder = t(mode === "actions" ? "Filter elements" : "Filter accessibility content");

@@ -2,7 +2,13 @@
 //  Copyright (c) 2026 Viva Republica, Inc.
 //
 
-import type { NectoBridgeError, NectoBridgeErrorCode, NectoJSONObject } from "./types";
+import type {
+  NectoBridgeError,
+  NectoBridgeErrorCode,
+  NectoEvent,
+  NectoExporterShutdownContext,
+  NectoJSONObject,
+} from "./types";
 
 /**
  * The WebKit message handler the host registers.
@@ -26,6 +32,10 @@ declare global {
       error: { code: NectoBridgeErrorCode; message: string; operationID?: string },
     ) => void;
     __nectoBridgeStreamEnd?: (subscriptionID: string) => void;
+    /** Installed before exporter registration so the host can deliver immediately. */
+    __nectoExporterReceive?: (event: NectoEvent) => void;
+    /** The host awaits this callback during normal app shutdown. */
+    __nectoExporterShutdown?: (context: NectoExporterShutdownContext) => Promise<void>;
   }
 }
 

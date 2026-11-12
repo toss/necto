@@ -121,14 +121,17 @@ echo
 echo "==> public web packages"
 script/pack-web-package.mjs WebPackages/Bridge "$VERSION" Build >/dev/null
 script/pack-web-package.mjs WebPackages/CreateNectoPlugin "$VERSION" Build >/dev/null
-BRIDGE_ARCHIVE="Build/necto-bridge-$VERSION.tgz"
-SCAFFOLD_ARCHIVE="Build/create-necto-plugin-$VERSION.tgz"
+WEB_ARCHIVES=("Build/necto-bridge-$VERSION.tgz" "Build/create-necto-plugin-$VERSION.tgz")
+# The workflow can use this script to rebuild tags from before the exporter was added.
+if [ -f WebPackages/HTTPExporter/package.json ]; then
+  script/pack-web-package.mjs WebPackages/HTTPExporter "$VERSION" Build >/dev/null
+  WEB_ARCHIVES+=("Build/necto-http-exporter-$VERSION.tgz")
+fi
 
 echo
 echo "archived: $ARCHIVE ($(du -h "$ARCHIVE" | cut -f1 | tr -d ' '))"
 echo "archived: $CHECKSUM"
-echo "archived: $BRIDGE_ARCHIVE"
-echo "archived: $SCAFFOLD_ARCHIVE"
+printf 'archived: %s\n' "${WEB_ARCHIVES[@]}"
 
 if [ "$DRY_RUN" == "--dry-run" ]; then
   echo "dry run: no tag, no push, no release."
@@ -139,7 +142,7 @@ echo
 echo "==> tag and release"
 git tag "$VERSION"
 git push "https://github.com/$REPOSITORY.git" "$VERSION"
-gh release create "$VERSION" "$ARCHIVE" "$CHECKSUM" "$BRIDGE_ARCHIVE" "$SCAFFOLD_ARCHIVE" \
+gh release create "$VERSION" "$ARCHIVE" "$CHECKSUM" "${WEB_ARCHIVES[@]}" \
   --repo "$REPOSITORY" \
   --verify-tag \
   --title "Necto $VERSION" \

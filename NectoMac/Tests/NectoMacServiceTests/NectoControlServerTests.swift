@@ -20,6 +20,9 @@ private struct StubHandler: NectoControlHandling {
     var invokeForever = false
     var installForever = false
     var echoScope = false
+    var warning: NectoJSONValue?
+
+    func exporterWarning() async -> NectoJSONValue? { warning }
 
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue {
         let path: String
@@ -102,7 +105,7 @@ private final class TestClient {
 }
 
 private func makeServer(
-    _ handler: StubHandler = StubHandler()
+    _ handler: any NectoControlHandling = StubHandler()
 ) throws -> (server: NectoControlServer, url: URL) {
     let url = FileManager.default.temporaryDirectory
         .appending(path: "necto-control-test-\(UUID().uuidString.prefix(8)).sock")
@@ -113,6 +116,31 @@ private func makeServer(
 
 @Suite("Control socket", .timeLimit(.minutes(1)))
 struct NectoControlServerTests {
+    private static let exporterWarning: NectoJSONValue = [
+        "exporters": [["id": "sample", "name": "Sample", "requestsShellAccess": false]],
+    ]
+
+    @Test("warnings precede the result only when the client opts in", arguments: [nil as Bool?, false, true])
+    func warningsOptIn(optIn: Bool?) async throws {
+        let bridge = NectoControlBridge(
+            registry: NectoPluginRegistry(), connectedApps: { [] }, exporterWarning: { Self.exporterWarning }
+        )
+        let (server, url) = try makeServer(bridge)
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        try await client.session.send(NectoControlRequest(id: "targets", kind: .targets, includeWarnings: optIn))
+        if optIn == true {
+            let warning = try await client.receive()
+            #expect(warning.id == "targets")
+            #expect(warning.kind == .warning)
+            #expect(warning.value == Self.exporterWarning)
+        }
+        let response = try await client.receive()
+        #expect(response.id == "targets")
+        #expect(response.kind == .result)
+        #expect(response.value == ["targets": []])
+    }
+
     @Test("discovery forwards ownership and operation selectors")
     func discoveryScopeRoundTrip() async throws {
         let (server, url) = try makeServer(StubHandler(echoScope: true))
@@ -146,6 +174,61 @@ struct NectoControlServerTests {
         let response = try await client.receive()
         #expect(response.kind == .result)
         #expect(response.value?["path"]?.stringValue == repository)
+    }
+
+    @Test("exporter review, approval and rejection route through the control bridge")
+    func exporterRoundTrip() async throws {
+        let bridge = NectoControlBridge(
+            registry: NectoPluginRegistry(), connectedApps: { [] },
+            reviewExporter: { ["pending": false] },
+            approveExporter: { ["shellAccess": $0.shellAccess.map { .string($0.rawValue) } ?? .null] },
+            rejectExporter: { ["rejected": true, "pluginID": "sample"] },
+            exporterWarning: { Self.exporterWarning }
+        )
+        let (server, url) = try makeServer(bridge)
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        for input: NectoJSONValue? in [nil, .null, .object([:])] {
+            try await client.session.send(NectoControlRequest(kind: .reviewExporter, input: input, includeWarnings: true))
+            #expect(try await client.receive().value == ["pending": false])
+            try await client.session.send(NectoControlRequest(kind: .approveExporter, input: input, includeWarnings: true))
+            #expect(try await client.receive().value == ["shellAccess": .null])
+            try await client.session.send(NectoControlRequest(kind: .rejectExporter, input: input, includeWarnings: true))
+            #expect(try await client.receive().value == ["rejected": true, "pluginID": "sample"])
+        }
+        for choice in NectoExporterApproval.ShellAccess.allCases {
+            let input = NectoExporterApproval(shellAccess: choice).input
+            try await client.session.send(NectoControlRequest(kind: .approveExporter, input: input))
+            #expect(try await client.receive().value == ["shellAccess": .string(choice.rawValue)])
+        }
+    }
+
+    @Test("exporter requests reject scope selectors and unsupported input", arguments: [
+        NectoControlRequest.Kind.reviewExporter, .approveExporter, .rejectExporter,
+    ])
+    func validatesExporterRequest(kind: NectoControlRequest.Kind) async throws {
+        let (server, url) = try makeServer()
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        let scoped: [NectoControlRequest] = [
+            .init(kind: kind, pluginID: "sample"), .init(kind: kind, operationID: "read"),
+            .init(kind: kind, app: "com.example.app"), .init(kind: kind, device: "device"),
+            .init(kind: kind, desktop: true), .init(kind: kind, desktop: false),
+        ]
+        let invalidInputs: [NectoJSONValue] = ["full", [], ["path": "/tmp/exporter"],
+            ["shellAccess": true], ["shellAccess": .null], ["shellAccess": "protected"],
+            ["shellAccess": "commands", "commands": ["echo hello"]],
+        ]
+        let inputs = kind == .approveExporter ? invalidInputs : invalidInputs + [["shellAccess": "none"]]
+        for request in scoped + inputs.map({ .init(kind: kind, input: $0) }) {
+            try await client.session.send(request)
+            let response = try await client.receive()
+            #expect(response.kind == .error)
+            #expect(response.error?.code == "INVALID_INPUT")
+        }
+
+        try await client.session.send(NectoControlRequest(kind: kind))
+        #expect(try await client.receive().error?.code == "OPERATION_UNAVAILABLE")
     }
 
     @Test("the socket rejects ambiguous installation sources")
@@ -398,14 +481,21 @@ struct NectoControlServerTests {
         #expect(response.error?.code == "OPERATION_UNAVAILABLE")
     }
 
-    @Test("streams events and then says so when the stream ends")
-    func subscribeDelivers() async throws {
-        let (server, url) = try makeServer()
+    @Test("an opted-in stream gets its warning before any event", arguments: [false, true])
+    func subscribeDelivers(optIn: Bool) async throws {
+        let (server, url) = try makeServer(StubHandler(warning: Self.exporterWarning))
         defer { server.stop() }
 
         let client = try await TestClient(url)
-        try await client.session.send(NectoControlRequest(id: "s1", kind: .subscribe, pluginID: "sample", operationID: "ticks"))
+        try await client.session.send(NectoControlRequest(id: "s1", kind: .subscribe, pluginID: "sample",
+            operationID: "ticks", includeWarnings: optIn ? true : nil))
 
+        if optIn {
+            let warning = try await client.receive()
+            #expect(warning.id == "s1")
+            #expect(warning.kind == .warning)
+            #expect(warning.value == Self.exporterWarning)
+        }
         #expect(try await client.receive().value?["tick"] == .number(1))
         #expect(try await client.receive().value?["tick"] == .number(2))
         #expect(try await client.receive().kind == .end)

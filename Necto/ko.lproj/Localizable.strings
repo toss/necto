@@ -233,3 +233,49 @@
 
 "Search plugins" = "플러그인 검색";
 "No plugins found" = "검색 결과 없음";
+
+/* Event exporter management */
+"Remove the installed event exporter before installing another." = "다른 Exporter를 설치하려면 기존 Exporter를 제거해 주세요.";
+"Allow event collection" = "이벤트 수집 허용";
+"Necto activity and usage events from current and future plugins will be shared with this exporter. Existing plugin exclusions are preserved. You can exclude individual plugins at any time. Remove the exporter to stop all collection." = "Necto 자체 활동과 현재 및 앞으로 설치되는 플러그인의 사용 기록을 이 Exporter에 전달해요. 기존 제외 목록은 유지되며, 개별 플러그인은 언제든 제외할 수 있어요. 전체 수집을 끝내려면 Exporter를 제거해 주세요.";
+"Install and allow collection" = "설치 및 수집 허용";
+"Update and allow collection" = "업데이트 및 수집 허용";
+"Reject" = "거절";
+"Global Full Access is enabled" = "전역 셸 전체 허용이 켜져 있어요";
+"The global setting lets this exporter run any shell command. Registering it keeps its individual Shell Access settings." = "전역 설정에 따라 이 Exporter는 모든 셸 명령어를 실행할 수 있어요. 등록해도 이 Exporter에 저장된 개별 셸 권한은 유지돼요.";
+"The ID matches, but Necto cannot verify the author of local files. Only update if you trust their source. The Shell Access option you choose replaces the saved one." = "ID는 같지만 파일의 제작자는 확인할 수 없어요. 출처를 신뢰할 때만 업데이트해 주세요. 기존 셸 권한은 여기서 선택한 권한으로 바뀌어요.";
+"Choose Shell Access" = "셸 권한 선택";
+"Run any shell command without confirmation." = "모든 셸 명령어를 별도 확인 없이 실행해요.";
+"Run only the exact commands listed in the details below." = "아래 상세 정보에 명시된 명령어만 실행할 수 있어요.";
+"Block this exporter's shell requests." = "이 Exporter의 셸 요청을 차단해요.";
+"Command approval requires at least one shell execution operation, with a description and valid exact commands for each one." = "명령어별 허용을 선택하려면 셸 실행 작업이 하나 이상 있어야 하고, 각 작업에 설명과 실행할 명령어가 정확히 명시되어 있어야 해요.";
+"The author did not describe this operation." = "제작자가 이 작업의 설명을 제공하지 않았어요.";
+"Description from the author" = "제작자가 제공한 설명";
+"The author did not declare exact commands." = "제작자가 실행할 명령어를 명시하지 않았어요.";
+"Commands declared by the author" = "제작자가 명시한 명령어";
+"The declared list contains an invalid command." = "명시된 목록에 유효하지 않은 명령어가 있어요.";
+"Necto could not read exact commands from this declaration." = "Necto가 이 선언에서 실행할 명령어를 읽을 수 없어요.";
+"This version of Necto does not recognize this shell operation's declaration." = "이 버전의 Necto는 이 셸 작업의 선언 형식을 인식하지 못해요.";
+"Event collection" = "이벤트 수집";
+"No event exporter installed. Install one to allow collection. Plugin exclusions are preserved." = "설치된 이벤트 Exporter가 없어요. Exporter를 설치하면 수집을 허용할 수 있어요. 플러그인 제외 목록은 유지돼요.";
+"Search plugin IDs" = "플러그인 ID 검색";
+"Include %@ in event collection" = "%@ 이벤트 수집에 포함";
+"Excluding a plugin stops new events from all apps and versions using its ID. Events already shared with the exporter may still be sent." = "플러그인을 제외하면 같은 ID를 사용하는 모든 앱과 버전의 새 이벤트 전달을 중지해요. 이미 Exporter에 전달한 이벤트는 계속 전송될 수 있어요.";
+"Not currently installed or connected" = "설치되지 않았거나 연결되지 않음";
+"Event Exporter" = "Event Exporter";
+"Usage data collection" = "사용 기록 수집";
+"Plugin events" = "플러그인 이벤트";
+"Exporter diagnostics" = "Exporter 진단 로그";
+"View diagnostics" = "진단 로그 보기";
+"Exporter diagnostics appear here." = "Exporter의 진단 내용을 확인할 수 있어요.";
+"Includes Necto activity and current and future plugins, except excluded IDs. Remove the exporter to stop collection." = "Necto 자체 활동과 현재 및 앞으로 설치되는 플러그인을 포함하며, 제외한 ID는 전달하지 않아요. 수집을 끝내려면 Exporter를 제거해 주세요.";
+
+"Choose Shell Access to enable installation." = "셸 권한을 선택하면 설치할 수 있어요.";
+"Exporter ID" = "Exporter ID";
+"Identifies this package across versions." = "버전이 바뀌어도 같은 플러그인을 구분하는 식별자예요.";
+"Installation source" = "설치 파일 출처";
+"Run shell commands" = "셸 명령 실행";
+"Request shell access" = "셸 권한 요청";
+"Capability identifier" = "기능 식별자";
+"Purpose · provided by the author" = "사용 목적 · 제작자 설명";
+"Requested commands" = "요청하는 명령어";
