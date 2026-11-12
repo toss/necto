@@ -27,6 +27,7 @@
 | 앱까지 도달하는 모든 변경 | `script/build` 실행 후, 앱 실행하기 |
 | SDK의 공개 API | 시뮬레이터를 부팅한 상태에서 `script/build`로 ExampleApp의 SDK 연동까지 빌드하기 |
 | 연결 수명주기, CLI의 디바이스 오퍼레이션 | `script/test e2e` |
+| Android SDK, Mac의 Android 연결 | `SDK/Android/gradlew -p SDK/Android build` 실행 후, 아래 Android 검사 |
 | 계약 변경 | 같은 커밋에서 픽스처 업데이트하기 |
 
 `script/test`는 Swift·Vitest 단위 테스트, 네이티브 캐시·WebView 통합 테스트,
@@ -99,6 +100,25 @@ SDK는 8개 포트 범위에서 빈 포트를 선택하고 Mac은 8개 모두 �
 실기기는 USB로 연결해 사이드바에 나타나는지 확인해요. `connectionRefused`는
 터널이 기기까지 연결됐지만 앱이 수신 대기 중이지 않다는 뜻이에요.
 앱이 실행 중이 아닐 때 나오는 정상 응답이에요.
+
+### Android 연결
+
+에뮬레이터를 부팅하거나 USB 기기를 연결한 뒤 실행해요.
+
+```bash
+script/android-sample <serial>
+```
+
+Android 샘플과 별도의 Necto.app(`im.toss.necto.android-sample`)을 빌드하고, 샘플을
+설치·실행한 뒤 그 Necto를 Ctrl-C까지 띄워 둬요. 이 Necto는 ADB로 샘플을 직접 찾아요.
+실행 중인 상태에서 다른 터미널로 아래 스크립트를 돌려요.
+
+| 스크립트 | 확인하는 것 |
+| --- | --- |
+| `script/test-android-sample` | `necto-cli`로 기본 패널의 모든 오퍼레이션 호출, 스트림 취소와 재구독, 잘못된 입력 거부, 강제 종료 시 타깃이 사라지고 재실행 시 돌아오는지 |
+| `script/test-android-security` | 비공개 소켓에 붙는 비정상 피어: 응답 없는 핸드셰이크, 제한을 벗어난 프레임, 깊은 중첩, 멈춘 프레임, 과도한 동시 요청. 모두 끊기고 다음 연결은 정상이어야 해요 |
+| `script/test-android-artifacts` | SDK AAR이 권한을 선언하지 않는지, 플러그인 모듈이 자기 패널만 싣는지. 실행 중인 앱이 아니라 전체 Gradle 빌드가 필요해요 |
+| `script/test-android-consumer` | 게시된 Maven 아티팩트로 만든 독립 앱 5개가 선택한 모듈만 해석하고 그 패널만 패키징하는지. `--jitpack <tag-or-commit>`을 주면 로컬 게시물 대신 JitPack 아티팩트를 검사해요. 실행 중인 앱은 필요 없어요 |
 
 ## 플러그인 검증하기
 
@@ -264,6 +284,8 @@ Dock에 고정하고 업데이트해 기존 PID가 종료된 뒤 새 PID가 시�
 
 - **시뮬레이터에서의 USB.** 시뮬레이터에는 usbmuxd 경로가 없어요. 루프백을
   사용해요.
+- **에뮬레이터에서의 Android USB.** 에뮬레이터의 ADB 전송은 USB가 아니에요. USB 경로를
+  검증했다고 하려면 실기기에서 Android 검사를 실행하세요.
 - **런타임 증거 없는 외형 확인.** 빌드나 정적 검사만으로 화면을 확인할 수는 없어요.
   Loupe나 권한이 허용된 캡처 경로를 사용하고 필요한 런타임 접근이나 화면 기록
   권한이 없다면 미검증 범위를 명시하세요.
