@@ -10,7 +10,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   build: {
-    outDir: "../../../../SDK/iOS/Sources/NectoPreferencesPlugin/Panels/preferences",
+    outDir: "../../../../SDK/Plugins/Preferences/Panel",
     emptyOutDir: true,
     rollupOptions: {
       output: {

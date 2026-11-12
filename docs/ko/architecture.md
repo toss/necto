@@ -120,7 +120,9 @@ hello의 프로토콜 버전이 다르면 협상 없이 연결을 거부해요.
 
 라이브러리는 Swift 패키지로, 앱 타깃은 `Necto.xcodeproj`로 관리해요.
 
-iOS SDK 소스와 테스트는 `SDK/iOS/Sources`와 `SDK/iOS/Tests`에 있어요.
+브리지는 `SDK/iOS`와 `SDK/Android`에 있어요. 플러그인은 `SDK/Plugins/<Name>`에
+있고, 빌드된 패널은 `Panel`, Swift 소스는 `iOS`, Gradle 모듈은 `Android`에 둬요.
+두 플랫폼이 같은 패널을 패키징해요.
 `Package.swift`는 저장소 루트에 유지하므로 기존 Swift 패키지 사용자는 같은
 저장소 URL을 사용할 수 있어요. Mac 패키지도 이 패키지의
 `NectoModel`과 `NectoTransport`를 계속 재사용해요.
@@ -133,6 +135,6 @@ iOS SDK 소스와 테스트는 `SDK/iOS/Sources`와 `SDK/iOS/Tests`에 있어요
 Mac 패키지나 ArgumentParser에 의존하지 않아요. `script/test swift`는 두 패키지와
 개별 product를 사용하는 외부 패키지 예제를 테스트해요.
 
-패널은 Yarn workspaces로 빌드해 Swift 패키지에 포함해요. 기본 플러그인은
-`SDK/iOS/Sources/<PluginModule>/Panels/<id>`에, 샘플은 예제 앱 번들에 들어가요.
+패널은 Yarn workspaces로 빌드해 플러그인에 포함해요. 기본 플러그인은
+`SDK/Plugins/<Name>/Panel`에, 샘플은 예제 앱 번들에 들어가요.
 빌드 결과를 커밋하므로 앱만 빌드할 때는 Node가 필요 없어요.

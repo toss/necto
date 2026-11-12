@@ -14,14 +14,11 @@ struct NectoThemeTests {
     @Test("Shared and shipped styles match native colors in both appearances", arguments: [false, true])
     func renderedColors(isDark: Bool) async throws {
         let root = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let sources = root.appending(path: "SDK/iOS/Sources")
-        let modules = try FileManager.default.contentsOfDirectory(at: sources, includingPropertiesForKeys: nil)
-        let panels = try modules.flatMap { module -> [URL] in
-            let directory = module.appending(path: "Panels")
-            guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
-            return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-                .filter { $0.hasDirectoryPath }.map { $0.appending(path: "assets/index.css") }
-        }
+        let plugins = root.appending(path: "SDK/Plugins")
+        let panels = try FileManager.default.contentsOfDirectory(at: plugins, includingPropertiesForKeys: nil)
+            .map { $0.appending(path: "Panel") }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+            .map { $0.appending(path: "assets/index.css") }
         let styles = [root.appending(path: "WebPackages/Bridge/theme.css")] + panels + [
             root.appending(path: "WebPackages/BuiltInPlugins/Plugins/plugin-sample/assets/index.css"),
             root.appending(path: "WebPackages/BuiltInPlugins/Plugins/shell-demo/assets/index.css"),

@@ -9,7 +9,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   build: {
-    outDir: "../../../../SDK/iOS/Sources/NectoNetworkPlugin/Panels/network-logger",
+    outDir: "../../../../SDK/Plugins/Network/Panel",
     emptyOutDir: true,
     rollupOptions: {
       output: {

@@ -30,7 +30,8 @@ NectoMac/Sources/NectoCLIService   The control socket contract shared by Necto.a
 NectoMac/Sources/NectoMacService   Mac providers, routing, device connections and control server
 SDK/iOS/Sources/NectoSDK          The SDK and listener embedded in a connected app
 SDK/iOS/Tests/                   SDK tests and the standalone consumer fixture
-SDK/Android/                     Kotlin SDK, plugin modules and sample app, built by Gradle
+SDK/Android/                     Kotlin bridge and sample app, built by Gradle
+SDK/Plugins/<Name>/              One plugin: Panel/ is the built panel, iOS/ the Swift sources, Android/ the Gradle module
 Necto/                    macOS shell, built by Necto.xcodeproj
 ExampleApp/              iOS sample app, built by Necto.xcodeproj
 WebPackages/BuiltInPlugins/          src/ is source, Plugins/ is the committed build output

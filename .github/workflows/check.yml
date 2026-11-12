@@ -173,7 +173,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: android-test-results
-          path: SDK/Android/*/build/reports/tests
+          path: |
+            SDK/Android/*/build/reports/tests
+            SDK/Plugins/*/Android/build/reports/tests
           retention-days: 7
 
   docs:

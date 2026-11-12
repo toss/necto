@@ -33,50 +33,62 @@ let package = Package(
         .target(
             name: "NectoNetworkPlugin",
             dependencies: ["NectoModel", "NectoSDK"],
-            path: "SDK/iOS/Sources/NectoNetworkPlugin",
-            resources: [.copy("Panels")]
+            path: "SDK/Plugins/Network",
+            exclude: ["Android"],
+            sources: ["iOS"],
+            resources: [.copy("Panel")]
         ),
         .target(
             name: "NectoEventsPlugin",
             dependencies: ["NectoModel", "NectoSDK"],
-            path: "SDK/iOS/Sources/NectoEventsPlugin",
-            resources: [.copy("Panels")]
+            path: "SDK/Plugins/Events",
+            exclude: ["Android"],
+            sources: ["iOS"],
+            resources: [.copy("Panel")]
         ),
         .target(
             name: "NectoFilesPlugin",
             dependencies: ["NectoModel", "NectoSDK"],
-            path: "SDK/iOS/Sources/NectoFilesPlugin",
-            resources: [.copy("Panels")]
+            path: "SDK/Plugins/Files",
+            exclude: ["Android"],
+            sources: ["iOS"],
+            resources: [.copy("Panel")]
         ),
         .target(
             name: "NectoPreferencesPlugin",
             dependencies: ["NectoModel", "NectoSDK"],
-            path: "SDK/iOS/Sources/NectoPreferencesPlugin",
-            resources: [.copy("Panels")]
+            path: "SDK/Plugins/Preferences",
+            exclude: ["Android"],
+            sources: ["iOS"],
+            resources: [.copy("Panel")]
         ),
         .target(
             name: "NectoPerformancePlugin",
             dependencies: ["NectoModel", "NectoSDK"],
-            path: "SDK/iOS/Sources/NectoPerformancePlugin",
-            resources: [.copy("Panels")]
+            path: "SDK/Plugins/Performance",
+            exclude: ["Android"],
+            sources: ["iOS"],
+            resources: [.copy("Panel")]
         ),
         .target(
             name: "NectoUIControlPlugin",
             dependencies: ["NectoModel", "NectoSDK"],
-            path: "SDK/iOS/Sources/NectoUIControlPlugin",
-            resources: [.copy("Panels")]
+            path: "SDK/Plugins/UIControl",
+            exclude: ["Android"],
+            sources: ["iOS"],
+            resources: [.copy("Panel")]
         ),
         // CPU, memory and frame-rate capture for apps that explicitly opt in.
         .target(
             name: "NectoProcessMetricPlugin",
             dependencies: ["NectoPerformancePlugin", "NectoModel", "NectoSDK"],
-            path: "SDK/iOS/Sources/NectoProcessMetricPlugin"
+            path: "SDK/Plugins/ProcessMetric/iOS"
         ),
         // Capture stays separate from the reporting API and starts only on registration.
         .target(
             name: "NectoURLSessionCapturePlugin",
             dependencies: ["NectoNetworkPlugin", "NectoModel", "NectoSDK"],
-            path: "SDK/iOS/Sources/NectoURLSessionCapturePlugin"
+            path: "SDK/Plugins/URLSessionCapture/iOS"
         ),
         .testTarget(
             name: "NectoModelTests",
