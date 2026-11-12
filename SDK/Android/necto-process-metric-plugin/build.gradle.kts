@@ -39,7 +39,7 @@ kotlin {
 }
 
 dependencies {
-    api(project(":necto-performance"))
+    api(project(":necto-performance-plugin"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test-junit"))

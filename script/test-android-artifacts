@@ -19,15 +19,15 @@ results = {}
 
 # A plugin owns its panel; the bridge and capture adapters carry no unrelated assets.
 plugins = {
-    "necto-events": "event-log",
-    "necto-network": "network-logger",
-    "necto-files": "files",
-    "necto-control": "control",
-    "necto-performance": "performance-monitor",
-    "necto-datastore": "preferences",
+    "necto-events-plugin": "event-log",
+    "necto-network-plugin": "network-logger",
+    "necto-files-plugin": "files",
+    "necto-ui-control-plugin": "control",
+    "necto-performance-plugin": "performance-monitor",
+    "necto-datastore-preferences-plugin": "preferences",
 }
-android_modules = {"necto-android", "necto-files", "necto-control", "necto-process-metrics", "necto-datastore"}
-modules = ["necto-core", "necto-plugin-support", "necto-android", "necto-okhttp", "necto-process-metrics", *plugins]
+android_modules = {"necto-android", "necto-files-plugin", "necto-ui-control-plugin", "necto-process-metric-plugin", "necto-datastore-preferences-plugin"}
+modules = ["necto-core", "necto-plugin-support", "necto-android", "necto-okhttp-capture-plugin", "necto-process-metric-plugin", *plugins]
 compared = 0
 for module in modules:
     if module in android_modules:

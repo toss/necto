@@ -45,14 +45,14 @@ without registering any plugins.
 | --- | --- |
 | `necto-core` | Protocol models, transport, plugin contracts and SDK runtime (plain JVM) |
 | `necto-android` | ADB listener and app identity: `NectoAndroid.start(context, plugins)` |
-| `necto-events` | Events reporting and panel: `NectoEventsPlugin` |
-| `necto-network` | Network reporting and panel: `NectoNetworkPlugin`; no capture dependency |
-| `necto-okhttp` | Optional OkHttp capture: `OkHttpNetworkPlugin` or `NectoOkHttpInterceptor`; depends on `necto-network` |
-| `necto-files` | Files panel and selected roots: `NectoFilesPlugin(context)` or `NectoFilesPlugin(roots)` |
-| `necto-performance` | Custom metric reporting and panel: `NectoPerformancePlugin`; no process sampler |
-| `necto-process-metrics` | Optional Android process sampling: `NectoProcessMetricPlugin(context)`; depends on `necto-performance` |
-| `necto-control` | Views and optional Compose UI Control: `NectoAndroidControlPlugin(context)` |
-| `necto-datastore` | DataStore Preferences and panel: `NectoDataStorePreferencesPlugin(stores)` |
+| `necto-events-plugin` | Events reporting and panel: `NectoEventsPlugin` |
+| `necto-network-plugin` | Network reporting and panel: `NectoNetworkPlugin`; no capture dependency |
+| `necto-okhttp-capture-plugin` | Optional OkHttp capture: `OkHttpNetworkPlugin` or `NectoOkHttpInterceptor`; depends on `necto-network-plugin` |
+| `necto-files-plugin` | Files panel and selected roots: `NectoFilesPlugin(context)` or `NectoFilesPlugin(roots)` |
+| `necto-performance-plugin` | Custom metric reporting and panel: `NectoPerformancePlugin`; no process sampler |
+| `necto-process-metric-plugin` | Optional Android process sampling: `NectoProcessMetricPlugin(context)`; depends on `necto-performance-plugin` |
+| `necto-ui-control-plugin` | Views and optional Compose UI Control: `NectoAndroidControlPlugin(context)` |
+| `necto-datastore-preferences-plugin` | DataStore Preferences and panel: `NectoDataStorePreferencesPlugin(stores)` |
 
 `necto-plugin-support` is an implementation dependency shared by the feature modules.
 It contains resource loading, stream fan-out and text decoding helpers, with no panel
@@ -98,7 +98,7 @@ For example, to include Events in debug builds only:
 val nectoVersion = "COMMIT_OR_TAG"
 dependencies {
     debugImplementation("com.github.toss.necto:necto-android:$nectoVersion")
-    debugImplementation("com.github.toss.necto:necto-events:$nectoVersion")
+    debugImplementation("com.github.toss.necto:necto-events-plugin:$nectoVersion")
 }
 ```
 
@@ -133,8 +133,8 @@ object NectoSetup {
 
 Call `NectoSetup.start(this)` from the app's `Application.onCreate`. Release builds
 compile without any Necto dependency. Add a matching setup for other build types as
-needed. For network capture, add `necto-okhttp` to the debug dependencies and wire the
-same instance to the bridge and the app's client:
+needed. For network capture, add `necto-okhttp-capture-plugin` to the debug
+dependencies and wire the same instance to the bridge and the app's client:
 
 ```kotlin
 val network = OkHttpNetworkPlugin()
@@ -144,7 +144,7 @@ val client = OkHttpClient.Builder()
     .build()
 ```
 
-To inspect DataStore, add `necto-datastore` and register
+To inspect DataStore, add `necto-datastore-preferences-plugin` and register
 `NectoDataStorePreferencesPlugin(mapOf("settings" to app.settings))` with the app's own
 store. Neither the connection nor other plugins bring DataStore into the app.
 

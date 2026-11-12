@@ -15,7 +15,7 @@ import im.toss.necto.sdk.NectoRegistrar
  * The standard way to report network traffic to Necto.
  *
  * An interface, not a capture mechanism: the app reports and Necto only carries.
- * `necto-okhttp` is one ready-made source for apps that use OkHttp.
+ * `necto-okhttp-capture-plugin` is one ready-made source for apps that use OkHttp.
  *
  * ```kotlin
  * val network = NectoNetworkPlugin()

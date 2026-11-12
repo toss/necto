@@ -22,8 +22,8 @@ kotlin {
 
 dependencies {
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-    testImplementation(project(":necto-events"))
-    testImplementation(project(":necto-network"))
+    testImplementation(project(":necto-events-plugin"))
+    testImplementation(project(":necto-network-plugin"))
     testImplementation(kotlin("test"))
 }
 

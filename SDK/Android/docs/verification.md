@@ -9,11 +9,11 @@ What was checked, and how to check it again. Update it when behaviour changes.
 | Modules | Coverage |
 | --- | --- |
 | `necto-core` | Protocol, JSON, schema validation, runtime lifecycle, request limits and plugin routing, with Events and Network as test-only consumers |
-| `necto-network`, `necto-okhttp` | Reporting, cURL quoting, truncated UTF-8, upload/response capture, failures and streaming bodies |
-| `necto-files` | Listing, previews, writes, path containment and deleting links without entering their targets |
-| `necto-performance`, `necto-process-metrics` | Custom series and budgets, failing sampler cleanup and initial frame-rate availability |
-| `necto-control` | Geometry, Views and Compose discovery/actions, cancellation, coverage and other-window focus |
-| `necto-datastore` | Numeric precision/range preservation and string-set round trips |
+| `necto-network-plugin`, `necto-okhttp-capture-plugin` | Reporting, cURL quoting, truncated UTF-8, upload/response capture, failures and streaming bodies |
+| `necto-files-plugin` | Listing, previews, writes, path containment and deleting links without entering their targets |
+| `necto-performance-plugin`, `necto-process-metric-plugin` | Custom series and budgets, failing sampler cleanup and initial frame-rate availability |
+| `necto-ui-control-plugin` | Geometry, Views and Compose discovery/actions, cancellation, coverage and other-window focus |
+| `necto-datastore-preferences-plugin` | Numeric precision/range preservation and string-set round trips |
 | `sample` | Every selected plugin's packaged manifest validates and its panel loads |
 
 `script/test-android-artifacts` checks that every plugin owns its panel, the bridge

@@ -51,12 +51,12 @@ androidComponents {
 
 dependencies {
     implementation(project(":necto-android"))
-    implementation(project(":necto-events"))
-    implementation(project(":necto-files"))
-    implementation(project(":necto-control"))
-    implementation(project(":necto-process-metrics"))
-    implementation(project(":necto-datastore"))
-    implementation(project(":necto-okhttp"))
+    implementation(project(":necto-events-plugin"))
+    implementation(project(":necto-files-plugin"))
+    implementation(project(":necto-ui-control-plugin"))
+    implementation(project(":necto-process-metric-plugin"))
+    implementation(project(":necto-datastore-preferences-plugin"))
+    implementation(project(":necto-okhttp-capture-plugin"))
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation(platform("androidx.compose:compose-bom:2025.02.00"))

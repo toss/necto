@@ -49,10 +49,10 @@ configurations {
 
 dependencies {
     debugImplementation("$sdkGroup:necto-android:$sdkVersion")
-    "networkDebugImplementation"("$sdkGroup:necto-okhttp:$sdkVersion")
-    "datastoreDebugImplementation"("$sdkGroup:necto-datastore:$sdkVersion")
-    "controlDebugImplementation"("$sdkGroup:necto-control:$sdkVersion")
-    listOf("necto-events", "necto-okhttp", "necto-files", "necto-process-metrics", "necto-datastore", "necto-control").forEach {
+    "networkDebugImplementation"("$sdkGroup:necto-okhttp-capture-plugin:$sdkVersion")
+    "datastoreDebugImplementation"("$sdkGroup:necto-datastore-preferences-plugin:$sdkVersion")
+    "controlDebugImplementation"("$sdkGroup:necto-ui-control-plugin:$sdkVersion")
+    listOf("necto-events-plugin", "necto-okhttp-capture-plugin", "necto-files-plugin", "necto-process-metric-plugin", "necto-datastore-preferences-plugin", "necto-ui-control-plugin").forEach {
         "allDebugImplementation"("$sdkGroup:$it:$sdkVersion")
     }
 }
@@ -62,10 +62,10 @@ tasks.register("verifyDependencies") {
         val base = setOf("necto-core", "necto-android")
         val selections = mapOf(
             "bridge" to emptySet(),
-            "network" to setOf("necto-network", "necto-okhttp", "necto-plugin-support"),
-            "datastore" to setOf("necto-datastore", "necto-plugin-support"),
-            "control" to setOf("necto-control", "necto-plugin-support"),
-            "all" to setOf("necto-events", "necto-network", "necto-okhttp", "necto-files", "necto-performance", "necto-process-metrics", "necto-datastore", "necto-control", "necto-plugin-support"),
+            "network" to setOf("necto-network-plugin", "necto-okhttp-capture-plugin", "necto-plugin-support"),
+            "datastore" to setOf("necto-datastore-preferences-plugin", "necto-plugin-support"),
+            "control" to setOf("necto-ui-control-plugin", "necto-plugin-support"),
+            "all" to setOf("necto-events-plugin", "necto-network-plugin", "necto-okhttp-capture-plugin", "necto-files-plugin", "necto-performance-plugin", "necto-process-metric-plugin", "necto-datastore-preferences-plugin", "necto-ui-control-plugin", "necto-plugin-support"),
         )
         for ((flavor, plugins) in selections) {
             val modules = configurations["${flavor}DebugRuntimeClasspath"].resolvedConfiguration.resolvedArtifacts

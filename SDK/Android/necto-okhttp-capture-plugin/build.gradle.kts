@@ -20,7 +20,7 @@ kotlin {
 }
 
 dependencies {
-    api(project(":necto-network"))
+    api(project(":necto-network-plugin"))
     api("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation(kotlin("test"))
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
