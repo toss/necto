@@ -122,10 +122,21 @@ struct NectoAndroidConnectionTests {
 
     private func name(_ seed: Character) -> String { "necto." + String(repeating: seed, count: 64) }
 
+    /// A listener on a loopback port below the range the system hands out for port 0.
+    /// That range is given out in order, so a port taken from it sits next to the ones
+    /// other suites are given a moment later, and a center probes eight ports from its
+    /// own. Probing those reaches another suite's listeners.
+    private func quietListener() throws -> NectoDeviceListener {
+        for _ in 0..<50 {
+            let listener = NectoDeviceListener(port: UInt16.random(in: 20_000..<40_000))
+            if (try? listener.start()) != nil { return listener }
+        }
+        throw NectoDeviceListener.Failure.cannotListen("No free port below the ephemeral range")
+    }
+
     /// A loopback port nobody listens on, so the simulator probe finds nothing.
     private func unusedPort() throws -> UInt16 {
-        let listener = NectoDeviceListener(port: 0)
-        try listener.start()
+        let listener = try quietListener()
         defer { listener.stop() }
         return listener.port
     }
@@ -241,8 +252,7 @@ struct NectoAndroidConnectionTests {
 
     @Test("Android and iOS reconnect independently using their original message contract")
     func mixedPlatforms() async throws {
-        let ios = NectoDeviceListener(port: 0)
-        try ios.start()
+        let ios = try quietListener()
         defer { ios.stop() }
         let adb = FakeADB()
         let androidPeer = Peer(app: "dev.necto.fixture"), iosPeer = Peer(app: "dev.necto.fixture")
