@@ -73,8 +73,10 @@ public struct NectoAppRelease: Sendable {
         imageSHA256 = hash
     }
 
-    public func downloadImage(into directory: URL) async throws -> URL {
-        let image = try await Self.download(imageURL, maximumBytes: Self.maximumImageBytes)
+    public func downloadImage(
+        into directory: URL, progress: @escaping @Sendable (Double?) -> Void = { _ in }
+    ) async throws -> URL {
+        let image = try await Self.download(imageURL, maximumBytes: Self.maximumImageBytes, progress: progress)
         defer { try? FileManager.default.removeItem(at: image) }
         try Task.checkCancellation()
         let destination = directory.appending(path: imageURL.lastPathComponent)
@@ -88,13 +90,15 @@ public struct NectoAppRelease: Sendable {
         guard output.exitCode == 0, let digest, digest == imageSHA256 else { throw Failure.checksumMismatch }
     }
 
-    static func download(_ url: URL, maximumBytes: Int) async throws -> URL {
+    static func download(
+        _ url: URL, maximumBytes: Int, progress: @escaping @Sendable (Double?) -> Void = { _ in }
+    ) async throws -> URL {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 180
         var request = URLRequest(url: url)
         request.setValue("Necto", forHTTPHeaderField: "User-Agent")
-        return try await Download(maximumBytes: maximumBytes).run(request, configuration: configuration)
+        return try await Download(maximumBytes: maximumBytes, progress: progress).run(request, configuration: configuration)
     }
 
     static func permitsDownloadURL(_ url: URL) -> Bool {
@@ -114,13 +118,17 @@ public struct NectoAppRelease: Sendable {
 
     private final class Download: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
         private let maximumBytes: Int
+        private let progress: @Sendable (Double?) -> Void
         private let lock = NSLock()
         private var continuation: CheckedContinuation<URL, any Error>?
         private var session: URLSession?
         private var task: URLSessionDownloadTask?
         private var downloaded: URL?
         private var failure: (any Error)?
-        init(maximumBytes: Int) { self.maximumBytes = maximumBytes }
+        init(maximumBytes: Int, progress: @escaping @Sendable (Double?) -> Void) {
+            self.maximumBytes = maximumBytes
+            self.progress = progress
+        }
 
         func run(_ request: URLRequest, configuration: URLSessionConfiguration) async throws -> URL {
             try await withTaskCancellationHandler {
@@ -153,7 +161,14 @@ public struct NectoAppRelease: Sendable {
 
         func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                         didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-            if totalBytesWritten > maximumBytes || totalBytesExpectedToWrite > maximumBytes { cancel(Failure.tooLarge) }
+            if totalBytesWritten > maximumBytes || totalBytesExpectedToWrite > maximumBytes {
+                cancel(Failure.tooLarge)
+                return
+            }
+            guard (downloadTask.response as? HTTPURLResponse)?.statusCode == 200 else { return }
+            progress(totalBytesExpectedToWrite > 0
+                ? min(1, max(0, Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)))
+                : nil)
         }
 
         func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {

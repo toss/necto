@@ -59,6 +59,8 @@ struct SettingsScreen: View {
                 ],
                 selection: page,
                 scale: scale,
+                updates: Set([model.updater.hasUpdate ? Page.general : nil,
+                              model.pluginUpdates.isEmpty ? nil : Page.plugins].compactMap { $0 }),
                 width: Binding(
                     get: { CGFloat(navWidth) },
                     set: { navWidth = Double($0) }
@@ -120,7 +122,7 @@ struct SettingsScreen: View {
 
         NectoRow(
             label: NectoL10n.text("Language"),
-            hint: NectoL10n.text("Changes Necto's native interface. Plugins manage their own language."),
+            hint: NectoL10n.text("Necto's display language. Plugins use their own language settings."),
             scale: scale,
             fontFamily: appearanceFont
         ) {
@@ -144,7 +146,7 @@ struct SettingsScreen: View {
 
         NectoRow(
             label: NectoL10n.text("Text size"),
-            hint: NectoL10n.text("Applies to the app and to every plugin. \u{2318}+ and \u{2318}- also move it."),
+            hint: NectoL10n.text("Text size in the app and plugins. Shortcuts: \u{2318}+ and \u{2318}-."),
             scale: scale,
             fontFamily: appearanceFont
         ) {
@@ -160,7 +162,7 @@ struct SettingsScreen: View {
 
         NectoRow(
             label: NectoL10n.text("UI font"),
-            hint: NectoL10n.text("A font family or CSS fallback stack."),
+            hint: NectoL10n.text("Font for the app and plugin interface."),
             scale: scale,
             fontFamily: appearanceFont
         ) {
@@ -175,7 +177,7 @@ struct SettingsScreen: View {
 
         NectoRow(
             label: NectoL10n.text("Code font"),
-            hint: NectoL10n.text("Used for code, values and plugin data."),
+            hint: NectoL10n.text("Font for code, values and plugin data."),
             scale: scale,
             fontFamily: appearanceFont
         ) {
@@ -203,15 +205,17 @@ struct SettingsScreen: View {
 
         NectoSectionTitle(NectoL10n.text("About"), scale: scale)
 
-        NectoRow(label: "Necto", hint: updateHint, scale: scale) {
+        NectoRow(label: "Necto", hint: updateHint, scale: scale, hasUpdate: model.updater.hasUpdate) {
             HStack(spacing: 8) {
                 updateControl
                 NectoRowValue(value: String(describing: NectoAppModel.nectoVersion), scale: scale)
+                    // The fixed-width progress view can otherwise collapse this text to zero width.
+                    .fixedSize()
             }
         }
         NectoRow(
             label: NectoL10n.text("Protocol"),
-            hint: NectoL10n.text("The wire version this build speaks."),
+            hint: NectoL10n.text("Version used to communicate with connected apps."),
             scale: scale
         ) {
             NectoRowValue(value: "1", scale: scale)
@@ -222,7 +226,7 @@ struct SettingsScreen: View {
                 label: NectoL10n.text("Command line tool"),
                 hint: NectoL10n.text(model.cliInstaller.isInstalled
                     ? "Use necto or necto-cli in your terminal."
-                    : "Adds necto and necto-cli to /usr/local/bin. macOS will ask for administrator approval."),
+                    : "Use necto or necto-cli in your terminal. Installation requires administrator approval."),
                 scale: scale
             ) {
                 Button(NectoL10n.text(model.cliInstaller.isInstalling ? "Installing…"
@@ -296,10 +300,10 @@ struct SettingsScreen: View {
         case .checking: NectoL10n.text("Checking for updates…")
         case .upToDate: NectoL10n.text("Up to date.")
         case let .available(version):
-            NectoL10n.format("%@ is out — one click installs and relaunches.", String(describing: version))
+            NectoL10n.format("Version %@ is available. Necto restarts after updating.", String(describing: version))
         case let .outside(version):
-            NectoL10n.format("%@ is out, but Necto is not running from /Applications.", String(describing: version))
-        case let .working(step): step
+            NectoL10n.format("Version %@ is available. Move Necto to Applications to update.", String(describing: version))
+        case .working: ""
         case let .failed(reason): reason
         }
     }
@@ -319,7 +323,11 @@ struct SettingsScreen: View {
         case .idle, .upToDate:
             Button(NectoL10n.text("Check for updates")) { Task { await model.updater.check() } }
                 .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
-        case .checking, .working:
+        case let .working(step, progress):
+            NectoUpdateProgress(step: step, fraction: progress, scale: scale)
+                .padding(.horizontal, 8)
+                .frame(width: NectoNav<Page>.defaultWidth)
+        case .checking:
             EmptyView()
         }
     }
@@ -376,17 +384,17 @@ struct SettingsScreen: View {
 
     @ViewBuilder
     private var plugins: some View {
-        NectoSectionTitle(NectoL10n.text("Installed"), scale: scale, isFirst: true)
+        NectoSectionTitle(NectoL10n.text("Installed plugins"), scale: scale, isFirst: true)
 
         PluginTable(model: model, scale: scale)
 
 
 
-        NectoSectionTitle(NectoL10n.text("Add and edit"), scale: scale)
+        NectoSectionTitle(NectoL10n.text("Install and manage"), scale: scale)
 
         NectoRow(
             label: NectoL10n.text("Install from GitHub"),
-            hint: NectoL10n.text("Install the latest release from a repository, or choose a specific release."),
+            hint: NectoL10n.text("Install using a repository or release URL."),
             scale: scale
         ) {
             Button(NectoL10n.text("Add…")) { model.beginAddingLink() }
@@ -396,7 +404,7 @@ struct SettingsScreen: View {
         NectoRow(
             label: NectoL10n.text("Install from a file"),
             hint: NectoL10n.text(
-                "Install a built desktop plugin from a folder or zip file. Necto does not verify the source or check for updates for file installs. Device plugins must be included in the app's Swift package."
+                "Install from a folder or ZIP file. Source verification and update checks are not available."
             ),
             scale: scale
         ) {
@@ -406,7 +414,7 @@ struct SettingsScreen: View {
 
         NectoRow(
             label: NectoL10n.text("Plugins folder"),
-            hint: NectoL10n.text("After adding or changing a plugin folder, reload and approve the plugin. Deleting its folder also removes its permissions."),
+            hint: NectoL10n.text("Reload after adding or changing a plugin folder."),
             scale: scale
         ) {
             HStack(spacing: 8) {
@@ -421,11 +429,11 @@ struct SettingsScreen: View {
         NectoRow(
             label: NectoL10n.text("Updates"),
             hint: NectoL10n.text(
-                "Checks for newer versions of plugins installed from a repository when you open this page. To check without downloading the archive, the release must include a separate manifest file."
+                "Check for updates to plugins installed from GitHub."
             ),
             scale: scale
         ) {
-            Button(model.isCheckingUpdates ? NectoL10n.text("Checking…") : NectoL10n.text("Check again")) {
+            Button(model.isCheckingUpdates ? NectoL10n.text("Checking…") : NectoL10n.text("Check for updates")) {
                 Task { await model.checkPluginUpdates(quietly: false) }
             }
             .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
@@ -433,16 +441,16 @@ struct SettingsScreen: View {
         }
 
         if !model.pluginUpdates.isEmpty {
-            NectoSectionTitle(NectoL10n.text("Newer releases"), scale: scale)
+            NectoSectionTitle(NectoL10n.text("Available updates"), scale: scale)
             ForEach(model.pluginUpdates.sorted(by: { $0.value.name < $1.value.name }), id: \.key) { id, update in
                 NectoRow(
                     label: update.name,
                     hint: NectoL10n.format(
-                        "%@ is published at %@. Installing it asks again, because a new version can bind to something the last one did not.",
-                        String(describing: update.version),
-                        update.repository.label
+                        "Version %@ is available.",
+                        String(describing: update.version)
                     ),
-                    scale: scale
+                    scale: scale,
+                    hasUpdate: true
                 ) {
                     Button(NectoL10n.text("Update")) { model.installUpdate(for: id) }
                         .buttonStyle(NectoButtonStyle(scale: scale))
@@ -466,7 +474,7 @@ struct SettingsScreen: View {
             ForEach(model.pluginsAwaitingApproval) { plugin in
                 NectoRow(
                     label: plugin.manifest.name,
-                    hint: NectoL10n.text("These files are new or have changed. They will not run until you approve their source."),
+                    hint: NectoL10n.text("Review the source before running new or changed files."),
                     scale: scale
                 ) {
                     HStack(spacing: 8) {

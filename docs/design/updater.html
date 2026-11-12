@@ -9,148 +9,120 @@
     <link rel="stylesheet" href="../../WebPackages/Bridge/components.css" />
     <link rel="stylesheet" href="./gallery.css" />
     <style>
-      .mock {
-        display: flex;
-        border: 1px solid var(--necto-border);
-        border-radius: var(--necto-radius-control);
-        overflow: hidden;
-        min-height: 300px;
-        font-family: var(--necto-font-mono);
-        font-size: 12px;
-        color: var(--necto-text);
-      }
-      .mock-sidebar {
-        width: 220px;
-        background: var(--necto-sidebar);
-        border-right: 1px solid var(--necto-border);
-        display: flex;
-        flex-direction: column;
-        padding: 10px 0 0;
-      }
-      .mock-group { padding: 4px 12px; color: var(--necto-text-tertiary); font-size: 11px; }
-      .mock-row { padding: 5px 12px; color: var(--necto-text-secondary); }
-      .mock-foot {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        border-top: 1px solid var(--necto-border);
-      }
-      .mock-foot .spacer { flex: 1; }
-      .mock-detail { flex: 1; padding: 18px 20px; background: var(--necto-base-00, transparent); }
-      .about-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 9px 0;
-        border-top: 1px solid var(--necto-border);
-        border-bottom: 1px solid var(--necto-border);
-      }
-      .about-row .label { flex: none; width: 70px; }
-      .about-row .hint { flex: 1; }
-      .scenarios { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+      .mock { display: flex; min-height: 300px; border: 1px solid var(--necto-border); border-radius: var(--necto-radius-control); overflow: hidden; }
+      .mock-sidebar { width: 220px; flex: none; display: flex; flex-direction: column; background: var(--necto-sidebar); padding: var(--necto-space-2); }
+      .mock-foot { margin-top: auto; border-top: 1px solid var(--necto-border); padding-top: var(--necto-space-2); }
+      .mock-detail { flex: 1; min-width: 0; padding: var(--necto-space-4); background: var(--necto-bg); }
+      .mock-nav { width: 180px; flex: none; padding: var(--necto-space-2); border-right: 1px solid var(--necto-border); }
+      .mock-nav .necto-nav-item { width: 100%; }
+      #detail-progress { box-sizing: border-box; width: 180px; flex: none; padding: 0 var(--necto-space-2); }
+      .progress-label { display: flex; justify-content: space-between; gap: var(--necto-space-2); margin-bottom: var(--necto-space-1); }
+      progress { display: block; width: 100%; height: var(--necto-space-2); accent-color: var(--necto-accent); }
+      .scenarios { display: flex; gap: var(--necto-space-2); margin-top: var(--necto-space-4); flex-wrap: wrap; }
+      [hidden] { display: none !important; }
     </style>
   </head>
   <body>
     <div class="themebar">
-      <span class="source">rendered from WebPackages/Bridge/theme.css + components.css</span>
+      <span class="source">Necto update indicators</span>
       <div class="switch" role="group" aria-label="Theme">
-        <button type="button" data-set="light" aria-pressed="false">light</button>
-        <button type="button" data-set="dark" aria-pressed="false">dark</button>
-        <button type="button" data-set="system" aria-pressed="true">system</button>
+        <button type="button" data-theme="light" aria-pressed="false">light</button>
+        <button type="button" data-theme="dark" aria-pressed="false">dark</button>
+        <button type="button" data-theme="system" aria-pressed="true">system</button>
       </div>
     </div>
-
     <div class="page">
       <header>
-        <p class="brandline">Necto · design proposal</p>
-        <h1>The update lives where the version lives</h1>
-        <p class="lede">
-          No new screen. When a release is out, an Update button appears beside
-          Settings at the foot of the sidebar — one click downloads, verifies
-          against the published hash, installs and relaunches. The About row in
-          Settings mirrors the same state with the detail.
-        </p>
+        <p class="brandline">Necto · design guide</p>
+        <h1>Updates in Settings</h1>
+        <p class="lede">A red dot beside Settings points to an available update. General shows app updates; Desktop Plugins shows plugin updates. Opening a page keeps its dot until the update is installed.</p>
       </header>
-
       <section>
         <div class="mock">
-          <div class="mock-sidebar">
-            <div class="mock-group">Device Plugins</div>
-            <div class="mock-row">Events</div>
-            <div class="mock-row">Network</div>
-            <div class="spacer" style="flex: 1"></div>
+          <aside class="mock-sidebar">
+            <div class="necto-sidebar-group">Device Plugins</div>
+            <div class="necto-sidebar-item">Events</div>
+            <div class="necto-sidebar-item">Network</div>
             <div class="mock-foot">
-              <span>Settings</span>
-              <span class="spacer"></span>
-              <span id="slot"></span>
+              <button class="necto-sidebar-item" type="button">Settings <span id="settings-dot" class="update-dot" role="img" aria-label="Update available"></span></button>
             </div>
-          </div>
-          <div class="mock-detail">
-            <p class="necto-caption" style="margin: 0 0 8px">Settings › About</p>
-            <div class="about-row">
-              <span class="label">Necto</span>
-              <span class="hint necto-caption" id="hint"></span>
-              <span id="ver" style="color: var(--necto-text-secondary)"></span>
+          </aside>
+          <nav class="mock-nav" aria-label="Settings">
+            <button class="necto-nav-item" type="button" aria-selected="true">General <span id="app-dot" class="update-dot" role="img" aria-label="Update available"></span></button>
+            <button class="necto-nav-item" type="button">Shell Access</button>
+            <button class="necto-nav-item" type="button">Desktop Plugins <span id="plugin-dot" class="update-dot" role="img" aria-label="Update available"></span></button>
+            <button class="necto-nav-item" type="button">Log</button>
+          </nav>
+          <main class="mock-detail">
+            <h3 class="necto-section-title">About</h3>
+            <div class="necto-row">
+              <div class="necto-row-label">Necto <p id="hint" class="necto-row-hint"></p></div>
+              <button id="update" class="necto-button necto-button-primary" type="button">Update</button>
+              <div id="detail-progress" hidden></div>
+              <span class="necto-row-value">0.3.2</span>
+              <span id="version-dot" class="update-dot" role="img" aria-label="Update available"></span>
             </div>
-            <p class="necto-caption" style="margin-top: 10px">
-              One state, two places: the sidebar button acts, the About row explains.
-            </p>
-          </div>
+            <p class="necto-caption">Download percentages use received bytes. Unknown sizes, verification, installation and relaunch use an indeterminate bar.</p>
+          </main>
         </div>
-
         <div class="scenarios" id="scenarios"></div>
       </section>
     </div>
-
-    <script src="./gallery.js"></script>
     <script>
       const $ = (id) => document.getElementById(id);
-      const set = (slot, hint, ver) => {
-        $("slot").innerHTML = slot;
-        $("hint").textContent = hint;
-        $("ver").textContent = ver;
-        const up = $("up");
-        if (up) up.addEventListener("click", play);
-      };
-      const caption = (text) => `<span class="necto-caption">${text}</span>`;
       const states = {
-        "최신": () => set("", "Checked a moment ago — up to date.", "0.3.3"),
-        "업데이트 있음": () =>
-          set(
-            '<button id="up" type="button" class="necto-button necto-button-primary">Update</button>',
-            "0.3.3 is out — one click installs and relaunches.",
-            "0.3.2",
-          ),
-        "/Applications 밖": () =>
-          set(
-            "",
-            "0.3.3 is out, but Necto is not running from /Applications — a Show releases button opens the page.",
-            "0.3.2",
-          ),
-        "해시 불일치": () =>
-          set(
-            '<button id="up" type="button" class="necto-button">Retry</button>',
-            "The download did not match its published hash. Nothing was installed.",
-            "0.3.2",
-          ),
+        "Up to date": { app: false, plugin: false, hint: "Up to date." },
+        "App update": { app: true, plugin: false },
+        "Plugin update": { app: false, plugin: true, hint: "Up to date." },
+        "Both updates": { app: true, plugin: true },
+        "Downloading": { app: true, plugin: true, step: "Downloading…", fraction: 0.42 },
+        "Unknown size": { app: true, plugin: false, step: "Downloading…" },
+        "Verifying": { app: true, plugin: false, step: "Verifying…" },
+        "Installing": { app: true, plugin: false, step: "Installing…" },
+        "Relaunching": { app: true, plugin: false, step: "Relaunching…" },
+        "Failed": { app: true, plugin: false, hint: "The download failed. Retry the update check." },
       };
-      function play() {
-        set(caption("Downloading…"), "Downloading 0.3.3… (1.7 MB)", "0.3.2");
-        setTimeout(() => set(caption("Verifying…"), "Verifying against the published hash…", "0.3.2"), 900);
-        setTimeout(() => set(caption("Installing…"), "Installing into /Applications…", "0.3.2"), 1700);
-        setTimeout(() => set(caption("Relaunching…"), "Updated. Relaunching…", "0.3.3"), 2500);
-        setTimeout(states["최신"], 3400);
+      function show(state) {
+        $("settings-dot").hidden = !state.app && !state.plugin;
+        $("app-dot").hidden = !state.app;
+        $("version-dot").hidden = !state.app;
+        $("plugin-dot").hidden = !state.plugin;
+        $("hint").textContent = state.hint ?? (state.step ? "" : "Version 0.3.3 is available. Necto restarts after updating.");
+        $("update").hidden = !state.app || !!state.step;
+        const progress = $("detail-progress");
+        progress.hidden = !state.step;
+        progress.replaceChildren();
+        if (state.step) {
+          const label = document.createElement("div");
+          label.className = "progress-label necto-caption";
+          label.textContent = state.step;
+          const value = document.createElement("span");
+          value.textContent = state.fraction == null ? "" : `${Math.round(state.fraction * 100)}%`;
+          label.append(value);
+          const bar = document.createElement("progress");
+          bar.max = 1;
+          if (state.fraction != null) bar.value = state.fraction;
+          bar.setAttribute("aria-label", state.step);
+          progress.append(label, bar);
+        }
       }
-      for (const [label, apply] of Object.entries(states)) {
+      for (const [label, state] of Object.entries(states)) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "necto-button";
         button.textContent = label;
-        button.addEventListener("click", apply);
+        button.addEventListener("click", () => show(state));
         $("scenarios").append(button);
       }
-      states["업데이트 있음"]();
+      $("update").addEventListener("click", () => show(states.Downloading));
+      for (const button of document.querySelectorAll("[data-theme]")) {
+        button.addEventListener("click", () => {
+          if (button.dataset.theme === "system") delete document.documentElement.dataset.theme;
+          else document.documentElement.dataset.theme = button.dataset.theme;
+          for (const other of document.querySelectorAll("button[data-theme]")) other.setAttribute("aria-pressed", String(other === button));
+        });
+      }
+      show(states["Both updates"]);
     </script>
   </body>
 </html>

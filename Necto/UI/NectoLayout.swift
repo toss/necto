@@ -41,6 +41,7 @@ struct NectoRow<Control: View>: View {
     var hint: String?
     let scale: CGFloat
     var fontFamily: String? = nil
+    var hasUpdate = false
     @ViewBuilder let control: () -> Control
 
     var body: some View {
@@ -60,8 +61,13 @@ struct NectoRow<Control: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             control()
+
+            if hasUpdate {
+                NectoUpdateDot()
+                    .padding(.trailing, 8)
+            }
         }
-        .padding(.vertical, 8)
+        .padding(8)
         .frame(minHeight: 38)
         .overlay(alignment: .top) {
             Rectangle().fill(NectoTheme.border).frame(height: 1)
@@ -91,6 +97,7 @@ struct NectoNav<Value: Hashable>: View {
     let items: [(value: Value, label: String, systemImage: String)]
     let selection: Value
     let scale: CGFloat
+    var updates: Set<Value> = []
     /// Persisted by the owner; the border is a handle, so a label that outgrows the
     /// column is dragged out of its trouble rather than truncated forever.
     @Binding var width: CGFloat
@@ -105,7 +112,8 @@ struct NectoNav<Value: Hashable>: View {
                     label: item.label,
                     systemImage: item.systemImage,
                     isSelected: item.value == selection,
-                    scale: scale
+                    scale: scale,
+                    hasUpdate: updates.contains(item.value)
                 ) { select(item.value) }
             }
 
@@ -145,6 +153,7 @@ struct NectoNavItem: View {
     let systemImage: String
     let isSelected: Bool
     let scale: CGFloat
+    var hasUpdate = false
     let select: () -> Void
 
     @State private var isHovering = false
@@ -159,6 +168,11 @@ struct NectoNavItem: View {
                 Text(label).lineLimit(1)
 
                 Spacer(minLength: 0)
+
+                if hasUpdate {
+                    NectoUpdateDot()
+                        .padding(.trailing, 8)
+                }
             }
             .font(.necto(.label, scale: scale))
             .foregroundStyle(isSelected || isHovering ? NectoTheme.text : NectoTheme.textSecondary)
@@ -170,11 +184,49 @@ struct NectoNavItem: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .accessibilityLabel(label)
+        .accessibilityValue(hasUpdate ? NectoL10n.text("Update available") : "")
     }
 
     private var background: Color {
         if isSelected { return NectoTheme.selected }
         return isHovering ? NectoTheme.hover : .clear
+    }
+}
+
+struct NectoUpdateDot: View {
+    var body: some View {
+        Circle()
+            .fill(NectoTheme.danger)
+            .frame(width: NectoTheme.statusDotSize, height: NectoTheme.statusDotSize)
+            .help(NectoL10n.text("Update available"))
+            .accessibilityHidden(true)
+    }
+}
+
+struct NectoUpdateProgress: View {
+    let step: String
+    let fraction: Double?
+    let scale: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Text(step)
+                Spacer(minLength: 0)
+                if let fraction {
+                    Text(fraction, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit()
+                }
+            }
+            .font(.necto(.caption, scale: scale))
+            .foregroundStyle(NectoTheme.textSecondary)
+
+            ProgressView(value: fraction)
+                .progressViewStyle(.linear)
+                .controlSize(.small)
+                .tint(NectoTheme.accent)
+                .accessibilityLabel(step)
+        }
     }
 }
 

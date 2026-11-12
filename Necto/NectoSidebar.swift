@@ -146,6 +146,7 @@ struct SidebarItem: View {
     let scale: CGFloat
     /// Sunken: a disabled plugin, present but not in play.
     var isDimmed = false
+    var hasUpdate = false
     var select: (() -> Void)?
 
     @State private var isHovering = false
@@ -168,16 +169,23 @@ struct SidebarItem: View {
                 .font(.necto(.caption, scale: scale))
                 .foregroundStyle(trailingIsIssue ? NectoTheme.danger : NectoTheme.textTertiary)
                 .lineLimit(1)
+
+            if hasUpdate {
+                NectoUpdateDot()
+            }
         }
         .font(.necto(.label, scale: scale))
         .foregroundStyle(isDimmed ? NectoTheme.textTertiary : isSelected ? NectoTheme.text : NectoTheme.textSecondary)
-        .padding(.horizontal, 8)
+        .padding(.leading, 8)
+        .padding(.trailing, 16)
         .frame(height: NectoTheme.rowHeight * scale)
         .background(background, in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
         .contentShape(Rectangle())
         .padding(.horizontal, 8)
         .onHover { isHovering = $0 }
         .modifier(TapIfPresent(action: select))
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(hasUpdate ? NectoL10n.text("Update available") : "")
     }
 
     private var background: Color {
@@ -336,10 +344,11 @@ struct DeviceRow: View {
                 // or a simulator belongs to the symbol on the left.
                 Circle()
                     .fill(NectoTheme.success)
-                    .frame(width: 6, height: 6)
+                    .frame(width: NectoTheme.statusDotSize, height: NectoTheme.statusDotSize)
             }
             .font(.necto(.label, scale: scale))
-            .padding(.horizontal, 8)
+            .padding(.leading, 8)
+            .padding(.trailing, 16)
             .frame(height: NectoTheme.rowHeight * scale)
             .background(background, in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
             .contentShape(Rectangle())

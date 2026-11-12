@@ -75,6 +75,35 @@ struct NectoUpdateDownloadTests {
         }
     }
 
+    @Test("reports received progress before the download finishes", arguments: [true, false])
+    func downloadProgress(knownLength: Bool) async throws {
+        let bytes = String(repeating: "x", count: 16_384)
+        let response = knownLength
+            ? "HTTP/1.1 200 OK\r\nContent-Length: 65536\r\n\r\n\(bytes)"
+            : "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4000\r\n\(bytes)\r\n"
+        try await serve(response, keepOpen: true) { url in
+            let samples = AsyncStream<Double?>.makeStream()
+            defer { samples.continuation.finish() }
+            let task = Task {
+                try await NectoAppRelease.download(url, maximumBytes: 65_536) { fraction in
+                    samples.continuation.yield(fraction)
+                }
+            }
+            defer { task.cancel() }
+            for await fraction in samples.stream {
+                if knownLength {
+                    let value = try #require(fraction)
+                    #expect(value > 0 && value <= 0.25)
+                } else {
+                    #expect(fraction == nil)
+                }
+                break
+            }
+            task.cancel()
+            await #expect(throws: CancellationError.self) { try await task.value }
+        }
+    }
+
     @Test("rejects empty successful downloads")
     func emptyDownload() async throws {
         _ = try await serve("HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n") { url in
