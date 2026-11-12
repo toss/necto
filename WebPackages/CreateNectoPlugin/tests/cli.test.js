@@ -8,13 +8,14 @@ import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 const cli = new URL("../bin/create-necto-plugin.js", import.meta.url);
 
 function run(t, args) {
   const cwd = mkdtempSync(resolve(tmpdir(), "necto-generator-cli-"));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));
-  return { cwd, ...spawnSync(process.execPath, [cli.pathname, ...args], {
+  return { cwd, ...spawnSync(process.execPath, [fileURLToPath(cli), ...args], {
     cwd, encoding: "utf8", timeout: 10_000,
   }) };
 }
