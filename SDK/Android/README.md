@@ -222,11 +222,11 @@ One session is served at a time.
     still scrolls the list it starts in.
 - **Panels** are packaged as Java resources: `necto/panels/<id>`, with a `files.txt`
   index.
-  - The build generates them from the built iOS panels in
-    `SDK/iOS/Sources/<PluginModule>/Panels`.
+  - The build generates them from the built panel beside each module,
+    `SDK/Plugins/<Name>/Panel`, the same directory the Swift package copies.
   - It overrides only the Control and Preferences manifests, which describe Android
     behaviour. They live in each owning plugin's `src/main/panel-manifests`, and the build fails
-    when their contracts drift from the iOS ones.
+    when their contracts drift from the panel's own.
 - **Requests from Necto** are bounded by the 64 KiB inbound frame, which reaches
   `files.write` and `preferences.set` with a large string. A larger request closes
   the session, the request fails with `PROVIDER_FAILED`, and Necto reconnects within a

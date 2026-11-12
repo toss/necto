@@ -33,4 +33,6 @@ WebBridge/dist/
 SDK/Android/**/.gradle/
 SDK/Android/**/.kotlin/
 SDK/Android/**/build/
+SDK/Plugins/**/.kotlin/
+SDK/Plugins/**/build/
 SDK/Android/local.properties
