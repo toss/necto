@@ -7,8 +7,8 @@ Build the tools you need as plugins. A modern alternative to Flipper.
 
 ![Necto showing CPU, memory, and frame rate in the Performance plugin](docs/images/necto.png)
 
-- Connect to an app on a USB device, a simulator or an emulator. The SDK listens
-  inside your app, so there is no proxy to configure and no certificate to trust
+- Connect straight to a running mobile app. The SDK listens inside your app, so
+  there is no proxy to configure and no certificate to trust
   ([docs/setup.md](docs/setup.md)).
 - Anything you need for app development can be a plugin. A device plugin rides in
   your app and its panel appears in Necto when the app connects; a desktop plugin

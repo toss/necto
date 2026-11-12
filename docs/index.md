@@ -17,7 +17,7 @@ hero:
 
 features:
   - title: Connect everywhere
-    details: Connect to an app on a USB device, a simulator or an emulator. The SDK listens inside your app, so there is no proxy to configure and no certificate to trust.
+    details: Connect straight to a running mobile app. The SDK listens inside your app, so there is no proxy to configure and no certificate to trust.
   - title: Build everything as a plugin
     details: Anything you need for app development can be a plugin. Device plugins and desktop plugins are both supported.
   - title: CLI support
