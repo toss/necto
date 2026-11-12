@@ -67,7 +67,7 @@ Simulator를 열고 부팅이 끝나면 테스트용 ExampleApp(`im.toss.necto.e
 제한 시간 안에 연결과 응답을 확인해요. 로그와 테스트 결과는 `Build/E2E/Logs`에 남아요.
 로컬에서는 별도로 실행하며 기본 `script/test`에는 포함하지 않아요.
 
-CI에서는 Mac·SDK 잡이 끝나면 `Simulator Connection & CLI E2E`를 실행해요.
+CI에서는 Mac·iOS SDK 잡이 끝나면 `iOS Simulator Connection & CLI E2E`를 실행해요.
 Mac 잡은 앱·CLI·테스트 번들을, SDK 잡은 ExampleApp을 전달해요. 같은 워크플로
 실행의 아티팩트를 받아 `test-without-building`으로 재빌드 없이 검증해요.
 실행 권한과 번들 내부 심볼릭 링크를 유지하도록 압축해서 전달해요.
@@ -119,6 +119,10 @@ Android 샘플과 별도의 Necto.app(`im.toss.necto.android-sample`)을 빌드�
 | `script/test-android-security` | 비공개 소켓에 붙는 비정상 피어: 응답 없는 핸드셰이크, 제한을 벗어난 프레임, 깊은 중첩, 멈춘 프레임, 과도한 동시 요청. 모두 끊기고 다음 연결은 정상이어야 해요 |
 | `script/test-android-artifacts` | SDK AAR이 권한을 선언하지 않는지, 플러그인 모듈이 자기 패널만 싣는지. 실행 중인 앱이 아니라 전체 Gradle 빌드가 필요해요 |
 | `script/test-android-consumer` | 게시된 Maven 아티팩트로 만든 독립 앱 5개가 선택한 모듈만 해석하고 그 패널만 패키징하는지. `--jitpack <tag-or-commit>`을 주면 로컬 게시물 대신 JitPack 아티팩트를 검사해요. 실행 중인 앱은 필요 없어요 |
+
+`script/android-sample <serial> --sdk-only`는 이미 빌드한 샘플을 Necto 호스트 없이
+설치하고 실행해요. `script/test-android-security`는 이 상태에서도 돌아가며, CI가 Mac
+없이 에뮬레이터에서 SDK를 검사하는 방식이에요.
 
 ## 플러그인 검증하기
 
@@ -244,11 +248,18 @@ npm 압축 파일에는 `LICENSE`를, DMG와 앱의 `Contents/Resources`에는
 
 공개 CI는 GitHub-hosted runner를 사용해요. Mac 잡의 앱과 테스트 번들에는 ad-hoc
 서명을 사용하고 SDK 잡의 ExampleApp은 서명 없이 빌드해요.
-`Check`의 작업은 `Mac Build & Tests`, `SDK Build & Tests`,
-`Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`, `Documentation Build`로 나뉘어요.
-Mac·SDK·E2E는 `macos-26`에서 Xcode 26.6을 사용하고
-웹과 문서 빌드는 `ubuntu-24.04`에서 실행해요.
-Node 22.12.0은 E2E를 제외한 네 작업에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
+`Check`의 작업은 `Mac Build & Tests`, `iOS SDK Build & Tests`,
+`iOS Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`,
+`Android SDK Build & Tests`, `Android Emulator Connection E2E`, `Documentation Build`로
+나뉘어요. Mac·iOS SDK·iOS E2E는 `macos-26`에서 Xcode 26.6을 사용하고
+웹·Android·문서 작업은 `ubuntu-24.04`에서 실행해요.
+Android 작업은 Temurin JDK 17로 `SDK/Android`에서 `./gradlew build`를 실행한 뒤
+`script/test-android-artifacts`와 `script/test-android-consumer`를 돌려요.
+Android E2E 작업은 API 35 에뮬레이터를 부팅하고
+`script/android-sample emulator-5554 --sdk-only`로 샘플을 띄운 뒤
+`script/test-android-security`를 실행해요. Necto 호스트는 macOS가 필요한데 호스티드 Mac
+러너에서는 에뮬레이터를 띄울 수 없어서, 호스트 없이 SDK에 직접 연결해 검사해요.
+Node 22.12.0은 Mac·iOS SDK·웹·문서 작업에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
 문서 배포는 별도 워크플로에서 수동으로 실행하며
 GitHub Pages는 Actions 배포로 설정해야 해요.
 워크플로 파일을 추가한 것만으로 외부 환경에서 실행에 성공했다고 볼 수는 없어요.

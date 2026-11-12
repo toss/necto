@@ -91,15 +91,20 @@ def invoke(client, request_id, operation, kind="once"):
     }})
 
 
-expected_host = out / "Products/Debug/Necto.app/Contents/MacOS/Necto"
-command = subprocess.check_output(["ps", "-p", str(run["pid"]), "-o", "command="], text=True).strip()
-assert command == str(expected_host), "The recorded host is no longer running"
+# A Necto host holds the sample's one session, so it is paused for the duration. A run
+# started with --sdk-only has no host.
+host = run.get("pid")
+if host is not None:
+    expected_host = out / "Products/Debug/Necto.app/Contents/MacOS/Necto"
+    command = subprocess.check_output(["ps", "-p", str(host), "-o", "command="], text=True).strip()
+    assert command == str(expected_host), "The recorded host is no longer running"
 def terminate(signum, _frame):
     raise SystemExit(128 + signum)
 
 
 signal.signal(signal.SIGTERM, terminate)
-os.kill(run["pid"], signal.SIGSTOP)
+if host is not None:
+    os.kill(host, signal.SIGSTOP)
 try:
     adb("shell", "am", "force-stop", "im.toss.necto.sample")
     adb("shell", "am", "start", "-W", "-n", "im.toss.necto.sample/.MainActivity")
@@ -147,7 +152,8 @@ try:
         assert "events" in reply["payload"]["output"]
         results["recoversWithoutAppRestart"] = True
 finally:
-    os.kill(run["pid"], signal.SIGCONT)
+    if host is not None:
+        os.kill(host, signal.SIGCONT)
     subprocess.run([run["adb"], "-s", run["serial"], "forward", "--remove", "localfilesystem:" + socket_path],
                    capture_output=True, timeout=10)
     shutil.rmtree(private, ignore_errors=True)
