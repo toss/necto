@@ -19,9 +19,9 @@ NectoPluginRegistry
    ├── desktop provider (Mac)
    └── device provider
          ↕ NectoDeviceBridgeClient / session
-       usbmuxd (device) · loopback (simulator)
+       usbmuxd (device) · loopback (simulator) · adb (Android)
          ↕ NectoSDK
-       NectoPlugin → NectoRegistrar (in the iOS app)
+       NectoPlugin → NectoRegistrar (in the app)
 ```
 
 플러그인은 자기 매니페스트에 있는 오퍼레이션 id를 호출해요. 런타임은
@@ -79,7 +79,8 @@ socket인 `~/Library/Application Support/Necto/necto.sock`에 연결하고 길�
 ## 앱이 리스닝하고 Mac이 연결하는 이유
 
 usbmuxd는 디바이스가 이미 열어 둔 포트에만 접근할 수 있으므로 소켓
-역할은 프로토콜 역할과 반대예요.
+역할은 프로토콜 역할과 반대예요. Android 앱도 비공개 Unix 소켓에서 리스닝하고,
+Mac이 `adb forward`로 그 소켓에 연결해요.
 
 | 레이어 | Mac | 앱 |
 | --- | --- | --- |

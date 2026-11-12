@@ -166,7 +166,8 @@ until Ctrl-C. While it runs, from another terminal:
 | --- | --- |
 | `script/test-android-sample` | Every shipped panel's operations through `necto-cli`, a stream cancelled and resubscribed, invalid input, then a force stop that removes the target and a relaunch that brings it back |
 | `script/test-android-security` | Malformed peers on the private socket: a silent handshake, frames outside the limits, deep nesting, a stalled frame, too many requests. Each is dropped and the next connection works |
-| `script/test-android-artifacts` | `necto-android` declares no permission, the packaged panels equal the iOS ones, and only the debug sample is debuggable. Needs a full Gradle build, not a running app |
+| `script/test-android-artifacts` | No SDK AAR declares a permission, each plugin module carries only its own panel, the packaged panels equal the iOS ones, and only the debug sample is debuggable. Needs a full Gradle build, not a running app |
+| `script/test-android-consumer` | Five independent minified apps built from the published Maven artifacts resolve only the modules they select and package only those panels. `--jitpack <tag-or-commit>` checks JitPack's artifacts instead of a local publication. Needs no running app |
 
 ## Verifying a plugin
 
@@ -331,7 +332,7 @@ bundle; the SDK job builds ExampleApp without signing.
 `Android SDK Build & Tests`, and `Documentation Build`.
 Mac, SDK and E2E use Xcode 26.6 on `macos-26`; web, Android and documentation builds use
 `ubuntu-24.04`. The Android job uses Temurin JDK 17 and runs `./gradlew build` in
-`SDK/Android`, then `script/test-android-artifacts`. The four non-E2E jobs use Node 22.12.0, and web and documentation
+`SDK/Android`, then `script/test-android-artifacts` and `script/test-android-consumer`. The four non-E2E jobs use Node 22.12.0, and web and documentation
 builds use Yarn 4.6.0.
 Documentation deployment remains a separate manual workflow. GitHub Pages must be
 configured to deploy from Actions.

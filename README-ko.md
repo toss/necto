@@ -2,15 +2,15 @@
 
 [English](README.md) | 한국어
 
-Necto는 어떤 환경에서든 바로 연결되는 iOS 디버깅 플랫폼이에요.  
+Necto는 어떤 환경에서든 바로 연결되는 iOS·Android 디버깅 플랫폼이에요.  
 무엇이든 플러그인으로 만들어 내 도구로 써요. Flipper의 현대적인 대안이에요.
 
 ![Performance 플러그인에서 CPU, 메모리, 프레임률을 보여주는 Necto 화면](docs/images/necto.png)
 
-- USB로 연결한 기기나 iOS 시뮬레이터의 앱에 연결해요. SDK가 앱 안에서 동작하기
-  때문에 프록시를 설정하거나 인증서를 신뢰시킬 필요가 없어요
+- USB로 연결한 기기, iOS 시뮬레이터, Android 에뮬레이터의 앱에 연결해요. SDK가 앱
+  안에서 동작하기 때문에 프록시를 설정하거나 인증서를 신뢰시킬 필요가 없어요
   ([docs/ko/setup.md](docs/ko/setup.md)).
-- iOS 개발에 필요한 모든 것을 플러그인으로 만들 수 있어요. 디바이스 플러그인은 앱에
+- 앱 개발에 필요한 모든 것을 플러그인으로 만들 수 있어요. 디바이스 플러그인은 앱에
   실려서 앱이 연결되면 패널이 Necto에 표시되고, 데스크톱 플러그인은 GitHub 릴리스,
   폴더나 ZIP으로 설치해 연결된 앱 없이도 동작해요
   ([docs/ko/plugin-manifest.md](docs/ko/plugin-manifest.md)).
@@ -19,7 +19,8 @@ Necto는 어떤 환경에서든 바로 연결되는 iOS 디버깅 플랫폼이�
   ([docs/ko/control-socket.md](docs/ko/control-socket.md)).
 - 기능 화면은 `manifest.json`과 웹 에셋으로 구성된 웹 플러그인이에요.
   앱과 같은 디자인 토큰을 사용해요([docs/ko/design.md](docs/ko/design.md)).
-- Mac 앱과 SDK는 Swift를, 플러그인 화면은 웹 기술을 사용해요.
+- Mac 앱과 iOS SDK는 Swift를, Android SDK는 Kotlin을, 플러그인 화면은 웹 기술을
+  사용해요.
   Mac 앱이 연결과 실행을 담당하며 별도의 서버 프로세스는 없어요
   ([docs/ko/architecture.md](docs/ko/architecture.md)).
 
@@ -34,7 +35,8 @@ Necto를 응용 프로그램 폴더로 옮기세요. 체크섬 확인과 ad-hoc 
 [설치 안내](docs/ko/install.md)에 있어요.
 
 소스에서 빌드하려면 macOS 14 이상, Swift 6.0 이상을 지원하는 Xcode,
-Node.js 22.12 이상과 Yarn 4.6.0이 필요해요. iOS SDK는 iOS 16 이상을 지원해요.
+Node.js 22.12 이상과 Yarn 4.6.0이 필요해요. iOS SDK는 iOS 16 이상을,
+Android SDK는 Android 8.0(API 26) 이상을 지원해요.
 
 ```bash
 script/build   # 웹 패키지, Swift 패키지, 앱 순서로 빌드
@@ -46,8 +48,9 @@ open Build/Products/Debug/Necto.app
 `script/build`로 `ExampleApp`도 빌드하려면 스크립트 실행 전에 iOS 시뮬레이터를
 켜두세요.
 
-앱에 SDK를 연동하고 Release 빌드에서 SDK 호출을 제외하는 방법은
-[docs/ko/setup.md](docs/ko/setup.md)를 참고하세요.
+앱에 SDK를 연동하고 Release 빌드에서 SDK 호출을 제외하는 방법은 iOS는
+[docs/ko/setup.md](docs/ko/setup.md), Android는
+[SDK/Android/README.md](SDK/Android/README.md)를 참고하세요.
 
 ## 플러그인 만들기
 

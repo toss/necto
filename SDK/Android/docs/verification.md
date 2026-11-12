@@ -47,6 +47,10 @@ Repeated over USB on a Samsung Galaxy S25+ (`SM-S936N`, Android 17, API 37):
 `script/test-android-sample` and `script/test-android-security` both pass, with the
 target appearing as `android:<serial>`.
 
+With the plugins in their own modules, both scripts pass again over USB on a Samsung
+Galaxy S25 (`SM-S931N`, Android 17, API 37), against a sample built from the split
+modules.
+
 The Control fixture and a string set edit were then driven over the ADB socket through
 `necto-cli`, three runs on each of the emulator and the Galaxy S25+: on Compose and on
 Views, `poc.readonly` and `poc.trap` are not targets, two taps, the nav action, the

@@ -4,6 +4,10 @@ Necto's SDK is a debug tool that compiles into your app. This page covers integr
 the SDK and excluding its calls from production builds. Install the Mac app separately
 using [install.md](install.md).
 
+This page covers the iOS SDK. Android apps use the Kotlin SDK in `SDK/Android`; see
+[Necto for Android](https://github.com/toss/necto/blob/main/SDK/Android/README.md)
+for its modules, its ADB connection and how it differs from iOS.
+
 Use Necto only with trusted apps and runtime environments, including development
 devices and networks. The SDK connection has no peer
 authentication or TLS: USB and loopback do not prevent other apps on the device or
@@ -107,6 +111,8 @@ dependencies and inspect the actual Release output for remaining code and resour
 
 - **Simulator**: the Mac reaches the app over loopback.
 - **Device**: over the USB cable, through `usbmuxd`.
+- **Android**: over ADB, to a private Unix socket in the app, on a USB device or a
+  local emulator.
 - The SDK listens on a local TCP port. If another simulator app holds it, the SDK
   looks for a free port within its port range. Necto does not use Bonjour or multicast.
 - Two apps, or the same app on two devices, connect side by side and are told

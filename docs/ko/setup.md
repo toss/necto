@@ -4,6 +4,11 @@ Necto SDK는 앱과 함께 컴파일되는 디버그 도구예요. SDK를 연결
 사용자에게 노출하지 않도록 설정하는 방법을 다뤄요.
 Mac 앱 설치 방법은 [install.md](install.md)를 참고하세요.
 
+이 문서는 iOS SDK를 다뤄요. Android 앱은 `SDK/Android`의 Kotlin SDK를 사용해요.
+모듈 구성, ADB 연결 방식, iOS와 다른 점은
+[Necto for Android](https://github.com/toss/necto/blob/main/SDK/Android/README.md)를
+참고하세요.
+
 Necto는 신뢰할 수 있는 앱과 실행 환경(개발 기기·네트워크 등)에서만 사용하세요.
 SDK 연결에는 상대 인증과 TLS가 없어요. USB나 루프백만으로는 같은 기기의 다른 앱이나
 Mac의 다른 프로그램이 접근하는 것을 막지 못해요. 포트를 신뢰할 수 없는 네트워크에
@@ -85,6 +90,8 @@ Swift 패키지의 소스를 제외할 수는 없어요.
 
 - **시뮬레이터** — Mac이 루프백으로 앱에 접근해요.
 - **실기기** — USB 케이블로 연결하면 `usbmuxd`를 거쳐요.
+- **Android** — USB 기기나 로컬 에뮬레이터에서 ADB를 거쳐 앱 안의 비공개 Unix 소켓에
+  연결해요.
 - SDK는 로컬 TCP 포트에서 수신 대기해요. 다른 시뮬레이터 앱이 포트를 쓰고
   있으면 정해진 포트 범위에서 빈 포트를 찾아요.
   Necto는 Bonjour나 멀티캐스트를 쓰지 않아요.
