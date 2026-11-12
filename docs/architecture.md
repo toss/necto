@@ -56,6 +56,8 @@ handlers and manifest bindings, not a feature-specific host adapter or wire mess
 | `NectoUIControlPlugin` | UI inspection, interaction and iOS touch runtime | Other plugins |
 | `NectoProcessMetricPlugin` | Optional CPU, memory, FPS and thread sampling | Starting unless the app registers it and a reader subscribes |
 | `NectoURLSessionCapturePlugin` | One capture mechanism, for apps using `URLSession` | Capture that an app cannot disable |
+| `necto-core`, `necto-android` | The Android bridge: protocol, runtime, ADB listener and app identity | Feature implementations or panels |
+| `SDK/Plugins/<Name>` | One plugin on both platforms: its built panel, Swift target and Gradle module | Another plugin |
 | `Necto/` | Shell UI and the plugin host | Feature screens |
 | `ExampleApp/` | Verifying connection and plugins on a device | Product features |
 

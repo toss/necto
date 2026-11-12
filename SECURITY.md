@@ -8,7 +8,7 @@ channel, without exploit steps, credentials, captured traffic or other sensitive
 Wait for a maintainer to provide a private channel before sharing those details.
 
 Include the affected Necto/SDK versions, operating systems and whether the connection
-uses USB or a simulator. Check the latest release when it is safe to do so; support
+uses USB, a simulator or an emulator. Check the latest release when it is safe to do so; support
 for older releases is not guaranteed.
 
 Necto is a development tool, not a sandbox for untrusted plugins. Keep it out of
