@@ -7,13 +7,12 @@ import { dirname, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const panelRoots = [];
-for (const entry of await readdir(resolve(root, "Sources"), { withFileTypes: true })) {
+for (const entry of await readdir(resolve(root, "SDK/Plugins"), { withFileTypes: true })) {
   if (!entry.isDirectory()) continue;
-  const panelRoot = resolve(root, "Sources", entry.name, "Panels");
-  let panels;
-  try { panels = await readdir(panelRoot, { withFileTypes: true }); }
+  const panelRoot = resolve(root, "SDK/Plugins", entry.name, "Panel");
+  try { await access(panelRoot); }
   catch (error) { if (error.code === "ENOENT") continue; throw error; }
-  panelRoots.push(...panels.filter(entry => entry.isDirectory()).map(entry => resolve(panelRoot, entry.name)));
+  panelRoots.push(panelRoot);
 }
 panelRoots.push(resolve(root, "WebPackages/BuiltInPlugins/Plugins/plugin-sample"));
 panelRoots.push(resolve(root, "WebPackages/BuiltInPlugins/Plugins/shell-demo"));

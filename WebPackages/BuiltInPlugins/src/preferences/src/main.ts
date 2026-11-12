@@ -271,12 +271,15 @@ function detailBody(): Node[] {
       return [pairs(), valueTitle(), field, actions([save])];
     }
 
-    case "Array": {
+    case "Array":
+    case "StringSet": {
       // Rows rather than a JSON blob: one element per field, and an element that is
-      // itself structured is one line of JSON in its row.
+      // itself structured is one line of JSON in its row. StringSet rows stay raw
+      // strings even when their text looks like JSON, such as `1.0` or `true`.
+      const strings = detail.type === "StringSet";
       const stored = arrayItems(detail.value);
       if (!stored) return readOnly();
-      const items = stored.map(display);
+      const items = stored.map(value => display(value, strings));
 
       const rows = el("div", { style: "display:flex; flex-direction:column; gap:6px; max-width:560px" });
       const renderRows = () => {
@@ -319,7 +322,7 @@ function detailBody(): Node[] {
       renderRows();
 
       const save = saveButton(() => {
-        void write(items.map(element)).catch(failed);
+        void write(strings ? items : items.map(element)).catch(failed);
       });
       return [pairs(), valueTitle(), rows, actions([save])];
     }

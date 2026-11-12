@@ -143,7 +143,14 @@ final class NectoAppModel {
 
     let registry = NectoPluginRegistry(targetHandles: NectoAppModel.targetHandles)
 
-    private let connections = NectoConnectionCenter()
+    /// The Android SDK folder chosen in Settings. Empty finds the SDK automatically.
+    static let androidSDKKey = "androidSDKPath"
+
+    private let connections = NectoConnectionCenter(
+        androidSDK: UserDefaults.standard.string(forKey: NectoAppModel.androidSDKKey)
+    )
+    /// The last SDK change, so edits typed one after another arrive in order.
+    private var androidSDKChange: Task<Void, Never>?
     private let storage = NectoPluginStorage()
     private let events = NectoPluginEventRouter()
     let diagnostics = NectoDiagnosticsLog()
@@ -224,6 +231,14 @@ final class NectoAppModel {
     ) async {
         await diagnostics.append(severity, source, message, detail: detail)
         unreadIssueCount = await diagnostics.unreadIssueCount()
+    }
+
+    func setAndroidSDK(_ path: String) {
+        let previous = androidSDKChange
+        androidSDKChange = Task { [connections] in
+            await previous?.value
+            await connections.setAndroidSDK(path)
+        }
     }
 
     func acknowledgeIssues() async {
@@ -751,7 +766,7 @@ final class NectoAppModel {
                 name: app.deviceName,
                 appName: app.appName,
                 appBundleID: app.appBundleID,
-                deviceType: app.connection == .simulator ? "simulator" : "device",
+                deviceType: app.connection.isEmulator ? "simulator" : "device",
                 // Everything the connection centre reports is by definition attached.
                 isConnected: true,
                 nectoVersion: app.sdkVersion

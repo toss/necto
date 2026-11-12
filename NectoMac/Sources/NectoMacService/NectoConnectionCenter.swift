@@ -8,14 +8,36 @@ import Foundation
 
 /// Finds apps to talk to and keeps their sessions open.
 ///
-/// Two paths reach an app. A device is announced by usbmuxd and reached through a
+/// Three paths reach an app. A device is announced by usbmuxd and reached through a
 /// tunnel; a simulator shares the Mac's loopback and has nothing to announce it, so
-/// it is probed instead.
+/// it is probed instead. An Android app is found through ADB and reached through a
+/// private Unix socket forwarded to it.
 ///
 /// The Mac assigns the device id, because the app cannot know a stable one for
 /// itself: a UDID for a device, a fixed value for the simulator.
 public actor NectoConnectionCenter {
     public static let simulatorDeviceID = "simulator"
+
+    /// A private Unix socket forwarded over ADB to one app on one Android device.
+    struct AndroidEndpoint: Sendable, Hashable {
+        let serial: String
+        let socketPath: String
+        let appBundleID: String
+
+        var deviceID: String { "android:" + serial }
+        var connectionID: String { NectoConnectedApp.id(for: NectoTarget(deviceID: deviceID, appBundleID: appBundleID)) }
+
+        func connect() async throws -> NectoMessageSession {
+            let parent = URL(filePath: socketPath).deletingLastPathComponent().path
+            var directory = stat()
+            var socket = stat()
+            guard lstat(parent, &directory) == 0, directory.st_mode & S_IFMT == S_IFDIR,
+                  directory.st_uid == getuid(), directory.st_mode & 0o077 == 0,
+                  lstat(socketPath, &socket) == 0, socket.st_mode & S_IFMT == S_IFSOCK,
+                  socket.st_uid == getuid() else { throw POSIXError(.EACCES) }
+            return try await NectoMessageSession(stream: NectoSocketStream.connect(unixPath: socketPath))
+        }
+    }
 
     private struct Connection {
         let app: NectoConnectedApp
@@ -25,6 +47,7 @@ public actor NectoConnectionCenter {
     private enum Endpoint: Hashable {
         case local(port: UInt16)
         case usb(device: NectoUSBDevice, port: UInt16)
+        case android(AndroidEndpoint)
 
         var usbDeviceID: Int? {
             if case let .usb(device, _) = self { return device.deviceID }
@@ -34,30 +57,53 @@ public actor NectoConnectionCenter {
 
     private let port: UInt16
     private let probeInterval: Duration
+    private var adb: (any NectoADB)?
+    /// The adb file behind ``adb``, so choosing the same SDK again changes nothing.
+    private var adbExecutable: String?
+    private var started = false
     private let deviceEvents: @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>
     private var onEnvelope: (@Sendable (NectoEnvelope, NectoTarget) -> Void)?
 
     private var connections: [String: Connection] = [:]
     private var deviceWatcher: Task<Void, Never>?
+    private var androidWatcher: Task<Void, Never>?
+    /// Where this run's forwarded sockets live: a directory only this user can enter.
+    private var androidSocketDirectory: String?
+    /// The socket name each forwarded app was last found under, by endpoint.
+    private var androidForwards: [AndroidEndpoint: String] = [:]
     private var probes: [Endpoint: Task<Void, Never>] = [:]
     private var sessionTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var observers: [UUID: AsyncStream<[NectoConnectedApp]>.Continuation] = [:]
 
+    /// [androidSDK] is an SDK folder chosen in Settings; nil or empty finds one itself.
     public init(
         port: UInt16 = NectoTransportDefaults.devicePort,
-        probeInterval: Duration = .seconds(2)
+        probeInterval: Duration = .seconds(2),
+        androidSDK: String? = nil
     ) {
-        self.init(port: port, probeInterval: probeInterval, deviceEvents: NectoUSBHub.deviceEvents)
+        // Without the Android SDK there is no adb, and Android discovery stays off.
+        let executable = NectoADBClient.locate(sdk: androidSDK)
+        self.init(port: port, probeInterval: probeInterval, deviceEvents: NectoUSBHub.deviceEvents,
+                  adb: executable.map { NectoADBClient(executable: $0) }, adbExecutable: executable)
+    }
+
+    /// The adb that an SDK folder chosen in Settings, or none, leads to.
+    public static func adbExecutable(androidSDK: String?) -> String? {
+        NectoADBClient.locate(sdk: androidSDK)
     }
 
     init(
         port: UInt16,
         probeInterval: Duration,
-        deviceEvents: @escaping @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>
+        deviceEvents: @escaping @Sendable () -> AsyncThrowingStream<NectoUSBDeviceEvent, any Error>,
+        adb: (any NectoADB)? = nil,
+        adbExecutable: String? = nil
     ) {
         self.port = port
         self.probeInterval = probeInterval
         self.deviceEvents = deviceEvents
+        self.adb = adb
+        self.adbExecutable = adbExecutable
     }
 
     public var connectedApps: [NectoConnectedApp] {
@@ -120,18 +166,53 @@ public actor NectoConnectionCenter {
     }
 
     public func start() {
-        guard deviceWatcher == nil else { return }
+        guard !started else { return }
+        started = true
 
         notes?(.watchingForDevices)
         deviceWatcher = Task { await watchDevices() }
         for candidate in Self.portsToDial(from: port, skipping: []) {
             startProbe(.local(port: candidate))
         }
+        if let adb { androidWatcher = Task { await watchAndroid(adb) } }
+    }
+
+    /// Moves Android discovery to the adb in [androidSDK]. Every adb talks to the same
+    /// server on this Mac, so forwards and connections made through the old one stay.
+    public func setAndroidSDK(_ androidSDK: String?) {
+        let executable = NectoADBClient.locate(sdk: androidSDK)
+        guard executable != adbExecutable else { return }
+        let previous = adb
+        adbExecutable = executable
+        adb = executable.map { NectoADBClient(executable: $0) }
+        androidWatcher?.cancel()
+        androidWatcher = nil
+        if adb == nil {
+            // Nothing follows the Android apps any more, so they are let go now rather
+            // than left connected with no one to notice them leave.
+            let forwards = Array(androidForwards.keys)
+            androidForwards.removeAll()
+            for endpoint in forwards { probes.removeValue(forKey: .android(endpoint))?.cancel() }
+            let ids = Set(forwards.map(\.connectionID))
+            removeConnections { ids.contains($0.id) }
+            if let previous, !forwards.isEmpty {
+                Task { for endpoint in forwards { await previous.removeForward(serial: endpoint.serial, socketPath: endpoint.socketPath) } }
+            }
+        }
+        if started, let adb { androidWatcher = Task { await watchAndroid(adb) } }
     }
 
     public func stop() {
+        started = false
         deviceWatcher?.cancel()
         deviceWatcher = nil
+        androidWatcher?.cancel()
+        androidWatcher = nil
+        if let adb, !androidForwards.isEmpty {
+            let forwards = Array(androidForwards.keys)
+            Task { for endpoint in forwards { await adb.removeForward(serial: endpoint.serial, socketPath: endpoint.socketPath) } }
+        }
+        androidForwards.removeAll()
         for probe in probes.values { probe.cancel() }
         probes.removeAll()
         for connection in connections.values { connection.session.close() }
@@ -174,6 +255,128 @@ public actor NectoConnectionCenter {
         for endpoint in probes.keys.filter({ $0.usbDeviceID.map(matches) == true }) {
             probes.removeValue(forKey: endpoint)?.cancel()
         }
+    }
+
+    /// Follows Android devices and the Necto apps running on them. ADB announces
+    /// nothing, so the device list and each device's apps are read every interval.
+    private func watchAndroid(_ adb: any NectoADB) async {
+        guard let directory = androidSocketDirectory ?? Self.makeAndroidSocketDirectory() else { return }
+        androidSocketDirectory = directory
+        await removeAbandonedForwards(through: adb)
+
+        while !Task.isCancelled {
+            if let serials = try? await adb.devices() {
+                var found: [AndroidEndpoint: String] = [:]
+                var unread: Set<String> = []
+                for serial in serials {
+                    guard let apps = try? await adb.endpoints(serial: serial) else {
+                        // A slow answer is not a departure: keep what was found before.
+                        unread.insert(serial)
+                        continue
+                    }
+                    for (app, name) in apps {
+                        found[androidEndpoint(serial: serial, app: app, in: directory)] = name
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                await follow(found, keeping: unread, through: adb)
+            }
+            try? await Task.sleep(for: probeInterval)
+        }
+    }
+
+    /// Forwards apps found or found under a new name, and lets go of the ones gone.
+    private func follow(_ found: [AndroidEndpoint: String], keeping unread: Set<String>, through adb: any NectoADB) async {
+        // A restarted adb server forgets every forward while the apps keep their names,
+        // so what it holds is checked, not only what was asked of it.
+        if let held = try? await adb.forwards() {
+            let paths = Set(held.map(\.socketPath))
+            for endpoint in androidForwards.keys where !paths.contains(endpoint.socketPath) {
+                androidForwards.removeValue(forKey: endpoint)
+            }
+        }
+        for (endpoint, name) in found where androidForwards[endpoint] != name {
+            guard !Task.isCancelled else { return }
+            do {
+                try await adb.forward(serial: endpoint.serial, socketPath: endpoint.socketPath, name: name)
+            } catch {
+                continue
+            }
+            // Recorded before the check below, so stop() still knows to remove it.
+            androidForwards[endpoint] = name
+            guard !Task.isCancelled else { return }
+            startProbe(.android(endpoint))
+        }
+        for endpoint in androidForwards.keys where found[endpoint] == nil && !unread.contains(endpoint.serial) {
+            guard !Task.isCancelled else { return }
+            androidForwards.removeValue(forKey: endpoint)
+            probes.removeValue(forKey: .android(endpoint))?.cancel()
+            removeConnections { $0.id == endpoint.connectionID }
+            await adb.removeForward(serial: endpoint.serial, socketPath: endpoint.socketPath)
+        }
+    }
+
+    /// Forwards and directories a run that crashed or was killed left behind. Another
+    /// Necto may be running beside this one, so only a run whose process is gone counts.
+    private func removeAbandonedForwards(through adb: any NectoADB) async {
+        guard let held = try? await adb.forwards() else { return }
+        for (serial, path) in held {
+            guard let directory = Self.abandonedAndroidSocketDirectory(holding: path) else { continue }
+            await adb.removeForward(serial: serial, socketPath: path)
+            Self.removeAndroidSocketDirectory(directory)
+        }
+    }
+
+    /// The directory of [path] when it is one of Necto's and the run that made it is gone.
+    ///
+    /// Any program that talks to the adb server can add a forward, so the path is matched
+    /// whole, `necto-adb.<pid>.<6 characters>/<n>.sock` directly in the temporary
+    /// directory, and nothing like `..` can lead elsewhere.
+    static func abandonedAndroidSocketDirectory(holding path: String) -> String? {
+        guard path.hasPrefix(androidSocketDirectoryPrefix),
+              let match = path.dropFirst(androidSocketDirectoryPrefix.count)
+                .wholeMatch(of: /([0-9]{1,9})\.[A-Za-z0-9]{6}\/[0-9]{1,9}\.sock/),
+              let pid = Int32(match.output.1),
+              pid != getpid(), kill(pid, 0) != 0, errno == ESRCH
+        else { return nil }
+        return URL(filePath: path).deletingLastPathComponent().path
+    }
+
+    /// Removes the sockets in one of Necto's directories, then the directory itself.
+    /// Nothing is removed recursively: a directory holding anything else stays.
+    private static func removeAndroidSocketDirectory(_ directory: String) {
+        var info = stat()
+        guard lstat(directory, &info) == 0, info.st_mode & S_IFMT == S_IFDIR, info.st_uid == getuid(),
+              let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
+        for name in names where name.wholeMatch(of: /[0-9]{1,9}\.sock/) != nil {
+            var socket = stat()
+            let path = directory + "/" + name
+            if lstat(path, &socket) == 0, socket.st_mode & S_IFMT == S_IFSOCK { unlink(path) }
+        }
+        rmdir(directory)
+    }
+
+    /// One socket path per app on a device, kept for as long as Necto runs, so an app
+    /// that restarts under a new name is forwarded to the same place.
+    private func androidEndpoint(serial: String, app: String, in directory: String) -> AndroidEndpoint {
+        if let known = androidForwards.keys.first(where: { $0.serial == serial && $0.appBundleID == app }) {
+            return known
+        }
+        androidSocketCount += 1
+        // A Unix socket path is limited to 104 bytes, so the name is a counter.
+        return AndroidEndpoint(serial: serial, socketPath: directory + "/\(androidSocketCount).sock", appBundleID: app)
+    }
+
+    private var androidSocketCount = 0
+
+    static let androidSocketDirectoryPrefix = NSTemporaryDirectory() + "necto-adb."
+
+    /// `necto-adb.<pid>.XXXXXX`: the pid tells a later run whether this one is still alive.
+    private static func makeAndroidSocketDirectory() -> String? {
+        var template = Array((androidSocketDirectoryPrefix + "\(getpid()).XXXXXX").utf8CString)
+        // mkdtemp creates it 0700.
+        guard mkdtemp(&template) != nil else { return nil }
+        return String(cString: template)
     }
 
     private func connectToDevice(_ device: NectoUSBDevice, port candidate: UInt16) async {
@@ -225,6 +428,24 @@ public actor NectoConnectionCenter {
                 }
             case let .usb(device, candidate) where !connectedPorts(usbDeviceID: device.deviceID).contains(candidate):
                 await connectToDevice(device, port: candidate)
+            case let .android(endpoint) where connections[endpoint.connectionID] == nil:
+                do {
+                    let session = try await endpoint.connect()
+                    try await withTaskCancellationHandler {
+                        try await accept(
+                            session: session,
+                            deviceID: endpoint.deviceID,
+                            connection: endpoint.serial.hasPrefix("emulator-") ? .androidEmulator : .androidDevice,
+                            usbDeviceID: nil,
+                            expectedAppBundleID: endpoint.appBundleID
+                        )
+                    } onCancel: {
+                        session.close()
+                    }
+                } catch {
+                    // The app is starting, or restarted under a new name the watcher
+                    // has not forwarded yet. Try again after the interval.
+                }
             default:
                 break
             }
@@ -255,10 +476,15 @@ public actor NectoConnectionCenter {
         usbDeviceID: Int?,
         deviceName: String? = nil,
         localPort: UInt16? = nil,
-        devicePort: UInt16? = nil
+        devicePort: UInt16? = nil,
+        expectedAppBundleID: String? = nil
     ) async throws -> Task<Void, Never>? {
         let (hello, ack) = try await session.handshake {
             let hello = try await session.receive(NectoHandshakeHello.self)
+            if let expectedAppBundleID, hello.appBundleID != expectedAppBundleID {
+                session.close()
+                throw POSIXError(.EACCES)
+            }
             let ack = NectoHandshakeAck.evaluate(hello)
             try await session.send(ack)
             return (hello, ack)

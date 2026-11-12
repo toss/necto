@@ -47,9 +47,10 @@ output is committed, so building the app alone does not require Node.
 ## Connect an app
 
 **Your own app**, with the SDK wired per [setup.md](setup.md) — launch it in a
-simulator or attach the device over USB. The app appears in Necto's sidebar when connected.
+simulator or an emulator, or attach the device over USB. The app appears in Necto's
+sidebar when connected.
 
-**No app yet** — run the bundled example app in a simulator.
+**No app yet** — run the bundled example app in an iOS simulator.
 
 ```bash
 xcrun simctl list devices available          # pick a device id
@@ -57,6 +58,15 @@ xcrun simctl boot <device-id>
 xcodebuild -project Necto.xcodeproj -scheme ExampleApp -destination "id=<device-id>" SYMROOT="$PWD/Build/Products" build
 xcrun simctl install <device-id> Build/Products/Debug-iphonesimulator/ExampleApp.app
 xcrun simctl launch <device-id> im.toss.necto.example
+```
+
+Or run the Android sample on an emulator or a USB device. This needs JDK 17 and the
+Android SDK.
+
+```bash
+SDK/Android/gradlew -p SDK/Android :sample:assembleDebug
+adb install -r SDK/Android/sample/build/outputs/apk/debug/sample-debug.apk
+adb shell am start -n im.toss.necto.sample/.MainActivity
 ```
 
 ## Watch the first request
@@ -80,6 +90,10 @@ responses to rejected requests.
 - On a device, a `connectionRefused` result means the tunnel reached the
   device but nothing was listening — the expected answer when the app is not
   running.
+- For an Android app, Necto needs `adb`. It looks in `ANDROID_HOME`, `ANDROID_SDK_ROOT`
+  and `~/Library/Android/sdk`. `adb devices` must list the device as `device`, on a USB
+  cable or as a local emulator; wireless ADB is not used. The app must be a debuggable
+  build, because the SDK does nothing in any other.
 - [verification.md](verification.md) covers the full checklist.
 
 ## Where next

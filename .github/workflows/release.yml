@@ -92,3 +92,37 @@ jobs:
           VERSION: ${{ inputs.version }}
           RELEASE_COMMIT: ${{ needs.build.outputs.commit }}
         run: node script/github-release.mjs publish "$VERSION" "$RELEASE_COMMIT"
+
+  android:
+    name: Android SDK on JitPack
+    needs: [build, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - name: Install Android SDK packages
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      # JitPack builds a tag on its first request, and the build log answers once the
+      # build has ended. Asking here keeps the first app that adds the release from waiting.
+      - name: Build the release on JitPack
+        run: |
+          curl --fail --silent --show-error --max-time 900 \
+            "https://jitpack.io/com/github/toss/necto/$VERSION/build.log" | tail -n 20
+          status="$(curl --fail --silent --show-error https://jitpack.io/api/builds/com.github.toss/necto \
+            | jq -r --arg version "$VERSION" '.["com.github.toss"].necto[$version]')"
+          echo "JitPack build of $VERSION: $status"
+          [[ "$status" == ok ]]
+      - name: Check selective consumers against JitPack
+        run: script/test-android-consumer --jitpack "$VERSION"

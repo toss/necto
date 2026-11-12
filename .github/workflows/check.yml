@@ -51,7 +51,7 @@ jobs:
           retention-days: 1
 
   sdk:
-    name: SDK Build & Tests
+    name: iOS SDK Build & Tests
     if: github.server_url == 'https://github.com'
     runs-on: macos-26
     timeout-minutes: 30
@@ -71,7 +71,7 @@ jobs:
       - name: Test SDK packages
         run: swift test --verbose
       - name: Test SDK consumer
-        run: swift test --package-path Tests/Fixtures/SDKConsumer --verbose
+        run: swift test --package-path SDK/iOS/Tests/Fixtures/SDKConsumer --verbose
       - name: Test package boundaries
         run: node --test script/tests/package.test.mjs
       - name: Build the iOS example
@@ -86,7 +86,7 @@ jobs:
           retention-days: 1
 
   e2e:
-    name: Simulator Connection & CLI E2E
+    name: iOS Simulator Connection & CLI E2E
     needs: [mac, sdk]
     if: github.server_url == 'https://github.com'
     runs-on: macos-26
@@ -144,6 +144,98 @@ jobs:
         run: yarn build
       - name: Test web packages and panel contracts
         run: script/test web
+
+  android:
+    name: Android SDK Build & Tests
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - name: Install Android SDK packages
+        run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Build and test the Android SDK and sample
+        working-directory: SDK/Android
+        run: ./gradlew build --console=plain
+      - name: Test Android artifacts
+        run: script/test-android-artifacts
+      - name: Test selective Android SDK consumers
+        run: script/test-android-consumer
+      - name: Upload Android test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-test-results
+          path: |
+            SDK/Android/*/build/reports/tests
+            SDK/Plugins/*/Android/build/reports/tests
+          retention-days: 7
+
+  android-e2e:
+    name: Android Emulator Connection E2E
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      - name: Allow the runner to use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install Android SDK packages
+        run: >
+          (yes || true) | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+          "platforms;android-35" "build-tools;35.0.0" "platform-tools" "emulator"
+          "system-images;android-35;google_apis;x86_64"
+      - name: Build the Android sample
+        working-directory: SDK/Android
+        run: ./gradlew :sample:assembleDebug --console=plain
+      - name: Boot an emulator
+        env:
+          # avdmanager and the emulator look for AVDs in different default folders here.
+          ANDROID_AVD_HOME: ${{ runner.temp }}/avd
+        run: |
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd --force \
+            --name necto --package "system-images;android-35;google_apis;x86_64"
+          nohup $ANDROID_HOME/emulator/emulator -avd necto -no-window -no-audio -no-boot-anim \
+            -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          adb=$ANDROID_HOME/platform-tools/adb
+          timeout 180 $adb wait-for-device
+          timeout 300 $adb shell 'until [ "$(getprop sys.boot_completed)" = 1 ]; do sleep 2; done'
+          $adb shell svc power stayon true
+          $adb shell wm dismiss-keyguard
+      # The Necto host runs on macOS only and hosted Mac runners cannot run an emulator,
+      # so this speaks to the SDK directly, the way the host does over ADB.
+      - name: Test the SDK connection on the emulator
+        run: |
+          script/android-sample emulator-5554 --sdk-only
+          script/test-android-security
+      - name: Upload emulator E2E results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-emulator-e2e-results
+          path: |
+            Build/Android/Logs
+            Build/Android/security-results.json
+            ${{ runner.temp }}/emulator.log
+          retention-days: 7
 
   docs:
     name: Documentation Build

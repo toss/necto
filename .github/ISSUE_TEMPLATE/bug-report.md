@@ -13,13 +13,13 @@ labels: bug
 ## Environment
 
 <!--
-  The connection path matters: USB device and simulator behave differently.
+  The connection path matters: a USB device, a simulator and an emulator behave differently.
 -->
 
 - Necto version:
 - macOS version:
-- Target connection: <!-- USB device / simulator / not applicable -->
-- iOS version of the connected app: <!-- leave empty if no app is involved -->
+- Target connection: <!-- USB device / simulator / emulator / not applicable -->
+- iOS or Android version of the connected app: <!-- leave empty if no app is involved -->
 
 ## Steps to reproduce
 

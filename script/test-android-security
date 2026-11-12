@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""Exercise malformed clients against the Android sample that script/android-sample runs."""
+import json
+import os
+from pathlib import Path
+import shutil
+import signal
+import socket
+import struct
+import subprocess
+import tempfile
+import time
+
+root = Path(__file__).resolve().parent.parent
+out = root / "Build/Android"
+run = json.loads((out / "current-run.json").read_text())
+assert run["applicationID"] == "im.toss.necto.sample"
+results = {}
+
+
+def adb(*args):
+    return subprocess.run([run["adb"], "-s", run["serial"], *args],
+                          capture_output=True, check=True, timeout=10).stdout
+
+
+# The sample's socket, reached the way Necto reaches it: its name through run-as, and a
+# forward to a private path of this script's own, so the stopped host is not involved.
+private = Path(tempfile.mkdtemp(prefix="necto-security."))
+socket_path = str(private / "adb.sock")
+
+
+def forward():
+    name = adb("exec-out", "run-as", run["applicationID"], "cat", "no_backup/necto-endpoint").decode().strip()
+    assert name.startswith("necto.") and len(name) == 70
+    adb("forward", "localfilesystem:" + socket_path, "localabstract:" + name)
+
+
+def read_exact(client, count):
+    value = b""
+    while len(value) < count:
+        part = client.recv(count - len(value))
+        if not part:
+            raise EOFError()
+        value += part
+    return value
+
+
+def receive(client):
+    size, = struct.unpack(">I", read_exact(client, 4))
+    assert 0 < size <= 32 * 1024 * 1024
+    return json.loads(read_exact(client, size))
+
+
+def send(client, value):
+    value = json.dumps(value).encode()
+    client.sendall(struct.pack(">I", len(value)) + value)
+
+
+def connect(handshake=True):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        client = socket.socket(socket.AF_UNIX)
+        client.settimeout(12)
+        try:
+            forward()
+            client.connect(socket_path)
+            assert receive(client)["appBundleID"] == "im.toss.necto.sample"
+            if handshake:
+                send(client, {"accepted": True, "hostProtocolVersion": 1})
+                assert receive(client)["type"] == "plugin.register"
+            return client
+        except (OSError, EOFError, subprocess.SubprocessError, AssertionError):
+            client.close()
+            time.sleep(0.1)
+    raise AssertionError("Sample did not accept a private connection")
+
+
+def closed(client):
+    while True:
+        try:
+            if not client.recv(65536):
+                return
+        except ConnectionResetError:
+            return
+
+
+def invoke(client, request_id, operation, kind="once"):
+    send(client, {"type": "plugin.invoke", "payload": {
+        "requestID": request_id, "name": "necto.device." + operation,
+        "version": 1, "kind": kind, "input": {},
+    }})
+
+
+# A Necto host holds the sample's one session, so it is paused for the duration. A run
+# started with --sdk-only has no host.
+host = run.get("pid")
+if host is not None:
+    expected_host = out / "Products/Debug/Necto.app/Contents/MacOS/Necto"
+    command = subprocess.check_output(["ps", "-p", str(host), "-o", "command="], text=True).strip()
+    assert command == str(expected_host), "The recorded host is no longer running"
+def terminate(signum, _frame):
+    raise SystemExit(128 + signum)
+
+
+signal.signal(signal.SIGTERM, terminate)
+if host is not None:
+    os.kill(host, signal.SIGSTOP)
+try:
+    adb("shell", "am", "force-stop", "im.toss.necto.sample")
+    adb("shell", "am", "start", "-W", "-n", "im.toss.necto.sample/.MainActivity")
+    with connect(handshake=False) as client:
+        start = time.monotonic()
+        closed(client)
+        assert 3 < time.monotonic() - start < 8
+        results["handshakeDeadline"] = True
+
+    for size in (0, 65537, 0xFFFFFFFF):
+        with connect() as client:
+            client.sendall(struct.pack(">I", size))
+            closed(client)
+    results["frameLimits"] = True
+
+    with connect() as client:
+        nested = ('{"input":' + '[' * 65 + '0' + ']' * 65 + '}').encode()
+        client.sendall(struct.pack(">I", len(nested)) + nested)
+        closed(client)
+        results["nestingLimit"] = True
+
+    with connect() as client:
+        start = time.monotonic()
+        client.sendall(b"\x00")
+        closed(client)
+        elapsed = time.monotonic() - start
+        assert 8 < elapsed < 12, f"stalled frame closed after {elapsed:.1f}s"
+        results["partialFrameDeadline"] = True
+
+    with connect() as client:
+        for number in range(33):
+            try:
+                invoke(client, str(number), "events.observe", "stream")
+            except BrokenPipeError:
+                break
+        closed(client)
+        results["concurrentRequestLimit"] = True
+
+    with connect() as client:
+        invoke(client, "recovered", "events.list")
+        # Every plugin registers on its own, so the answer follows the remaining ones.
+        while (reply := receive(client))["type"] != "plugin.result":
+            assert reply["type"] == "plugin.register"
+        assert reply["payload"]["requestID"] == "recovered"
+        assert "events" in reply["payload"]["output"]
+        results["recoversWithoutAppRestart"] = True
+finally:
+    if host is not None:
+        os.kill(host, signal.SIGCONT)
+    subprocess.run([run["adb"], "-s", run["serial"], "forward", "--remove", "localfilesystem:" + socket_path],
+                   capture_output=True, timeout=10)
+    shutil.rmtree(private, ignore_errors=True)
+
+(out / "security-results.json").write_text(json.dumps(results, indent=2))
+print("PASS: " + ", ".join(results))

@@ -10,7 +10,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   base: "./",
   build: {
-    outDir: "../../../../Sources/NectoPerformancePlugin/Panels/performance-monitor",
+    outDir: "../../../../SDK/Plugins/Performance/Panel",
     emptyOutDir: true,
     rollupOptions: {
       output: {

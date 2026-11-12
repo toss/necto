@@ -441,6 +441,18 @@ const generalPage = (updates = false) => `
       <input class="necto-field" style="flex:none; width:190px" value="ui-monospace" aria-label="Code font" />
     </div>
 
+    <h3 class="necto-section-title">Android</h3>
+
+    <div class="necto-row">
+      <div class="necto-row-label">Android SDK
+        <p class="necto-row-hint">Found automatically. Choose a folder if adb is elsewhere.</p>
+      </div>
+      <div class="necto-toolbar-group" style="padding: 0">
+        <input class="necto-field" style="flex:none; width:190px" placeholder="Automatic" aria-label="Android SDK" />
+        <button type="button" class="necto-button necto-button-quiet">Choose…</button>
+      </div>
+    </div>
+
     <h3 class="necto-section-title">About</h3>
 
     <div class="necto-row">
@@ -892,6 +904,18 @@ const editorRows = [
       </div>
       <div style="display:flex; gap:6px">
         <input class="necto-field" style="flex:1; font-family:var(--necto-font-mono)" value="debugging" aria-label="Item 2" />
+        <button type="button" class="necto-button necto-button-quiet" aria-label="Remove item">✕</button>
+      </div>
+      <button type="button" class="necto-button necto-button-quiet" style="align-self:flex-start">+ Add item</button>
+    </div>`],
+  ["StringSet", "example.tags",
+    `<div style="display:flex; flex-direction:column; gap:6px; width:280px">
+      <div style="display:flex; gap:6px">
+        <input class="necto-field" style="flex:1; font-family:var(--necto-font-mono)" value="1.0" aria-label="Item 1" />
+        <button type="button" class="necto-button necto-button-quiet" aria-label="Remove item">✕</button>
+      </div>
+      <div style="display:flex; gap:6px">
+        <input class="necto-field" style="flex:1; font-family:var(--necto-font-mono)" value="&quot;quoted&quot;" aria-label="Item 2" />
         <button type="button" class="necto-button necto-button-quiet" aria-label="Remove item">✕</button>
       </div>
       <button type="button" class="necto-button necto-button-quiet" style="align-self:flex-start">+ Add item</button>

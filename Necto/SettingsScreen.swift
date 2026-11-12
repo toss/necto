@@ -21,6 +21,7 @@ struct SettingsScreen: View {
     @AppStorage(NectoFontPreference.uiKey) private var uiFontFamily = NectoFontPreference.defaultUI
     @AppStorage(NectoFontPreference.codeKey) private var codeFontFamily = NectoFontPreference.defaultCode
     @AppStorage(NectoLanguage.key) private var language = NectoLanguage.system.rawValue
+    @AppStorage(NectoAppModel.androidSDKKey) private var androidSDK = ""
     @AppStorage("settingsNavWidth") private var navWidth = Double(NectoNav<Page>.defaultWidth)
     @State private var page = Page.general
     @State private var selectedShellCaller: NectoShellCaller?
@@ -189,6 +190,19 @@ struct SettingsScreen: View {
             .frame(width: 190)
         }
 
+        NectoSectionTitle(NectoL10n.text("Android"), scale: scale)
+
+        NectoRow(label: NectoL10n.text("Android SDK"), hint: androidSDKHint, scale: scale) {
+            HStack(spacing: 8) {
+                NectoField(placeholder: NectoL10n.text("Automatic"), text: $androidSDK, scale: scale)
+                    .frame(width: 190)
+                    .accessibilityIdentifier("settings.android.sdk")
+                Button(NectoL10n.text("Choose…")) { chooseAndroidSDK() }
+                    .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+            }
+        }
+        .onChange(of: androidSDK) { _, path in model.setAndroidSDK(path) }
+
         NectoSectionTitle(NectoL10n.text("About"), scale: scale)
 
         NectoRow(label: "Necto", hint: updateHint, scale: scale, hasUpdate: model.updater.hasUpdate) {
@@ -257,6 +271,27 @@ struct SettingsScreen: View {
                 }
             }
         }
+    }
+
+    /// An app started from the Finder sees no shell variables, so where adb was found,
+    /// or that it was not, is said here.
+    private var androidSDKHint: String {
+        let found = NectoConnectionCenter.adbExecutable(androidSDK: androidSDK) != nil
+        if androidSDK.isEmpty {
+            return NectoL10n.text(found
+                ? "Found automatically. Choose a folder if adb is elsewhere."
+                : "Not found. Choose the SDK folder that holds platform-tools.")
+        }
+        return NectoL10n.text(found ? "Uses adb from this folder." : "No platform-tools/adb in this folder.")
+    }
+
+    private func chooseAndroidSDK() {
+        let panel = NSOpenPanel()
+        panel.message = NectoL10n.text("Choose the Android SDK folder.")
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        androidSDK = url.path(percentEncoded: false)
     }
 
     private var updateHint: String {

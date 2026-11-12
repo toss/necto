@@ -1,10 +1,13 @@
 # 2부 — 첫 디바이스 플러그인
 
 [1부](tutorial-desktop.md)에서는 플러그인이 온전히 Mac에서 실행됐어요. 이번
-플러그인은 앱 안에 실려요. 디바이스 플러그인은 구현과 웹 패널을 함께 담은
+플러그인은 앱 안에 실려요. iOS에서 디바이스 플러그인은 구현과 웹 패널을 함께 담은
 Swift 패키지 하나예요. 앱이 패키지를 링크하고 플러그인을 등록하면 앱이
 연결되어 있는 동안 패널이 Necto에 나타나요. Mac 쪽에는 아무것도 설치되지
 않아요 — 두 종류의 차이는 [plugin-manifest.md](plugin-manifest.md)가 설명해요.
+
+아래 단계는 플러그인을 Swift로 작성해요. Android 앱이라면 계약과 패널을 똑같이 만든
+다음 [Android에서 같은 플러그인 만들기](#android)에서 Kotlin으로 응답을 구현하세요.
 
 **Uptime**은 앱 실행 시간을 보여 주는 패널이에요.
 종류별로 오퍼레이션을 하나씩 구현해요.
@@ -158,7 +161,7 @@ JSON을 주고받으며 런타임이 입력과 출력을 스키마로 검증해�
 
 ## 디바이스에서 응답하기
 
-[`NectoPlugin`](https://github.com/toss/necto/blob/main/Sources/NectoSDK/NectoPlugin.swift)을
+[`NectoPlugin`](https://github.com/toss/necto/blob/main/SDK/iOS/Sources/NectoSDK/NectoPlugin.swift)을
 채택하면 `id`와 `register(_:)`를 구현해야 해요. `panel`의 기본값은 `nil`이며
 패널을 포함하는 플러그인은 이 프로퍼티로 모듈 리소스의 `Panel` 디렉터리를 지정해요.
 
@@ -424,6 +427,127 @@ Refresh를 누르면 다시 조회해요. 패널은 연결된 앱에서 가져�
 
 플러그인을 기여하거나 브리지를 바꿀 때는
 [harness.md](harness.md)의 규칙과 검증 방법을 확인하세요.
+
+<a id="android"></a>
+
+## Android에서 같은 플러그인 만들기
+
+Android 앱은 Swift 패키지 대신 Kotlin 코드와 Java 리소스로 플러그인을 실어요.
+[계약](#계약)과 [패널](#패널)은 그대로 써요. Kotlin 플러그인이 같은 id로 같은
+오퍼레이션 두 개에 응답하므로 한 번 빌드한 패널을 두 플랫폼이 함께 써요.
+
+[setup.md](setup.md#android)대로 JitPack을 설정하고 디버그 빌드에 `necto-android`를
+추가해요. 플러그인 API가 들어 있는 `necto-core`가 함께 따라오므로 직접 만든
+플러그인에는 다른 모듈이 필요하지 않아요.
+
+```kotlin
+// app/build.gradle.kts
+val nectoVersion = "COMMIT_OR_TAG"
+dependencies {
+    debugImplementation("com.github.toss.necto:necto-android:$nectoVersion")
+}
+```
+
+[`NectoPlugin`](https://github.com/toss/necto/blob/main/SDK/Android/necto-core/src/main/kotlin/im/toss/necto/sdk/NectoPlugin.kt)이
+요구하는 것은 Swift와 같아요. `id`와 `register(necto)`를 구현하고 `panel`의 기본값은
+`null`이에요. 클래스는 의존성과 마찬가지로 debug 소스 세트에 두세요.
+
+`app/src/debug/kotlin/com/example/UptimePlugin.kt`
+
+```kotlin
+package com.example
+
+import im.toss.necto.model.jsonObject
+import im.toss.necto.model.jsonOf
+import im.toss.necto.sdk.NectoPlugin
+import im.toss.necto.sdk.NectoPluginPanel
+import im.toss.necto.sdk.NectoRegistrar
+import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.Instant
+
+/** How long the app has been running, asked once or watched live. */
+class UptimePlugin : NectoPlugin {
+    override val id = "uptime"
+
+    private val startedAt = Instant.now()
+
+    override val panel: NectoPluginPanel =
+        NectoPluginPanel.resources("panels/uptime", UptimePlugin::class.java.classLoader!!)
+
+    override fun register(necto: NectoRegistrar) {
+        necto.handle("uptime.get") {
+            jsonObject(
+                "startedAt" to jsonOf(startedAt.toString()),
+                "uptimeSeconds" to jsonOf(uptimeSeconds()),
+            )
+        }
+
+        necto.stream("uptime.observe") { _, out ->
+            while (true) {
+                out.send(jsonObject("uptimeSeconds" to jsonOf(uptimeSeconds())))
+                delay(1000)
+            }
+        }
+    }
+
+    private fun uptimeSeconds(): Double =
+        Duration.between(startedAt, Instant.now()).toMillis() / 1000.0
+}
+```
+
+Kotlin에서는 메서드로 종류를 구분해요. `handle`은 한 번 응답하고 `stream`은 본문이
+반환하거나 호출자가 구독을 취소할 때까지 스트리밍해요. 구독을 취소하면 본문을 실행하던
+코루틴도 취소돼 루프가 끝나요. 페이로드는 `jsonObject`와 `jsonOf`로 만든
+`NectoJsonValue`예요.
+
+### 패널 싣기
+
+`NectoPluginPanel.resources("panels/uptime", …)`는 앱의 Java 리소스에서 패널을 읽어요.
+리소스 폴더는 실행 중에 목록을 조회할 수 없어서 인덱스가 필요해요.
+`panels/uptime/files.txt`에 패널 파일마다 그 폴더 기준 상대 경로를 한 줄씩 적어요.
+
+Necto가 제공하는 모듈은 이 리소스와 인덱스를
+[`NectoPanelResources`](https://github.com/toss/necto/blob/main/SDK/Android/buildSrc/src/main/kotlin/NectoPanelResources.kt)로
+생성해요. 이 Gradle 태스크는 저장소의 `buildSrc`에만 있고 배포되지 않아요. 내 앱에서는
+빌드된 패널을 debug 리소스로 복사하고 인덱스를 직접 만들어요. 앱 프로젝트 루트에서
+실행하세요.
+
+```bash
+panel=app/src/debug/resources/panels/uptime
+mkdir -p "$panel"
+cp -R <path-to>/necto-uptime-plugin/Sources/NectoUptimePlugin/Panel/. "$panel"
+(cd "$panel" && find . -type f ! -name '.*' ! -name files.txt | sed 's|^\./||' | sort > files.txt)
+```
+
+이제 `files.txt`에 `index.html`, `manifest.json`, `assets/` 아래 파일이 나열돼요. 패널을
+빌드할 때마다 다시 실행하세요. 인덱스에 없는 파일은 제공되지 않고 인덱스에 적힌 파일이
+없으면 패널 전체를 읽지 못해요.
+[샘플 앱](https://github.com/toss/necto/blob/main/SDK/Android/sample/build.gradle.kts)에서
+같은 작업을 Gradle 태스크로 하는 방법을 볼 수 있어요.
+
+### 등록하고 실행하기
+
+[setup.md](setup.md#android)의 debug `NectoSetup`에서 `NectoAndroid.start`에 플러그인을
+넘겨요. 목록의 플러그인을 등록하고 수신 대기를 시작해요. debuggable 빌드가 아니면
+경고만 로그로 남겨요.
+
+```kotlin
+// app/src/debug/kotlin/com/example/NectoSetup.kt
+NectoAndroid.start(app, listOf(UptimePlugin()))
+```
+
+디버그 빌드를 에뮬레이터나 USB 기기에 설치한 다음 앱을 실행해요.
+
+```bash
+./gradlew :app:installDebug
+```
+
+Necto가 실행 중이면 사이드바에 앱과 **Uptime**이 나타나요. 나타나지 않으면
+[install.md](install.md)에서 Necto가 Android 앱을 찾는 조건을 확인하세요.
+[플러그인 검증하기](#플러그인-검증하기)의 체크도 두 가지만 바꿔 그대로 적용해요. 순서는
+패널 빌드, 복사와 인덱스 생성, 앱 재설치예요. 그리고 에뮬레이터의 ADB 연결은 USB가
+아니므로 USB 경로는 실기기에서 실행해 확인하세요.
 
 ## 다음으로
 

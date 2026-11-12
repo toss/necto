@@ -29,6 +29,14 @@
 "Font for the app and plugin interface." = "Font for the app and plugin interface.";
 "Code font" = "Code font";
 "Font for code, values and plugin data." = "Font for code, values and plugin data.";
+"Android" = "Android";
+"Android SDK" = "Android SDK";
+"Automatic" = "Automatic";
+"Found automatically. Choose a folder if adb is elsewhere." = "Found automatically. Choose a folder if adb is elsewhere.";
+"Not found. Choose the SDK folder that holds platform-tools." = "Not found. Choose the SDK folder that holds platform-tools.";
+"Uses adb from this folder." = "Uses adb from this folder.";
+"No platform-tools/adb in this folder." = "No platform-tools/adb in this folder.";
+"Choose the Android SDK folder." = "Choose the Android SDK folder.";
 "About" = "About";
 "Protocol" = "Protocol";
 "Version used to communicate with connected apps." = "Version used to communicate with connected apps.";

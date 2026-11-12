@@ -19,9 +19,9 @@ NectoPluginRegistry
    ├── desktop provider (Mac)
    └── device provider
          ↕ NectoDeviceBridgeClient / session
-       usbmuxd (device) · loopback (simulator)
+       usbmuxd (device) · loopback (simulator) · adb (Android)
          ↕ NectoSDK
-       NectoPlugin → NectoRegistrar (in the iOS app)
+       NectoPlugin → NectoRegistrar (in the app)
 ```
 
 플러그인은 자기 매니페스트에 있는 오퍼레이션 id를 호출해요. 런타임은
@@ -56,6 +56,8 @@ NectoPluginRegistry
 | `NectoUIControlPlugin` | UI 조회·조작과 iOS 터치 런타임 | 다른 플러그인 |
 | `NectoProcessMetricPlugin` | 선택적인 CPU, 메모리, FPS, 스레드 샘플링 | 앱에 등록되거나 리더가 구독하기 전의 샘플링 |
 | `NectoURLSessionCapturePlugin` | `URLSession`을 쓰는 앱을 위한 하나의 캡처 메커니즘 | 앱에서 끌 수 없는 캡처 기능 |
+| `necto-core`, `necto-android` | Android 브리지: 프로토콜, 런타임, ADB 리스너, 앱 식별 | 기능 구현이나 패널 |
+| `SDK/Plugins/<Name>` | 두 플랫폼의 플러그인 하나: 빌드된 패널, Swift 타깃, Gradle 모듈 | 다른 플러그인 |
 | `Necto/` | 셸 UI와 플러그인 호스트 | 기능 화면 |
 | `ExampleApp/` | 디바이스에서 연결과 플러그인 검증 | 제품 기능 |
 
@@ -79,7 +81,8 @@ socket인 `~/Library/Application Support/Necto/necto.sock`에 연결하고 길�
 ## 앱이 리스닝하고 Mac이 연결하는 이유
 
 usbmuxd는 디바이스가 이미 열어 둔 포트에만 접근할 수 있으므로 소켓
-역할은 프로토콜 역할과 반대예요.
+역할은 프로토콜 역할과 반대예요. Android 앱도 비공개 Unix 소켓에서 리스닝하고
+Mac이 `adb forward`로 그 소켓에 연결해요.
 
 | 레이어 | Mac | 앱 |
 | --- | --- | --- |
@@ -119,6 +122,13 @@ hello의 프로토콜 버전이 다르면 협상 없이 연결을 거부해요.
 
 라이브러리는 Swift 패키지로, 앱 타깃은 `Necto.xcodeproj`로 관리해요.
 
+브리지는 `SDK/iOS`와 `SDK/Android`에 있어요. 플러그인은 `SDK/Plugins/<Name>`에
+있고, 빌드된 패널은 `Panel`, Swift 소스는 `iOS`, Gradle 모듈은 `Android`에 둬요.
+두 플랫폼이 같은 패널을 패키징해요.
+`Package.swift`는 저장소 루트에 유지하므로 기존 Swift 패키지 사용자는 같은
+저장소 URL을 사용할 수 있어요. Mac 패키지도 이 패키지의
+`NectoModel`과 `NectoTransport`를 계속 재사용해요.
+
 루트 패키지는 기본 SDK인 `NectoSDK`와 플러그인별 product를 제공해요.
 자동 캡처는 별도 product이며 기본 SDK의 의존성에 포함되지 않아요.
 앱에서 사용할 플러그인을 `import`하고
@@ -127,6 +137,6 @@ hello의 프로토콜 버전이 다르면 협상 없이 연결을 거부해요.
 Mac 패키지나 ArgumentParser에 의존하지 않아요. `script/test swift`는 두 패키지와
 개별 product를 사용하는 외부 패키지 예제를 테스트해요.
 
-패널은 Yarn workspaces로 빌드해 Swift 패키지에 포함해요. 기본 플러그인은
-`Sources/<PluginModule>/Panels/<id>`에, 샘플은 예제 앱 번들에 들어가요.
+패널은 Yarn workspaces로 빌드해 플러그인에 포함해요. 기본 플러그인은
+`SDK/Plugins/<Name>/Panel`에, 샘플은 예제 앱 번들에 들어가요.
 빌드 결과를 커밋하므로 앱만 빌드할 때는 Node가 필요 없어요.

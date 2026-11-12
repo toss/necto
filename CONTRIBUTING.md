@@ -24,7 +24,7 @@ For potential vulnerabilities, follow [SECURITY.md](SECURITY.md) before posting 
 
 Use issues to report bugs or propose features. A bug report needs the Necto
 version, the macOS version, how the target was connected
-(USB device or simulator), and steps to reproduce.
+(USB device, simulator or emulator), and steps to reproduce.
 
 Necto's feature screens are web plugins. When proposing a feature, consider a
 plugin implementation before changes to the shell, SDK or runtime.

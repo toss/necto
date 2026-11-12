@@ -27,6 +27,7 @@
 | 앱까지 도달하는 모든 변경 | `script/build` 실행 후, 앱 실행하기 |
 | SDK의 공개 API | 시뮬레이터를 부팅한 상태에서 `script/build`로 ExampleApp의 SDK 연동까지 빌드하기 |
 | 연결 수명주기, CLI의 디바이스 오퍼레이션 | `script/test e2e` |
+| Android SDK, Mac의 Android 연결 | `SDK/Android/gradlew -p SDK/Android build` 실행 후, 아래 Android 검사 |
 | 계약 변경 | 같은 커밋에서 픽스처 업데이트하기 |
 
 `script/test`는 Swift·Vitest 단위 테스트, 네이티브 캐시·WebView 통합 테스트,
@@ -66,7 +67,7 @@ Simulator를 열고 부팅이 끝나면 테스트용 ExampleApp(`im.toss.necto.e
 제한 시간 안에 연결과 응답을 확인해요. 로그와 테스트 결과는 `Build/E2E/Logs`에 남아요.
 로컬에서는 별도로 실행하며 기본 `script/test`에는 포함하지 않아요.
 
-CI에서는 Mac·SDK 잡이 끝나면 `Simulator Connection & CLI E2E`를 실행해요.
+CI에서는 Mac·iOS SDK 잡이 끝나면 `iOS Simulator Connection & CLI E2E`를 실행해요.
 Mac 잡은 앱·CLI·테스트 번들을, SDK 잡은 ExampleApp을 전달해요. 같은 워크플로
 실행의 아티팩트를 받아 `test-without-building`으로 재빌드 없이 검증해요.
 실행 권한과 번들 내부 심볼릭 링크를 유지하도록 압축해서 전달해요.
@@ -99,6 +100,29 @@ SDK는 8개 포트 범위에서 빈 포트를 선택하고 Mac은 8개 모두 �
 실기기는 USB로 연결해 사이드바에 나타나는지 확인해요. `connectionRefused`는
 터널이 기기까지 연결됐지만 앱이 수신 대기 중이지 않다는 뜻이에요.
 앱이 실행 중이 아닐 때 나오는 정상 응답이에요.
+
+### Android 연결
+
+에뮬레이터를 부팅하거나 USB 기기를 연결한 뒤 실행해요.
+
+```bash
+script/android-sample <serial>
+```
+
+Android 샘플과 별도의 Necto.app(`im.toss.necto.android-sample`)을 빌드하고, 샘플을
+설치·실행한 뒤 그 Necto를 Ctrl-C까지 띄워 둬요. 이 Necto는 ADB로 샘플을 직접 찾아요.
+실행 중인 상태에서 다른 터미널로 아래 스크립트를 돌려요.
+
+| 스크립트 | 확인하는 것 |
+| --- | --- |
+| `script/test-android-sample` | `necto-cli`로 기본 패널의 모든 오퍼레이션 호출, 스트림 취소와 재구독, 잘못된 입력 거부, 강제 종료 시 타깃이 사라지고 재실행 시 돌아오는지 |
+| `script/test-android-security` | 비공개 소켓에 붙는 비정상 피어: 응답 없는 핸드셰이크, 제한을 벗어난 프레임, 깊은 중첩, 멈춘 프레임, 과도한 동시 요청. 모두 끊기고 다음 연결은 정상이어야 해요 |
+| `script/test-android-artifacts` | SDK AAR이 권한을 선언하지 않는지, 플러그인 모듈이 자기 패널만 싣는지. 실행 중인 앱이 아니라 전체 Gradle 빌드가 필요해요 |
+| `script/test-android-consumer` | 게시된 Maven 아티팩트로 만든 독립 앱 5개가 선택한 모듈만 해석하고 그 패널만 패키징하는지. `--jitpack <tag-or-commit>`을 주면 로컬 게시물 대신 JitPack 아티팩트를 검사해요. 실행 중인 앱은 필요 없어요 |
+
+`script/android-sample <serial> --sdk-only`는 이미 빌드한 샘플을 Necto 호스트 없이
+설치하고 실행해요. `script/test-android-security`는 이 상태에서도 돌아가며, CI가 Mac
+없이 에뮬레이터에서 SDK를 검사하는 방식이에요.
 
 ## 플러그인 검증하기
 
@@ -224,11 +248,21 @@ npm 압축 파일에는 `LICENSE`를, DMG와 앱의 `Contents/Resources`에는
 
 공개 CI는 GitHub-hosted runner를 사용해요. Mac 잡의 앱과 테스트 번들에는 ad-hoc
 서명을 사용하고 SDK 잡의 ExampleApp은 서명 없이 빌드해요.
-`Check`의 작업은 `Mac Build & Tests`, `SDK Build & Tests`,
-`Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`, `Documentation Build`로 나뉘어요.
-Mac·SDK·E2E는 `macos-26`에서 Xcode 26.6을 사용하고
-웹과 문서 빌드는 `ubuntu-24.04`에서 실행해요.
-Node 22.12.0은 E2E를 제외한 네 작업에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
+`Check`의 작업은 `Mac Build & Tests`, `iOS SDK Build & Tests`,
+`iOS Simulator Connection & CLI E2E`, `Web Plugins Build & Tests`,
+`Android SDK Build & Tests`, `Android Emulator Connection E2E`, `Documentation Build`로
+나뉘어요. Mac·iOS SDK·iOS E2E는 `macos-26`에서 Xcode 26.6을 사용하고
+웹·Android·문서 작업은 `ubuntu-24.04`에서 실행해요.
+Android 작업은 Temurin JDK 17로 `SDK/Android`에서 `./gradlew build`를 실행한 뒤
+`script/test-android-artifacts`와 `script/test-android-consumer`를 돌려요.
+Android E2E 작업은 API 35 에뮬레이터를 부팅하고
+`script/android-sample emulator-5554 --sdk-only`로 샘플을 띄운 뒤
+`script/test-android-security`를 실행해요. Necto 호스트는 macOS가 필요한데 호스티드 Mac
+러너에서는 에뮬레이터를 띄울 수 없어서, 호스트 없이 SDK에 직접 연결해 검사해요.
+Node 22.12.0은 Mac·iOS SDK·웹·문서 작업에서, Yarn 4.6.0은 웹과 문서 빌드에서 사용해요.
+릴리스 워크플로는 게시 후 `Android SDK on JitPack` 작업에서 JitPack에 새 태그의 빌드를
+요청하고 `script/test-android-consumer --jitpack <version>`으로 결과를 검사해요. 이
+시점에는 릴리스가 이미 공개돼 있어서, 실패하면 재시도가 아니라 수정 릴리스가 필요해요.
 문서 배포는 별도 워크플로에서 수동으로 실행하며
 GitHub Pages는 Actions 배포로 설정해야 해요.
 워크플로 파일을 추가한 것만으로 외부 환경에서 실행에 성공했다고 볼 수는 없어요.
@@ -264,6 +298,8 @@ Dock에 고정하고 업데이트해 기존 PID가 종료된 뒤 새 PID가 시�
 
 - **시뮬레이터에서의 USB.** 시뮬레이터에는 usbmuxd 경로가 없어요. 루프백을
   사용해요.
+- **에뮬레이터에서의 Android USB.** 에뮬레이터의 ADB 전송은 USB가 아니에요. USB 경로를
+  검증했다고 하려면 실기기에서 Android 검사를 실행하세요.
 - **런타임 증거 없는 외형 확인.** 빌드나 정적 검사만으로 화면을 확인할 수는 없어요.
   Loupe나 권한이 허용된 캡처 경로를 사용하고 필요한 런타임 접근이나 화면 기록
   권한이 없다면 미검증 범위를 명시하세요.

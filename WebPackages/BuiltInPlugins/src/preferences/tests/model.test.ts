@@ -20,6 +20,11 @@ test("a plain string shows without quotes and structured values show as JSON", (
   assert.strictEqual(display({ a: 1 }), '{"a":1}');
 });
 
+test("StringSet rows keep JSON-looking strings exactly as stored", () => {
+  const stored = ["1.0", '"x"', "1", "true", "null", '{"a":1}', "", " 7", "한글"];
+  assert.deepEqual(stored.map(value => display(value, true)), stored);
+});
+
 test("typed text is saved as the JSON it reads as, or as a string", () => {
   assert.strictEqual(element("47"), 47);
   assert.strictEqual(element("true"), true);

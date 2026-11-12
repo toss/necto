@@ -1,11 +1,12 @@
 # Necto Agent Guide
 
-A macOS debugging tool for iOS apps. The shell is Swift; every feature screen is a
-web plugin. [README.md](README.md) covers the same project from a user's view.
+A macOS debugging tool for iOS and Android apps. The shell is Swift; every feature
+screen is a web plugin. [README.md](README.md) covers the same project from a user's
+view.
 
 Everything here is written in English: code, comments, documentation and commit
-messages. Every Swift and TypeScript file starts with the copyright header used
-throughout the repository.
+messages. Every Swift, Kotlin and TypeScript file starts with the copyright header
+used throughout the repository.
 
 ## Commands
 
@@ -13,6 +14,7 @@ throughout the repository.
 | --- | --- |
 | Build everything | `script/build` |
 | Unit tests | `script/test` (or `script/test swift`, `script/test web`) |
+| Android SDK build and tests | `SDK/Android/gradlew -p SDK/Android build` |
 | Run the app | `open Build/Products/Debug/Necto.app` |
 
 Panels must be built before the Swift packages, because their output rides inside
@@ -22,11 +24,14 @@ does that in order.
 ## Layout
 
 ```text
-Sources/NectoModel        Manifest, operation and target types, schema validation
-Sources/NectoTransport    Shared byte streams, message framing and connection defaults
+SDK/iOS/Sources/NectoModel        Manifest, operation and target types, schema validation
+SDK/iOS/Sources/NectoTransport    Shared byte streams, message framing and connection defaults
 NectoMac/Sources/NectoCLIService   The control socket contract shared by Necto.app and necto-cli
 NectoMac/Sources/NectoMacService   Mac providers, routing, device connections and control server
-Sources/NectoSDK          The SDK and listener embedded in a connected app
+SDK/iOS/Sources/NectoSDK          The SDK and listener embedded in a connected app
+SDK/iOS/Tests/                   SDK tests and the standalone consumer fixture
+SDK/Android/                     Kotlin bridge and sample app, built by Gradle
+SDK/Plugins/<Name>/              One plugin: Panel/ is the built panel, iOS/ the Swift sources, Android/ the Gradle module
 Necto/                    macOS shell, built by Necto.xcodeproj
 ExampleApp/              iOS sample app, built by Necto.xcodeproj
 WebPackages/BuiltInPlugins/          src/ is source, Plugins/ is the committed build output

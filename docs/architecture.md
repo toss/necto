@@ -19,9 +19,9 @@ NectoPluginRegistry
    ├── desktop provider (Mac)
    └── device provider
          ↕ NectoDeviceBridgeClient / session
-       usbmuxd (device) · loopback (simulator)
+       usbmuxd (device) · loopback (simulator) · adb (Android)
          ↕ NectoSDK
-       NectoPlugin → NectoRegistrar (in the iOS app)
+       NectoPlugin → NectoRegistrar (in the app)
 ```
 
 A plugin calls an operation id from its own manifest. The runtime matches it against
@@ -56,6 +56,8 @@ handlers and manifest bindings, not a feature-specific host adapter or wire mess
 | `NectoUIControlPlugin` | UI inspection, interaction and iOS touch runtime | Other plugins |
 | `NectoProcessMetricPlugin` | Optional CPU, memory, FPS and thread sampling | Starting unless the app registers it and a reader subscribes |
 | `NectoURLSessionCapturePlugin` | One capture mechanism, for apps using `URLSession` | Capture that an app cannot disable |
+| `necto-core`, `necto-android` | The Android bridge: protocol, runtime, ADB listener and app identity | Feature implementations or panels |
+| `SDK/Plugins/<Name>` | One plugin on both platforms: its built panel, Swift target and Gradle module | Another plugin |
 | `Necto/` | Shell UI and the plugin host | Feature screens |
 | `ExampleApp/` | Verifying connection and plugins on a device | Product features |
 
@@ -80,7 +82,8 @@ panels; it is not an HTTP service. See [the control socket](control-socket.md).
 ## Why the app listens and the Mac connects
 
 usbmuxd can only reach a port the device already has open, so the socket roles are the
-reverse of the protocol roles.
+reverse of the protocol roles. An Android app listens too, on a private Unix socket
+that the Mac reaches through `adb forward`.
 
 | Layer | Mac | App |
 | --- | --- | --- |
@@ -124,6 +127,13 @@ See [the trust policy](plugin-manifest.md#identity-and-trust).
 
 Libraries are managed as Swift packages, and app targets live in `Necto.xcodeproj`.
 
+The bridge lives in `SDK/iOS` and `SDK/Android`. Each plugin lives in
+`SDK/Plugins/<Name>`, with its built panel in `Panel`, its Swift sources in `iOS` and its
+Gradle module in `Android`, so both platforms package the same panel.
+`Package.swift` stays at the repository root so existing Swift package consumers
+keep the same repository URL. The Mac package continues
+to reuse `NectoModel` and `NectoTransport` from that package.
+
 The root package exposes `NectoSDK` for the bridge and separate products for each plugin.
 Capture products remain separate and are never dependencies of the core SDK. Apps import and register
 the plugins they use. The local `NectoMac/Package.swift` builds Mac services, `necto-cli` and their
@@ -131,6 +141,6 @@ tests. It depends on the root product for shared types and transport; the SDK ha
 dependency on the Mac package or ArgumentParser. Run `script/test swift` to test both
 packages and the selective-product consumer fixture.
 
-Panels are built by Yarn workspaces into the Swift packages that carry them —
-`Sources/<PluginModule>/Panels/<id>` for the defaults, the example app's bundle
+Panels are built by Yarn workspaces into the plugins that carry them —
+`SDK/Plugins/<Name>/Panel` for the defaults, the example app's bundle
 for the sample — and committed so that building the app alone needs no Node.

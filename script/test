@@ -42,7 +42,7 @@ fi
 if [[ "${scope}" == "all" || "${scope}" == "swift" ]]; then
   run "swift test" swift test
   run "Mac swift test" swift test --package-path NectoMac
-  run "SDK consumer test" swift test --package-path Tests/Fixtures/SDKConsumer
+  run "SDK consumer test" swift test --package-path SDK/iOS/Tests/Fixtures/SDKConsumer
 fi
 
 if [[ "${scope}" == "all" || "${scope}" == "native" ]]; then

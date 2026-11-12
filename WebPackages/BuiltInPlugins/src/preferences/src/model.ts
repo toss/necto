@@ -17,8 +17,9 @@ export function element(text: string): NectoJSONValue {
 /// A string shows as itself, unless that text would be saved as something else: a
 /// stored `"1"` has to stay a string. That one, like anything structured, shows as one
 /// line of JSON, so every row is saved as what it was unless someone changes it.
-export function display(value: NectoJSONValue): string {
-  if (typeof value === "string" && element(value) === value) return value;
+/// StringSet rows skip JSON parsing on save, so their strings stay unquoted.
+export function display(value: NectoJSONValue, stringsOnly = false): string {
+  if (typeof value === "string" && (stringsOnly || element(value) === value)) return value;
   return JSON.stringify(value);
 }
 
