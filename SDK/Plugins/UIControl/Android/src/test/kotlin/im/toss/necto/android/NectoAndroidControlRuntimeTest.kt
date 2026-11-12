@@ -29,7 +29,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
@@ -80,8 +79,15 @@ class NectoAndroidControlRuntimeTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
     }
 
+    /**
+     * Compose keeps one UI dispatcher for the whole process, while Robolectric empties the
+     * main looper between tests. Ending the activity and letting the looper finish keeps a
+     * composition from one test from leaving work queued there for the next.
+     */
     @After
     fun tearDown() {
+        controller?.close()
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(100))
         Dispatchers.resetMain()
     }
 
@@ -418,15 +424,10 @@ class NectoAndroidControlRuntimeTest {
      * Compose redraws on a frame, and Robolectric runs frames only as its clock moves, so a
      * read straight after an action can see the old text. Moves the clock a frame at a time
      * until [done], for at most a second.
-     *
-     * A state write reaches the composition through a process-wide observer that outlives
-     * each test's looper, and here it did not always announce the write. Announcing it
-     * before each frame is what Compose's own test clock does.
      */
     private suspend fun afterFrames(done: suspend () -> Boolean) {
         repeat(60) {
             if (done()) return
-            Snapshot.sendApplyNotifications()
             shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(16))
         }
     }
