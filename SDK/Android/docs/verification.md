@@ -41,7 +41,7 @@ Run on an Android 17 emulator (`sdk_gphone64_arm64`, API 37) on an Apple silicon
 | --- | --- |
 | `script/test-android-sample` | ✅ The target appears as `android:emulator-5554`. Every shipped panel's operations are available. `events.detail` answers. `{"limit":0}` is refused with `INVALID_INPUT`. A `performance.observe` stream ends and a new one starts. `files.roots` and `preferences.suites` answer. `events.clear` works. A force stop ends an open stream with `TARGET_DISCONNECTED` and removes the target, and a relaunch brings it back |
 | `script/test-android-security` | ✅ A silent handshake is dropped after 5 seconds. Frames of 0 bytes, 64 KiB + 1 and 4 GiB are dropped, as are nesting past 64, a frame that stalls for 10 seconds, and 33 concurrent requests. A request then succeeds without restarting the app |
-| `script/test-android-artifacts` | ✅ `necto-android` declares no permission. 24 packaged panel files equal the iOS ones. Only the debug sample is debuggable |
+| `script/test-android-artifacts` | ✅ No SDK module declares a permission, and each plugin module carries only its own panel |
 
 Repeated over USB on a Samsung Galaxy S25+ (`SM-S936N`, Android 17, API 37):
 `script/test-android-sample` and `script/test-android-security` both pass, with the
