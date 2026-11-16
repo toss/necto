@@ -90,6 +90,26 @@ final class NectoAppModel {
         }
     }
 
+    /// A window that hides while the app is quitting would hold the process open.
+    @ObservationIgnored var isTerminating = false
+
+    /// The last window hides instead of closing: the app keeps serving the CLI, and the
+    /// Dock icon brings back the same selection and panels rather than a fresh window.
+    func windowShouldClose(_ state: NectoWindowState) -> Bool {
+        guard !isTerminating, let window = state.window,
+              windows.values.compactMap(\.value).filter({ $0.window != nil }).count == 1,
+              // Ordering out a full screen window leaves its empty Space behind.
+              !window.styleMask.contains(.fullScreen) else { return true }
+        window.orderOut(nil)
+        return false
+    }
+
+    func showHiddenWindow() -> Bool {
+        let hidden = windows.values.compactMap { $0.value?.window }.first { !$0.isVisible && !$0.isMiniaturized }
+        hidden?.makeKeyAndOrderFront(nil)
+        return hidden != nil
+    }
+
     private func presentInstaller() throws {
         guard let state = presentationWindow() else {
             throw NectoBridgeError(code: .operationUnavailable, message: "Open a Necto window before installing a plugin.")
@@ -117,6 +137,8 @@ final class NectoAppModel {
         guard let state = presentationWindow() else { return }
         presentationWindowID = state.id
         if prompt != nil { state.isShowingSettings = true }
+        // A sheet on a hidden window is a request nobody can answer.
+        if let window = state.window, !window.isVisible, !window.isMiniaturized { window.orderFront(nil) }
     }
 
     private func refreshBackgroundPanels() {
