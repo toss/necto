@@ -31,8 +31,26 @@ final class NectoControlRuntime {
             .first(where: \.isKeyWindow)
     }
 
-    func readAccessibility() -> [NectoAccessibilityItem] {
-        guard let window = activeWindow else { return [] }
+    /// The key window for discovery. Refuses with the reason instead of reporting an empty
+    /// screen, so a caller can tell "no controls" from "nothing could be read".
+    private func readableWindow() throws -> UIWindow {
+        guard let window = activeWindow else {
+            throw unavailable("The app is not in the foreground, is covered by a system dialog, or the screen is locked. Bring it to the front, then refresh.")
+        }
+        return window
+    }
+
+    func readAccessibility() throws -> [NectoAccessibilityItem] {
+        items(in: try readableWindow())
+    }
+
+    /// What `perform` compares before and after an action. An action that moves the app to
+    /// the background was still dispatched, so this reads nothing rather than refusing.
+    private func currentItems() -> [NectoAccessibilityItem] {
+        activeWindow.map(items(in:)) ?? []
+    }
+
+    private func items(in window: UIWindow) -> [NectoAccessibilityItem] {
         NectoTouchInjector.prepareAccessibility()
         return NectoAccessibilityReader.read(in: window)
     }
@@ -107,9 +125,10 @@ final class NectoControlRuntime {
         return result
     }
 
-    func snapshot() -> [NectoControlTarget] {
+    func snapshot() throws -> [NectoControlTarget] {
         targets.removeAll()
-        guard !performing, let window = activeWindow else { return [] }
+        let window = try readableWindow()
+        guard !performing else { throw unavailable("Another action is in progress") }
         NectoTouchInjector.prepareAccessibility()
         return entries(in: window).compactMap { object, owner, frame in
             let actions = actions(for: object)
@@ -151,7 +170,7 @@ final class NectoControlRuntime {
         performing = true
         targets.removeAll()
         defer { performing = false }
-        let before = readAccessibility().map(\.json)
+        let before = currentItems().map(\.json)
         let method: String
         switch operation {
         case "tap":
@@ -234,7 +253,7 @@ final class NectoControlRuntime {
         }
         try await Task.sleep(for: .milliseconds(600))
         return ["dispatched": true, "method": .string(method),
-                "contentChanged": .bool(before != readAccessibility().map(\.json))]
+                "contentChanged": .bool(before != currentItems().map(\.json))]
     }
 
     private func send(in window: UIWindow, from start: CGPoint, to end: CGPoint,

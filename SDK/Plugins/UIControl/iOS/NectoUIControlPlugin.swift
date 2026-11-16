@@ -60,13 +60,13 @@ public final class NectoUIControlPlugin: NectoPlugin, @unchecked Sendable {
     public let id = "control"
     public var panel: NectoPluginPanel? { NectoPluginPanel(bundle: .module) }
 
-    private let actionTargets: @Sendable () async -> [NectoControlTarget]
-    private let readAccessibility: @Sendable () async -> [NectoAccessibilityItem]
+    private let actionTargets: @Sendable () async throws -> [NectoControlTarget]
+    private let readAccessibility: @Sendable () async throws -> [NectoAccessibilityItem]
     private let action: @Sendable (String, NectoJSONValue) async throws -> NectoJSONValue
 
     public init(
-        actionTargets: @escaping @Sendable () async -> [NectoControlTarget],
-        readAccessibility: @escaping @Sendable () async -> [NectoAccessibilityItem],
+        actionTargets: @escaping @Sendable () async throws -> [NectoControlTarget],
+        readAccessibility: @escaping @Sendable () async throws -> [NectoAccessibilityItem],
         action: @escaping @Sendable (String, NectoJSONValue) async throws -> NectoJSONValue
     ) {
         self.actionTargets = actionTargets
@@ -78,8 +78,8 @@ public final class NectoUIControlPlugin: NectoPlugin, @unchecked Sendable {
     public convenience init() {
         let runtime = NectoControlRuntime()
         self.init(
-            actionTargets: { await runtime.snapshot() },
-            readAccessibility: { await runtime.readAccessibility() },
+            actionTargets: { try await runtime.snapshot() },
+            readAccessibility: { try await runtime.readAccessibility() },
             action: { operation, input in try await runtime.perform(operation, input) }
         )
     }
@@ -88,7 +88,7 @@ public final class NectoUIControlPlugin: NectoPlugin, @unchecked Sendable {
     public func register(_ necto: NectoRegistrar) {
         necto.handle("control.actionTargets") { [self] input in
             let query = input["query"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let available = await actionTargets().filter { !$0.actions.isEmpty }
+            let available = try await actionTargets().filter { !$0.actions.isEmpty }
             let matches = query.isEmpty ? available : available.filter { element in
                 [element.label, element.identifier, element.role].contains {
                     $0?.localizedCaseInsensitiveContains(query) == true
@@ -98,7 +98,7 @@ public final class NectoUIControlPlugin: NectoPlugin, @unchecked Sendable {
         }
         necto.handle("control.readAccessibility") { [self] input in
             let query = input["query"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let items = await readAccessibility()
+            let items = try await readAccessibility()
             let matches = query.isEmpty ? items : items.filter { item in
                 [item.label, item.identifier, item.role, item.value].contains {
                     $0?.localizedCaseInsensitiveContains(query) == true

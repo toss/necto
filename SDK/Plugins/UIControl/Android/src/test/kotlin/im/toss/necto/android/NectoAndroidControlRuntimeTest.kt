@@ -368,8 +368,21 @@ class NectoAndroidControlRuntimeTest {
         idle()
 
         assertUnavailable { runtime.perform("tap", jsonObject("targetID" to jsonOf(save.id))) }
-        assertTrue(runtime.snapshot().isEmpty())
+        assertUnavailable { runtime.snapshot() }
+        assertUnavailable { runtime.readAccessibility() }
         assertEquals(0, taps)
+    }
+
+    /** Discovery says why it read nothing, rather than reporting a screen without controls. */
+    @Test
+    fun discoveryExplainsWhyNothingCouldBeRead() = runTest {
+        assertTrue(assertUnavailable { runtime.snapshot() }.message.startsWith("The app is not in the foreground"))
+
+        show(Button(start()).apply { text = "Save" })
+        controller!!.windowFocusChanged(false)
+        idle()
+
+        assertTrue(assertUnavailable { runtime.readAccessibility() }.message.startsWith("Another window"))
     }
 
     /** A tap that opens a dialog stops a double tap before its second tap lands behind it. */
@@ -433,7 +446,7 @@ class NectoAndroidControlRuntimeTest {
     }
 
     /** Suspends rather than blocks: an action that wrongly goes ahead fails here instead of hanging. */
-    private suspend fun assertUnavailable(block: suspend () -> Unit) {
+    private suspend fun assertUnavailable(block: suspend () -> Unit): NectoBridgeError {
         val error = try {
             block()
             null
@@ -441,6 +454,7 @@ class NectoAndroidControlRuntimeTest {
             error
         }
         assertEquals(NectoBridgeErrorCode.OPERATION_UNAVAILABLE, error?.code)
+        return error!!
     }
 
     private suspend fun labels(): List<String> = runtime.readAccessibility().mapNotNull { it.label }

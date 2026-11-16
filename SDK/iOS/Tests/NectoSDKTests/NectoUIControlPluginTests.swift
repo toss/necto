@@ -86,6 +86,13 @@ struct NectoUIControlPluginTests {
         #expect(output["targets"] == [])
     }
 
+    @Test("a screen that cannot be read is refused, not reported as empty", arguments: ["actionTargets", "readAccessibility"])
+    func unreadableScreen(operation: String) async throws {
+        let reason = NectoBridgeError(code: .operationUnavailable, message: "The app is not in the foreground")
+        let control = NectoUIControlPlugin(actionTargets: { throw reason }, readAccessibility: { throw reason }) { _, _ in [:] }
+        await #expect(throws: reason) { try await call(control, operation) }
+    }
+
     @Test("accessibility reading includes non-actionable content without executable or tree IDs")
     func readsContentSeparately() async throws {
         let control = NectoUIControlPlugin(actionTargets: {

@@ -32,7 +32,12 @@ async function act(operation, match, input = {}) {
 }
 async function expectContent(query, match) {
   for (let attempt = 0; attempt < 20; attempt++) {
-    if (read(query).some(match)) return;
+    // A screen in transition can be briefly unreadable, which is reported as an error.
+    try {
+      if (read(query).some(match)) return;
+    } catch (error) {
+      if (attempt === 19) throw error;
+    }
     await delay(100);
   }
   assert.fail(`Expected content for ${query}: ${JSON.stringify(read(query))}`);

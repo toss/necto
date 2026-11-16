@@ -76,8 +76,8 @@ internal class NectoAndroidControlRuntime(private val activity: () -> Activity?)
 
     private fun discover(): List<NectoControlTarget> {
         targets.clear()
-        val root = rootView() ?: return emptyList()
-        if (performing) return emptyList()
+        val root = readableRoot()
+        if (performing) throw unavailable("Another action is in progress")
         return entries(root).flatMap { (view, frame) ->
             if (view !== root && isComposeHost(view)) composeTargets(root, view) else listOfNotNull(viewTarget(root, view, frame))
         }
@@ -144,10 +144,7 @@ internal class NectoAndroidControlRuntime(private val activity: () -> Activity?)
         return frame
     }
 
-    suspend fun readAccessibility(): List<NectoAccessibilityItem> = onMain {
-        val root = rootView() ?: return@onMain emptyList()
-        readItems(root)
-    }
+    suspend fun readAccessibility(): List<NectoAccessibilityItem> = onMain { readItems(readableRoot()) }
 
     suspend fun perform(operation: String, input: NectoJsonValue): NectoJsonValue = onMain {
         if (performing) throw unavailable("Another action is in progress")
@@ -315,6 +312,18 @@ internal class NectoAndroidControlRuntime(private val activity: () -> Activity?)
      * person cannot see; the keyboard does not take focus.
      */
     private fun rootView(): View? = activity()?.window?.decorView?.takeIf { it.isAttachedToWindow && it.hasWindowFocus() }
+
+    /**
+     * [rootView] for discovery. Refuses with the reason instead of reporting an empty
+     * screen, so a caller can tell "no controls" from "nothing could be read".
+     */
+    private fun readableRoot(): View = rootView() ?: throw unavailable(
+        if (activity()?.window?.decorView?.isAttachedToWindow == true) {
+            "Another window, such as a dialog or the notification shade, has input focus. Close it, then refresh."
+        } else {
+            "The app is not in the foreground, is covered by a system dialog, or the screen is locked. Bring it to the front, then refresh."
+        },
+    )
 
     /** Every visible view with its visible frame, in drawing order. */
     private fun entries(root: View): List<Pair<View, NectoRect>> {
