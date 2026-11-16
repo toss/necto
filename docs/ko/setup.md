@@ -78,11 +78,26 @@ SDK는 캡처를 특정 빌드 설정으로 제한하지 않아요. 내부 테�
 `URLSessionNetworkPlugin`을 등록하면 네트워크 캡처가 시작돼요.
 `NectoSDK.start()`를 호출하면 Mac의 Necto 앱에서 캡처한 요청을 확인할 수 있어요.
 
-호출을 제외해도 패키지의 코드와 리소스까지 모두 제거된다고 보장하지는 않아요.
-제거 여부는 링크 방식과 데드 코드 스트리핑 등 빌드 설정에 따라 달라져요.
-완전히 제외해야 한다면 Necto 의존성이 없는 배포용 타깃을 분리하고 실제 Release
-산출물에 코드와 리소스가 남는지 확인하세요. `EXCLUDED_SOURCE_FILE_NAMES`만으로
-Swift 패키지의 소스를 제외할 수는 없어요.
+호출을 제외해도 패키지는 빠지지 않아요. Swift Package Manager는 product를 모든 빌드
+설정에 링크하므로, Necto 호출을 전부 `#if DEBUG`로 감싸도 코드와 패널 리소스가
+Release 빌드에 남아요.
+
+Release 앱에서 빼려면 앱 타깃의 Release 설정에서 **Excluded Source File Names**
+(`EXCLUDED_SOURCE_FILE_NAMES`)를 `Necto*`로 지정하고, import와 호출은 `#if DEBUG`
+안에 두세요.
+
+이 패턴은 패키지의 오브젝트 파일과 리소스 번들을 앱 타깃에서 제외해요. 패키지는
+그대로 컴파일되고, 이름이 `Necto`로 시작하는 앱 자체 파일도 함께 제외돼요. 설정이
+적용되는 방식은 기본 Xcode 프로젝트나 Tuist 같은 프로젝트 구성과 Xcode 버전에 따라
+달라질 수 있으니 실제 Release 산출물을 확인하세요.
+
+```sh
+ls YourApp.app | grep Necto
+nm -U YourApp.app/YourApp | grep -ci necto
+```
+
+첫 번째는 아무것도 출력하지 않고 두 번째는 `0`을 출력해야 해요. 그렇지 않다면 Necto
+의존성이 없는 배포용 타깃을 분리하세요.
 
 ### 먼저 추가할 플러그인
 
