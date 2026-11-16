@@ -100,11 +100,27 @@ builds distributed to users.
 Registering `URLSessionNetworkPlugin` starts network capture.
 Calling `NectoSDK.start()` lets you view the captured requests in the Necto app on your Mac.
 
-Excluding calls does not guarantee removal of all package code and resources.
-What remains depends on linking and build settings such as dead-code stripping.
-If complete exclusion is required, use a separate distribution target without Necto
-dependencies and inspect the actual Release output for remaining code and resources.
-`EXCLUDED_SOURCE_FILE_NAMES` alone does not exclude Swift package sources.
+Excluding calls does not remove the package. Swift Package Manager links a product in
+every build configuration, so the code and panel resources stay in a Release build
+even when every Necto call is under `#if DEBUG`.
+
+To keep them out of the Release app, set **Excluded Source File Names**
+(`EXCLUDED_SOURCE_FILE_NAMES`) to `Necto*` for the Release configuration of the app
+target, and keep the imports and calls under `#if DEBUG`.
+
+The pattern drops the package's object files and resource bundles from the app target.
+The package still compiles, and the pattern also excludes any file of your own whose
+name starts with `Necto`. How the setting applies can differ with the project setup,
+such as a plain Xcode project or Tuist, and with the Xcode version, so inspect the
+actual Release output:
+
+```sh
+ls YourApp.app | grep Necto
+nm -U YourApp.app/YourApp | grep -ci necto
+```
+
+The first should print nothing and the second `0`. If they do not, use a separate
+distribution target without Necto dependencies.
 
 ### Where to start
 
