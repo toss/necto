@@ -58,6 +58,7 @@ struct NectoWindowAttachment: NSViewRepresentable {
     final class Attachment: NSView {
         let state: NectoWindowState
         private var observers: [NSObjectProtocol] = []
+        private var closeInterceptor: NectoCloseInterceptor?
 
         init(state: NectoWindowState) { self.state = state; super.init(frame: .zero) }
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -69,6 +70,11 @@ struct NectoWindowAttachment: NSViewRepresentable {
             state.window = window
             state.isMain = window.isMainWindow
             state.model.registerWindow(state)
+            let interceptor = NectoCloseInterceptor(original: window.delegate) { [state] in
+                state.model.windowShouldClose(state)
+            }
+            closeInterceptor = interceptor
+            window.delegate = interceptor
             for name in [NSWindow.didBecomeMainNotification, NSWindow.didResignMainNotification] {
                 observers.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated { self?.state.isMain = self?.window?.isMainWindow == true }
@@ -83,10 +89,37 @@ struct NectoWindowAttachment: NSViewRepresentable {
         func detach() {
             observers.forEach(NotificationCenter.default.removeObserver)
             observers.removeAll()
-            guard state.window != nil else { return }
+            guard let window = state.window else { return }
+            if let closeInterceptor, window.delegate === closeInterceptor {
+                window.delegate = closeInterceptor.original
+            }
+            closeInterceptor = nil
             state.window = nil
             state.isMain = false
             state.model.unregisterWindow(state)
         }
+    }
+}
+
+/// SwiftUI owns the window's delegate. This stands in front of it to answer the close
+/// question and forwards everything else untouched.
+private final class NectoCloseInterceptor: NSObject, NSWindowDelegate {
+    nonisolated(unsafe) weak var original: NSWindowDelegate?
+    private let shouldClose: @MainActor () -> Bool
+
+    init(original: NSWindowDelegate?, shouldClose: @escaping @MainActor () -> Bool) {
+        self.original = original
+        self.shouldClose = shouldClose
+    }
+
+    override func responds(to selector: Selector!) -> Bool {
+        super.responds(to: selector) || original?.responds(to: selector) == true
+    }
+
+    override func forwardingTarget(for selector: Selector!) -> Any? { original }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard original?.windowShouldClose?(sender) != false else { return false }
+        return shouldClose()
     }
 }

@@ -20,6 +20,7 @@ struct NectoApp: App {
         WindowGroup("Necto") {
             ContentView(model: model)
                 .environment(\.locale, selectedLanguage.locale)
+                .onAppear { delegate.model = model }
         }
         .defaultSize(width: 1100, height: 720)
         // No title bar of its own. The toolbar carries the plugin's identity, and AppKit
@@ -75,14 +76,24 @@ extension Notification.Name {
 
 /// Brings the window to the front even when launched outside an app bundle.
 final class NectoAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    /// The model tracks the windows, so quitting and the Dock icon are passed on to it.
+    var model: NectoAppModel?
+
     func applicationDidFinishLaunching(_: Notification) {
         UNUserNotificationCenter.current().delegate = self
         NSApplication.shared.setActivationPolicy(.regular)
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
-        true
+    /// Returning true lets SwiftUI open a fresh window, which is right only when no
+    /// hidden one is waiting.
+    func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        hasVisibleWindows || model?.showHiddenWindow() != true
+    }
+
+    func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
+        model?.isTerminating = true
+        return .terminateNow
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,

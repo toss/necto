@@ -233,7 +233,9 @@ For background plugins, also verify in a built Necto:
 2. Use a fixture plugin to submit a notification while another panel and Settings are
    visible, and confirm background work continues across both selection changes.
 3. Disable/remove/update the plugin: background work ends. Ordinary panels still cancel
-   on selection changes. Closing the last window stops work.
+   on selection changes. Closing the last window hides it and work continues: the
+   CLI still answers, and the Dock icon brings back the same window with its
+   selection and panel intact. Quitting stops work.
 4. Test notification permission denied, Focus suppression and app-foreground delivery.
 5. User-activated HTTPS links open in the system browser and keep the plugin panel alive.
 6. Open a second window with Command-N: background initialization occurs only once.

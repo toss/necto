@@ -99,7 +99,7 @@ panel or Settings is visible, and tears them down on disable/removal/content rep
 Their target is nil, so selecting an iOS device does not restart the background account
 panel. Ordinary panels retain their existing teardown behavior. System sleep/App Nap
 and WebKit throttling can delay work; this is not an OS background service. Closing
-Necto's last window or quitting stops everything.
+Necto's last window only hides it, so work continues until Necto quits.
 
 If a web content process terminates, Necto reloads its document even while hidden.
 Recovery waits 1, 2 and 4 seconds for up to three consecutive attempts; a minute
