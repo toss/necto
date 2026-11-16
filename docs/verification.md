@@ -150,6 +150,12 @@ For a device, attach it over USB and confirm it appears. A `connectionRefused` r
 means the tunnel reached the device but nothing was listening, which is the expected
 answer when the app is not running.
 
+A change to the listener or the acceptor also needs the suspension check, on a device:
+with the app listed by `necto device list`, lock the phone for one to two minutes,
+unlock it, and bring the app forward without relaunching. The app must be listed
+again within a few seconds. The unit tests tear the listening socket down themselves;
+only a device shows that iOS does the same to a suspended app.
+
 ### Android connection
 
 Boot an emulator or attach a USB device, then:
