@@ -97,6 +97,13 @@ stable one for itself.
 A hello with a different protocol version is rejected. Necto does not negotiate
 protocol versions.
 
+iOS takes the sockets of an app it has suspended, the listening one included. The app
+is told nothing: the descriptor stays open, and connections to its port are refused.
+`NectoSocketAcceptor` watches for that teardown and ends its `sessions` stream, the SDK
+binds a new listener a second later, and the Mac's next probe finds it. A session that
+was open ends the same way a dropped connection does. The SDK does not observe the
+app's lifecycle for any of this, so a listener that survived is left alone.
+
 ## Plugin identity
 
 `NectoApp` owns one `NectoAppModel`, including the registry, control server, installer,

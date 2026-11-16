@@ -21,6 +21,34 @@ struct NectoSocketConcurrencyTests {
         #expect(throws: POSIXError.self) { try NectoSocketAcceptor(descriptor: -1) }
     }
 
+    @Test("a listening socket the system tore down ends the acceptor's sessions")
+    func tornDownListener() async throws {
+        let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+        try #require(descriptor >= 0)
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_addr.s_addr = INADDR_LOOPBACK.bigEndian
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bound == 0, listen(descriptor, 4) == 0 else {
+            Darwin.close(descriptor)
+            Issue.record("Could not listen on loopback")
+            return
+        }
+        let acceptor = try NectoSocketAcceptor(descriptor: descriptor)
+        defer { acceptor.close() }
+
+        // The descriptor stays open and stops listening, which is how iOS hands back
+        // the listener of an app it suspended.
+        try #require(disconnectx(descriptor, 0, 0) == 0)
+        await #expect(throws: POSIXError.self) {
+            for try await session in acceptor.sessions { session.close() }
+        }
+    }
+
     @Test("concurrent large frames never interleave", arguments: 0..<8)
     func concurrentFrames(_: Int) async throws {
         let (outgoing, incoming) = try socketPair()

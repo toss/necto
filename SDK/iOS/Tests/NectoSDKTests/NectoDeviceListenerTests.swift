@@ -146,3 +146,59 @@ private func startListener() throws -> (NectoDeviceListener, UInt16) {
     try await accepted.send(NectoHandshakeAck(accepted: true))
     #expect(try await next.receive(NectoHandshakeAck.self).accepted)
 }
+
+/// Tears down every socket on `port` and leaves the descriptors open, which is how iOS
+/// hands back the sockets of an app it suspended.
+private func tearDownSockets(on port: UInt16) -> Int {
+    var count = 0
+    for descriptor in 0 ..< getdtablesize() {
+        var address = sockaddr_in()
+        var size = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let named = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(descriptor, $0, &size) }
+        }
+        guard named == 0, address.sin_family == sa_family_t(AF_INET),
+              UInt16(bigEndian: address.sin_port) == port else { continue }
+        if disconnectx(descriptor, 0, 0) == 0 { count += 1 }
+    }
+    return count
+}
+
+private func next(
+    _ statuses: inout AsyncStream<NectoSDK.Status>.Iterator,
+    where matches: (NectoSDK.Status) -> Bool
+) async throws -> NectoSDK.Status {
+    while let status = await statuses.next() {
+        if matches(status) { return status }
+    }
+    throw CancellationError()
+}
+
+@Test(.timeLimit(.minutes(1)))
+func listensAgainAfterTheSystemTakesItsSockets() async throws {
+    let runtime = NectoSDKRuntime()
+    defer { runtime.stop() }
+    var statuses = runtime.statusUpdates().makeAsyncIterator()
+    runtime.start(port: 0)
+    guard case let .listening(port) = try await next(&statuses, where: {
+        if case .listening = $0 { true } else { false }
+    }) else { return }
+
+    let host = try await connectLocally(to: port)
+    defer { host.close() }
+    _ = try await host.receive(NectoHandshakeHello.self)
+    // SwiftPM's test runner has no app bundle identity; this test host accepts it.
+    try await host.send(NectoHandshakeAck(accepted: true))
+    _ = try await next(&statuses, where: { if case .connected = $0 { true } else { false } })
+
+    // The listener and the connection it accepted.
+    #expect(tearDownSockets(on: port) == 2)
+
+    _ = try await next(&statuses, where: { if case .failed = $0 { true } else { false } })
+    guard case let .listening(rebuilt) = try await next(&statuses, where: {
+        if case .listening = $0 { true } else { false }
+    }) else { return }
+    let returning = try await connectLocally(to: rebuilt)
+    defer { returning.close() }
+    _ = try await returning.receive(NectoHandshakeHello.self)
+}
