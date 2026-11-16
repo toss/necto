@@ -58,7 +58,7 @@ struct NectoProcessMetricsTests {
     func releasesThreadPorts() async throws {
         let plugin = ProcessPerformancePlugin()
         _ = try await answer(plugin, "necto.device.performance.snapshot")
-        let before = portNameCount()
+        let before = deadNameCount()
 
         for _ in 0..<300 {
             let thread = ParkedThread()
@@ -66,7 +66,7 @@ struct NectoProcessMetricsTests {
             thread.end()
         }
 
-        #expect(portNameCount() - before < 100)
+        #expect(deadNameCount() - before < 100)
     }
 }
 
@@ -88,13 +88,26 @@ private final class ParkedThread: @unchecked Sendable {
     }
 }
 
-/// How many port names this process holds, dead ones included.
-private func portNameCount() -> Int {
+/// How many dead names this process holds.
+///
+/// Only dead names are counted, because a thread port that is kept turns into one when
+/// its thread ends. Live names come and go with whatever other suites run in parallel
+/// in the same process, so counting every name made the result depend on them.
+private func deadNameCount() -> Int {
     var names: mach_port_name_array_t?
     var nameCount: mach_msg_type_number_t = 0
     var types: mach_port_type_array_t?
     var typeCount: mach_msg_type_number_t = 0
     guard mach_port_names(mach_task_self_, &names, &nameCount, &types, &typeCount) == KERN_SUCCESS else { return 0 }
+    // MACH_PORT_TYPE_DEAD_NAME is a C macro Swift does not import:
+    // MACH_PORT_TYPE(right) is 1 << (right + 16).
+    let deadNameType = mach_port_type_t(1) << (mach_port_type_t(MACH_PORT_RIGHT_DEAD_NAME) + 16)
+    var dead = 0
+    if let types {
+        for index in 0 ..< Int(typeCount) where types[index] & deadNameType != 0 {
+            dead += 1
+        }
+    }
     if let names {
         vm_deallocate(
             mach_task_self_,
@@ -109,5 +122,5 @@ private func portNameCount() -> Int {
             vm_size_t(MemoryLayout<mach_port_type_t>.stride * Int(typeCount))
         )
     }
-    return Int(nameCount)
+    return dead
 }
