@@ -385,6 +385,23 @@ class NectoAndroidControlRuntimeTest {
         assertTrue(assertUnavailable { runtime.readAccessibility() }.message.startsWith("Another window"))
     }
 
+    /** Discovery during an action says so, rather than listing targets the action is about to change. */
+    @Test
+    fun discoveryExplainsThatAnActionIsInProgress() = runTest {
+        show(View(start()).apply { setOnTouchListener { _, _ -> true } })
+        val screen = runtime.snapshot().first { it.role == "screen" }
+
+        val swipe = launch {
+            runtime.perform("swipe", jsonObject("targetID" to jsonOf(screen.id), "direction" to jsonOf("up")))
+        }
+        runCurrent()
+
+        assertTrue(assertUnavailable { runtime.snapshot() }.message.startsWith("Another action is in progress"))
+        swipe.cancel()
+        runCurrent()
+        idle()
+    }
+
     /** A tap that opens a dialog stops a double tap before its second tap lands behind it. */
     @Test
     fun aDialogOpenedByTheFirstTapStopsTheSecond() = runTest {

@@ -4,8 +4,9 @@
 
 // Run against a freshly launched ExampleApp using its dedicated fixture bundle.
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import { promisify } from "node:util";
 
 const [device, app] = process.argv.slice(2);
 if (!device || !app?.startsWith("im.toss.necto.example.")) {
@@ -117,6 +118,22 @@ assert.equal(targets().find(identifier("poc.scroll"))?.value, "Main queue ran du
 await delay(1000);
 assert.ok(!targets().some(identifier("poc.item.1")), "UIKit scroll should move Item 1 offscreen");
 console.log("PASS UIKit: navigation bar, accessible gesture, input, secure value redaction, push/back, swipe");
+
+// Discovery while an action runs is refused with the reason, not answered with an empty list.
+const scrollID = targets().find(identifier("poc.scroll"))?.id;
+assert.ok(scrollID, "Expected the UIKit scroll target");
+const slowSwipe = promisify(execFile)(executable, ["plugin", "send", "control", "control.swipe", ...scope,
+  "--input", JSON.stringify({ targetID: scrollID, direction: "down", distanceRatio: 0.7, durationMs: 2000 })],
+  { encoding: "utf8", timeout: 10_000 });
+await delay(700);
+const during = spawnSync(executable, ["plugin", "send", "control", "control.actionTargets", ...scope,
+  "--input", "{}"], { encoding: "utf8", timeout: 10_000 });
+assert.notEqual(during.status, 0, `Discovery during an action must fail: ${during.stdout}`);
+assert.match(during.stderr, /OPERATION_UNAVAILABLE/);
+assert.match(during.stderr, /Another action is in progress/);
+assert.equal(JSON.parse((await slowSwipe).stdout).dispatched, true);
+assert.ok(targets().some(screen), "Discovery works again once the action ends");
+console.log("PASS discovery during an action: refused with the reason");
 
 await act("tap", label("Accessibility"));
 await act("swipe", (target) => target.role === "scrollArea", { direction: "down", distanceRatio: 0.9, durationMs: 150 });
