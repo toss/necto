@@ -339,8 +339,10 @@ async function runAction(operation: string, input: NectoJSONObject): Promise<voi
   statusText.textContent = t("Sending input…");
   try {
     const result = await necto.device.send<NectoJSONObject>(operation, input);
-    const refreshed = await load();
-    if (refreshed) statusText.textContent = t(result.contentChanged
+    // The input was delivered even when the screen it led to cannot be read; that reason
+    // shows in the list instead of replacing this status.
+    await load();
+    statusText.textContent = t(result.contentChanged
       ? "Input sent · accessibility content changed" : "Input sent · no accessibility change observed");
   } catch (error) {
     await load();
@@ -359,12 +361,11 @@ function actionButton(label: string, operation: string, input: NectoJSONObject):
   return button;
 }
 
-async function load(): Promise<boolean> {
-  if (loading) return false;
+async function load(): Promise<void> {
+  if (loading) return;
   loading = true;
   statusText.textContent = t("Loading…");
   updateBusyState();
-  let success = false;
   try {
     if (mode === "actions") {
       elements = (await necto.device.send<{ targets: ActionTarget[] }>("control.actionTargets")).targets;
@@ -376,7 +377,6 @@ async function load(): Promise<boolean> {
     }
     message = null;
     statusText.textContent = "";
-    success = true;
   } catch (error) {
     elements = [];
     accessibilityItems = [];
@@ -390,7 +390,6 @@ async function load(): Promise<boolean> {
   renderList();
   renderDetail();
   updateBusyState();
-  return success;
 }
 
 refresh.addEventListener("click", () => { if (!acting) void load(); });
