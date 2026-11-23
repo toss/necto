@@ -38,6 +38,8 @@ export const t = createTranslator({
     "Input sent · accessibility content changed": "입력 전달됨 · 접근성 내용 변경됨",
     "Input sent · no accessibility change observed": "입력 전달됨 · 접근성 변화 확인 안 됨",
     "Another action is in progress": "다른 동작이 실행 중이에요.",
+    "The app is not in the foreground, is covered by a system dialog, or the screen is locked. Bring it to the front, then refresh.": "앱이 화면에 없거나, 시스템 창에 가려져 있거나, 화면이 잠겨 있어요. 앱을 앞으로 가져온 뒤 새로고침해 주세요.",
+    "Another window, such as a dialog or the notification shade, has input focus. Close it, then refresh.": "대화상자나 알림창 같은 다른 창이 열려 있어요. 닫은 뒤 새로고침해 주세요.",
     "The target changed. Refresh Control before acting.": "요소가 바뀌었어요. 새로고침한 뒤 다시 선택해 주세요.",
     "The target is covered by another view. Refresh Control before acting.": "다른 화면이 요소를 가리고 있어요. 새로고침한 뒤 다시 선택해 주세요.",
     "The text field did not receive focus. Refresh Control before acting.": "입력란에 포커스가 이동하지 않았어요. 새로고침한 뒤 다시 선택해 주세요.",

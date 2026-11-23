@@ -19,7 +19,7 @@
     {
       "id": "control.actionTargets",
       "title": "List action targets",
-      "description": "List visible action targets and their supported requests. Discover by label, identifier, or role, then pass the returned opaque id as targetID. Refresh after every action or UI change; stale or moved targets are refused. Read-only labels and disabled controls are excluded. Scroll containers and a screen gesture surface are also provided. Discovery does not execute actions. A supported request does not guarantee the intended app outcome.",
+      "description": "List visible action targets and their supported requests. Discover by label, identifier, or role, then pass the returned opaque id as targetID. Refresh after every action or UI change; stale or moved targets are refused. Read-only labels and disabled controls are excluded. Scroll containers and a screen gesture surface are also provided. Discovery does not execute actions. A supported request does not guarantee the intended app outcome. When the screen cannot be read (the app is in the background, the screen is locked, another window or dialog has focus, or an action is in progress), this fails with OPERATION_UNAVAILABLE and the reason; an empty list means the screen has no action targets.",
       "kind": "once",
       "binding": {
         "name": "necto.device.control.actionTargets",
@@ -134,7 +134,7 @@
     {
       "id": "control.readAccessibility",
       "title": "Read accessibility content",
-      "description": "Read visible accessibility content to understand the current screen or verify an action outcome. Includes non-actionable text and labels. Returns flat read-only items, not a view tree, action targets, or a definitive screen identity. Items have no executable IDs; use control.actionTargets to find a target before acting. Offscreen and hidden content is excluded; secure values are omitted. Content depends on what the app exposes; this is not a full VoiceOver transcript. This read does not execute actions or refresh cached action targets.",
+      "description": "Read visible accessibility content to understand the current screen or verify an action outcome. Includes non-actionable text and labels. Returns flat read-only items, not a view tree, action targets, or a definitive screen identity. Items have no executable IDs; use control.actionTargets to find a target before acting. Offscreen and hidden content is excluded; secure values are omitted. Content depends on what the app exposes; this is not a full VoiceOver transcript. This read does not execute actions or refresh cached action targets. When the screen cannot be read (the app is in the background, the screen is locked, or another window or dialog has focus), this fails with OPERATION_UNAVAILABLE and the reason; an empty list means nothing visible is exposed.",
       "kind": "once",
       "binding": {
         "name": "necto.device.control.readAccessibility",
