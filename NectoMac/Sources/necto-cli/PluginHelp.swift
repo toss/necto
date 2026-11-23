@@ -118,10 +118,6 @@ enum PluginHelp {
         return displayText(lines.joined(separator: "\n"))
     }
 
-    private static func shellArgument(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
-    }
-
     static func schemaLines(_ schema: NectoJSONValue, name: String? = nil, required: Bool = false, depth: Int = 0) -> [String] {
         let indent = String(repeating: "  ", count: depth + 1)
         guard depth < 12 else { return [indent + "… See --json for the complete schema."] }
@@ -141,6 +137,10 @@ enum PluginHelp {
         if let items = schema["items"] { lines += schemaLines(items, name: "items", depth: depth + 1) }
         return lines
     }
+}
+
+func shellArgument(_ value: String) -> String {
+    "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
 }
 
 func displayText(_ text: String) -> String {

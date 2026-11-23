@@ -353,9 +353,12 @@ struct Pack: AsyncParsableCommand {
         // The next step is only news to someone doing this by hand. A script that
         // packages several plugins is going to publish them together.
         if !quiet {
+            let assets = [archivePath, manifestPath].map { file in
+                shellArgument(output == nil ? "./\(file.lastPathComponent)" : file.path)
+            }.joined(separator: " ")
             print("")
             print("Next:")
-            print("  gh release create <tag> \(archivePath.lastPathComponent) \(manifestPath.lastPathComponent)")
+            print("  gh release create <tag> \(assets)")
         }
     }
 

@@ -212,6 +212,34 @@ struct NectoCLIBlackBoxTests {
         #expect(result.status == 130)
     }
 
+    @Test("pack's release command names both files in the selected output directory")
+    func packReleasePaths() async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let panel = fixture.directory.appending(path: "dist")
+        try FileManager.default.createDirectory(at: panel, withIntermediateDirectories: true)
+        let manifest = NectoPluginManifest(
+            id: "sample", name: "Sample", description: "Sample panel", version: "1.0.0",
+            author: "Necto", icon: .init(systemName: "terminal"), assets: ["index.html"],
+            allowedOrigins: ["self"], operations: []
+        )
+        try JSONEncoder().encode(manifest).write(to: panel.appending(path: "manifest.json"))
+        try Data("<!doctype html>".utf8).write(to: panel.appending(path: "index.html"))
+
+        let output = fixture.directory.appending(path: "Author's releases")
+        let result = try await fixture.run(["plugin", "pack", panel.path, "--output", output.path])
+        try #require(result.status == 0, "\(result.error)")
+        let command = try #require(result.output.split(separator: "\n").last).trimmingCharacters(in: .whitespaces)
+        let prefix = "gh release create <tag> "
+        try #require(command.hasPrefix(prefix))
+        let parsed = try await fixture.run(["-c", "printf '%s\\n' " + command.dropFirst(prefix.count)],
+                                           executable: URL(filePath: "/bin/sh"))
+        let files = ["sample-1.0.0.zip", "sample-1.0.0.manifest.json"].map { output.appending(path: $0).path }
+        #expect(parsed.status == 0)
+        #expect(parsed.output.split(separator: "\n").map(String.init) == files)
+        #expect(files.allSatisfy { FileManager.default.fileExists(atPath: $0) })
+    }
+
     @Test("skills install for both agents without Necto and protect user edits")
     func skillInstallation() async throws {
         let fixture = try CLIProcessFixture()
