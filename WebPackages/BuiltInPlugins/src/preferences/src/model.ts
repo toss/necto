@@ -38,6 +38,15 @@ export function dictionaryFields(text: string): [string, NectoJSONValue][] | nul
   return Object.entries(value);
 }
 
+/// The first blank or repeated key, so the editor can flag it before building the dictionary.
+export function invalidDictionaryKey(fields: [string, string][]): string | undefined {
+  const seen = new Set<string>();
+  for (const [key] of fields) {
+    if (!key.trim() || seen.has(key)) return key;
+    seen.add(key);
+  }
+}
+
 /// The number a field holds, or null when it holds none. `Number("")` is 0, and an
 /// emptied field must not be saved as one.
 export function numberValue(text: string, type: string): number | null {
