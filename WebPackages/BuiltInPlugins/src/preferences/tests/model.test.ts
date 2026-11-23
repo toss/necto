@@ -4,7 +4,7 @@
 
 import { assert, test } from "vitest";
 
-import { arrayItems, dictionaryFields, display, element, numberValue } from "../src/model";
+import { arrayItems, dictionaryFields, display, element, invalidDictionaryKey, numberValue } from "../src/model";
 
 test("an untouched row is saved as the value it showed", () => {
   const stored = ["dark", "1", "1.0", "true", "null", "", " 7", '"quoted"', '{"a":1}', 1, true, { a: [1] }, [2]];
@@ -46,6 +46,14 @@ test("a container that is not JSON is not an empty one", () => {
     ["a", 1],
     ["b", "two"],
   ]);
+});
+
+test("dictionary edits reject blank and duplicate keys and preserve distinct spellings", () => {
+  assert.strictEqual(invalidDictionaryKey([["theme", "light"], ["accent", "red"], ["theme", "blue"]]), "theme");
+  assert.strictEqual(invalidDictionaryKey([["", "blue"]]), "");
+  assert.strictEqual(invalidDictionaryKey([[" ", "blue"]]), " ");
+  assert.isUndefined(invalidDictionaryKey([["theme", "light"], ["Theme", "dark"], [" theme", "blue"]]));
+  assert.isUndefined(invalidDictionaryKey([]));
 });
 
 test("an emptied or oversized number field holds no number", () => {
