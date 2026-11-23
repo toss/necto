@@ -69,7 +69,7 @@ struct NectoPluginSidebarStoreTests {
         #expect(try fixture.store.load(.device).items.isEmpty)
     }
 
-    @Test("Flat reordering persists the requested order and retains unavailable IDs", arguments: [
+    @Test("Reordering new root plugins preserves other unplaced and unavailable siblings", arguments: [
         NectoPluginSidebarStore.Kind.desktop, .device,
     ])
     func reorderFlatSection(_ kind: NectoPluginSidebarStore.Kind) throws {
@@ -78,13 +78,19 @@ struct NectoPluginSidebarStoreTests {
         let legacy = ["a", "unavailable-1", "b", "unavailable-2"]
         fixture.defaults.set(legacy, forKey: kind.legacyOrderKey)
 
-        let expected = ["b", "new", "a", "unavailable-1", "unavailable-2"]
-        #expect(try fixture.store.saveFlatOrder(["b", "new", "a"], for: kind).pluginIDs == expected)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let active = ["a", "b", "new-a", "new-b", "new-c"]
+        #expect(state.reorder(
+            location(.plugin("new-c"), in: kind), relativeTo: location(.plugin("new-b"), in: kind),
+            position: .before, activePluginIDs: active, disabledPluginIDs: []
+        ))
+        let expected = ["a", "unavailable-1", "b", "unavailable-2", "new-a", "new-c", "new-b"]
+        #expect(state[kind].pluginIDs == expected)
         #expect(try fixture.store.load(kind).pluginIDs == expected)
         #expect(fixture.defaults.stringArray(forKey: kind.legacyOrderKey) == legacy)
     }
 
-    @Test("A nested section still orders plugin rows and rejects a flat reorder")
+    @Test("A root reorder preserves nested ownership and unavailable descendants")
     func keepNestedOrder() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -92,7 +98,6 @@ struct NectoPluginSidebarStoreTests {
         let outer = Section.Folder(name: "Tools", children: [.folder(inner)])
         let section = try Section(items: [.plugin("top"), .folder(outer), .plugin("tail")])
         try fixture.store.save(section, for: .desktop)
-        let original = try #require(fixture.defaults.data(forKey: Store.Kind.desktop.sectionKey))
 
         let available = [
             plugin(id: "new-zulu", name: "Zulu"), plugin(id: "tail", name: "A"),
@@ -102,11 +107,16 @@ struct NectoPluginSidebarStoreTests {
         #expect(NectoPluginLibrary.sorted(available, by: order).map(\.id) == [
             "top", "nested", "tail", "new-alpha", "new-zulu",
         ])
-        #expect(throws: Store.StorageError.sectionContainsFolders) {
-            try fixture.store.saveFlatOrder(["tail", "nested", "top"], for: .desktop)
-        }
-        #expect(fixture.defaults.data(forKey: Store.Kind.desktop.sectionKey) == original)
-        #expect(try fixture.store.load(.desktop) == section)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        #expect(state.reorder(
+            location(.plugin("tail"), in: .desktop), relativeTo: location(.plugin("top"), in: .desktop),
+            position: .before, activePluginIDs: available.map(\.id), disabledPluginIDs: []
+        ))
+        let expected: [Section.Item] = [
+            .plugin("tail"), .plugin("top"), .folder(outer), .plugin("new-zulu"), .plugin("new-alpha"),
+        ]
+        #expect(state[.desktop].items == expected)
+        #expect(try fixture.store.load(.desktop).items == expected)
     }
 
     @Test("Malformed data, invariant violations, and a wrong preference type preserve the stored value")
@@ -117,6 +127,8 @@ struct NectoPluginSidebarStoreTests {
         let fixture = try Fixture()
         defer { fixture.remove() }
         fixture.defaults.set(["legacy"], forKey: "devicePluginOrder")
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let original = state[.device]
         let invalidTree = try JSONEncoder().encode(UnvalidatedSection(items: [
             .plugin("duplicate"), .folder(.init(name: "Tools", children: [.plugin("duplicate")])),
         ]))
@@ -126,21 +138,25 @@ struct NectoPluginSidebarStoreTests {
         for payload in [Data("invalid JSON".utf8), invalidTree] {
             fixture.defaults.set(payload, forKey: key)
             #expect(throws: Store.StorageError.invalidSavedSection) { try fixture.store.load(.device) }
-            #expect(throws: Store.StorageError.invalidSavedSection) {
-                try fixture.store.saveFlatOrder(["replacement"], for: .device)
-            }
+            #expect(!state.reorder(
+                location(.plugin("b")), relativeTo: location(.plugin("a")), position: .before,
+                activePluginIDs: ["a", "b"], disabledPluginIDs: []
+            ))
             #expect(throws: Store.StorageError.invalidSavedSection) {
                 try fixture.store.save(replacement, for: .device)
             }
             #expect(fixture.defaults.data(forKey: key) == payload)
+            #expect(state[.device] == original)
         }
 
         fixture.defaults.set("wrong type", forKey: key)
         #expect(throws: Store.StorageError.invalidSavedSection) { try fixture.store.load(.device) }
-        #expect(throws: Store.StorageError.invalidSavedSection) {
-            try fixture.store.saveFlatOrder(["replacement"], for: .device)
-        }
+        #expect(!state.reorder(
+            location(.plugin("b")), relativeTo: location(.plugin("a")), position: .before,
+            activePluginIDs: ["a", "b"], disabledPluginIDs: []
+        ))
         #expect(fixture.defaults.object(forKey: key) as? String == "wrong type")
+        #expect(state[.device] == original)
     }
 
     @Test("A folder edit publishes the saved section and leaves it unchanged on failure")
@@ -169,8 +185,84 @@ struct NectoPluginSidebarStoreTests {
         }
         #expect(state[.device] == original)
         #expect(fixture.defaults.data(forKey: key) == data)
-        #expect(!state.saveFlatOrder(["replacement"], for: .device))
-        #expect(state[.device] == original)
+    }
+
+    @Test("A disabled plugin can reorder among its saved siblings while root disabled rows stay in place")
+    func reorderNestedDisabledPlugin() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let folder = Section.Folder(name: "Tools", children: [.plugin("a"), .plugin("hidden"), .plugin("disabled")])
+        let section = try Section(items: [.plugin("root-disabled"), .folder(folder), .plugin("tail")])
+        try fixture.store.save(section, for: .device)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let rootDisabled = location(.plugin("root-disabled"))
+        let tail = location(.plugin("tail"))
+        let active = ["a", "tail"]
+        let disabled = ["disabled", "root-disabled"]
+
+        #expect(!state.reorder(rootDisabled, relativeTo: tail, position: .after, activePluginIDs: active, disabledPluginIDs: disabled))
+        #expect(!state.reorder(tail, relativeTo: rootDisabled, position: .after, activePluginIDs: active, disabledPluginIDs: disabled))
+        #expect(state.reorder(
+            location(.plugin("disabled"), parentID: folder.id), relativeTo: location(.plugin("a"), parentID: folder.id),
+            position: .before, activePluginIDs: active, disabledPluginIDs: disabled
+        ))
+        var expectedFolder = folder
+        expectedFolder.children = [.plugin("disabled"), .plugin("a"), .plugin("hidden")]
+        #expect(try fixture.store.load(.device).items == [.plugin("root-disabled"), .folder(expectedFolder), .plugin("tail")])
+    }
+
+    @Test("A drop whose source or destination is hidden, dimmed or in another section leaves storage unchanged")
+    func refuseUnavailableAndCrossSectionDrops() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let folder = Section.Folder(name: "Tools", children: [.plugin("nested")])
+        let section = try Section(items: [.plugin("a"), .plugin("b"), .folder(folder)])
+        try fixture.store.save(section, for: .device)
+        try fixture.store.save(section, for: .desktop)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let original = try #require(fixture.defaults.data(forKey: Store.Kind.device.sectionKey))
+        let a = location(.plugin("a"))
+        let b = location(.plugin("b"))
+        let tools = location(.folder(folder.id))
+        let absent = location(.plugin("absent"))
+
+        #expect(!state.reorder(a, relativeTo: b, position: .after, activePluginIDs: ["b"], disabledPluginIDs: []))
+        #expect(!state.reorder(b, relativeTo: absent, position: .after, activePluginIDs: ["b"], disabledPluginIDs: []))
+        #expect(!state.reorder(tools, relativeTo: b, position: .before, activePluginIDs: ["a", "b"], disabledPluginIDs: []))
+        #expect(!state.reorder(b, relativeTo: tools, position: .after, activePluginIDs: ["a", "b"], disabledPluginIDs: []))
+        #expect(!state.reorder(
+            b, relativeTo: location(.plugin("a"), in: .desktop), position: .before,
+            activePluginIDs: ["a", "b"], disabledPluginIDs: []
+        ))
+        #expect(state[.device] == section)
+        #expect(state[.desktop] == section)
+        #expect(fixture.defaults.data(forKey: Store.Kind.device.sectionKey) == original)
+    }
+
+    @Test("A drop rechecks the saved parent and cancels when the source has moved")
+    func refuseStaleParentDrop() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let left = Section.Folder(name: "Left", children: [.plugin("a"), .plugin("b")])
+        let right = Section.Folder(name: "Right")
+        let before = try Section(items: [.folder(left), .folder(right)])
+        try fixture.store.save(before, for: .device)
+        let state = NectoPluginSidebarState(store: fixture.store)
+
+        var newLeft = left
+        newLeft.children = [.plugin("b")]
+        var newRight = right
+        newRight.children = [.plugin("a")]
+        let latest = try Section(items: [.folder(newLeft), .folder(newRight)])
+        try fixture.store.save(latest, for: .device)
+        let original = try #require(fixture.defaults.data(forKey: Store.Kind.device.sectionKey))
+
+        #expect(!state.reorder(
+            location(.plugin("a"), parentID: left.id), relativeTo: location(.plugin("b"), parentID: left.id),
+            position: .after, activePluginIDs: ["a", "b"], disabledPluginIDs: []
+        ))
+        #expect(state[.device] == before)
+        #expect(fixture.defaults.data(forKey: Store.Kind.device.sectionKey) == original)
     }
 
     @Test("Child creation opens its saved ancestors and deletion preserves surviving folders' collapse state")
@@ -335,6 +427,14 @@ struct NectoPluginSidebarStoreTests {
         #expect(state[.desktop] == original)
         #expect(fixture.defaults.data(forKey: key) == corrupt)
         #expect(fixture.defaults.stringArray(forKey: "disabledPluginIDs") == ["already-disabled"])
+    }
+
+    private func location(
+        _ id: Section.Item.ID,
+        in kind: Store.Kind = .device,
+        parentID: UUID? = nil
+    ) -> NectoPluginSidebarState.ItemLocation {
+        .init(kind: kind, id: id, parentID: parentID)
     }
 
     private func plugin(id: String, name: String, source: NectoInstalledPlugin.Source = .installed) -> NectoInstalledPlugin {

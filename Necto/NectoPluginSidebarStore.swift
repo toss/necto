@@ -6,7 +6,7 @@ import Foundation
 
 @MainActor
 struct NectoPluginSidebarStore {
-    enum Kind: String, CaseIterable {
+    enum Kind: String, CaseIterable, Sendable {
         case desktop
         case device
 
@@ -27,7 +27,6 @@ struct NectoPluginSidebarStore {
 
     enum StorageError: Error, Equatable {
         case invalidSavedSection
-        case sectionContainsFolders
     }
 
     let defaults: UserDefaults
@@ -46,19 +45,6 @@ struct NectoPluginSidebarStore {
         // Read first so a corrupt or unsupported saved value stays available for recovery.
         _ = try savedSection(for: kind)
         try write(section, for: kind)
-    }
-
-    /// Keeps the old flat drag behavior until the sidebar supports folder-aware reordering.
-    func saveFlatOrder(_ ids: [String], for kind: Kind) throws -> NectoPluginSidebarSection {
-        let previousIDs = try load(kind).items.map { item in
-            guard case .plugin(let id) = item else { throw StorageError.sectionContainsFolders }
-            return id
-        }
-        // Plugin availability can change between reorders. Keep unlisted IDs in their relative order.
-        let order = Self.uniqueIDs(ids + previousIDs)
-        let updated = try NectoPluginSidebarSection(items: order.map { .plugin($0) })
-        try write(updated, for: kind)
-        return updated
     }
 
     private func savedSection(for kind: Kind) throws -> NectoPluginSidebarSection? {

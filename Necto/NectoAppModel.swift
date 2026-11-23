@@ -210,26 +210,26 @@ final class NectoAppModel {
             .sorted { $0.manifest.name < $1.manifest.name }
     }
 
-    func moveDevicePlugins(from source: IndexSet, to destination: Int, target: NectoTarget?) {
-        var arranged = activeDevicePlugins(for: target)
-        arranged.move(fromOffsets: source, toOffset: destination)
-
-        pluginSidebar.saveFlatOrder(arranged.map(\.id), for: .device)
-    }
-
     /// The enabled catalog entries in the sidebar's saved order.
     var enabledPlugins: [NectoInstalledPlugin] {
         NectoPluginLibrary.sorted(plugins.filter { !disabledIDs.contains($0.id) }, by: pluginSidebar[.desktop].pluginIDs)
     }
 
-    /// Takes the move `List` already worked out, once, when the row is dropped.
-    func movePlugins(from source: IndexSet, to destination: Int) {
-        var enabled = enabledPlugins
-        enabled.move(fromOffsets: source, toOffset: destination)
-
-        let arranged = enabled + plugins.filter { disabledIDs.contains($0.id) }
-        guard pluginSidebar.saveFlatOrder(arranged.map(\.id), for: .desktop) else { return }
-        plugins = arranged
+    func reorderSidebar(
+        _ source: NectoPluginSidebarState.ItemLocation,
+        relativeTo anchor: NectoPluginSidebarState.ItemLocation,
+        position: NectoPluginSidebarSection.InsertionPosition,
+        target: NectoTarget?
+    ) {
+        let active = source.kind == .device ? activeDevicePlugins(for: target) : enabledPlugins
+        let disabled = source.kind == .device ? disabledDevicePlugins(for: target) : []
+        let saved = pluginSidebar.reorder(
+            source, relativeTo: anchor, position: position,
+            activePluginIDs: active.map(\.id), disabledPluginIDs: disabled.map(\.id)
+        )
+        if saved && source.kind == .desktop {
+            plugins = NectoPluginLibrary.sorted(plugins, by: pluginSidebar[.desktop].pluginIDs)
+        }
     }
 
     /// Records a line and republishes what the badge reads.

@@ -6,9 +6,26 @@ import Foundation
 
 /// The arrangement of one sidebar section, independent of which plugins are available.
 struct NectoPluginSidebarSection: Equatable, Sendable {
-    enum Item: Codable, Equatable, Sendable {
+    enum Item: Codable, Equatable, Identifiable, Sendable {
+        enum ID: Hashable, Sendable {
+            case plugin(String)
+            case folder(UUID)
+        }
+
         case plugin(String)
         case folder(Folder)
+
+        var id: ID {
+            switch self {
+            case .plugin(let id): .plugin(id)
+            case .folder(let folder): .folder(folder.id)
+            }
+        }
+    }
+
+    enum InsertionPosition: Sendable {
+        case before
+        case after
     }
 
     struct Folder: Codable, Equatable, Sendable {
@@ -128,6 +145,34 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         return true
     }
 
+    mutating func reorder(
+        _ source: Item.ID,
+        relativeTo anchor: Item.ID,
+        position: InsertionPosition,
+        in parentID: UUID?,
+        unplacedRootPluginIDs: [String] = []
+    ) throws -> Bool {
+        guard source != anchor else { return false }
+        var updatedItems = items
+        if let parentID {
+            var didReorder = false
+            let found = Self.replaceFolderInTree(parentID, in: &updatedItems, expandingAncestors: false) { folder, _ in
+                var folder = folder
+                didReorder = Self.insert(source, relativeTo: anchor, position: position, in: &folder.children)
+                return [.folder(folder)]
+            }
+            guard found && didReorder else { return false }
+        } else {
+            var placed = Set(pluginIDs)
+            for id in unplacedRootPluginIDs where placed.insert(id).inserted {
+                updatedItems.append(.plugin(id))
+            }
+            guard Self.insert(source, relativeTo: anchor, position: position, in: &updatedItems) else { return false }
+        }
+        self = try Self(items: updatedItems)
+        return true
+    }
+
     private mutating func appendFolder(to parentID: UUID?, name: ([Item]) -> String) throws -> UUID {
         let id = UUID()
         if let parentID {
@@ -196,6 +241,23 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
             }
         }
         return false
+    }
+
+    private static func insert(
+        _ source: Item.ID,
+        relativeTo anchor: Item.ID,
+        position: InsertionPosition,
+        in items: inout [Item]
+    ) -> Bool {
+        guard let sourceIndex = items.firstIndex(where: { $0.id == source }),
+              let anchorIndex = items.firstIndex(where: { $0.id == anchor }) else { return false }
+        let anchorAfterRemoval = sourceIndex < anchorIndex ? anchorIndex - 1 : anchorIndex
+        let destination = position == .before ? anchorAfterRemoval : anchorAfterRemoval + 1
+        guard sourceIndex != destination else { return false }
+
+        let item = items.remove(at: sourceIndex)
+        items.insert(item, at: destination)
+        return true
     }
 
     private static func reserveFolderName(_ baseName: String, in names: inout Set<String>) -> String {

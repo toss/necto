@@ -11,6 +11,72 @@ struct NectoPluginSidebarSectionTests {
     typealias Folder = Section.Folder
     typealias Item = Section.Item
 
+    @Test("Moving either visible row around a hidden sibling keeps the hidden sibling's position relative to the untouched row")
+    func insertAroundHiddenSibling() throws {
+        let saved = try Section(items: [.plugin("a"), .plugin("c"), .plugin("b")])
+        let rows = saved.visibleRows(activePluginIDs: ["a", "b"], disabledPluginIDs: [])
+        var bBeforeA = saved
+        let upward = try #require(Section.insertion(from: [1], to: 0, in: rows))
+        #expect(try bBeforeA.reorder(
+            upward.source.id, relativeTo: upward.anchor.id, position: upward.position, in: upward.source.parentID
+        ))
+        #expect(bBeforeA.pluginIDs == ["b", "a", "c"])
+
+        var aAfterB = saved
+        let downward = try #require(Section.insertion(from: [0], to: rows.count, in: rows))
+        #expect(try aAfterB.reorder(
+            downward.source.id, relativeTo: downward.anchor.id, position: downward.position, in: downward.source.parentID
+        ))
+        #expect(aAfterB.pluginIDs == ["c", "b", "a"])
+    }
+
+    @Test("A native insertion after an expanded folder lands beyond its subtree")
+    func insertAfterExpandedFolder() throws {
+        let child = Folder(name: "Child", children: [.plugin("child")])
+        let folder = Folder(name: "Tools", children: [.plugin("tool"), .folder(child)])
+        let unavailable = Folder(name: "Unavailable", children: [.plugin("missing")])
+        var section = try Section(items: [.plugin("a"), .folder(folder), .plugin("disabled"), .folder(unavailable)])
+        let rows = section.visibleRows(activePluginIDs: ["a", "child", "tool"], disabledPluginIDs: ["disabled"])
+        #expect(rows.map(\.id) == [
+            .plugin("a"), .folder(folder.id), .plugin("tool"), .folder(child.id), .plugin("child"),
+            .plugin("disabled"), .folder(unavailable.id),
+        ])
+
+        #expect(Section.insertion(from: [0], to: 2, in: rows) == nil) // Inside Tools.
+        #expect(Section.insertion(from: [1], to: 5, in: rows) == nil) // After its own subtree.
+        #expect(Section.insertion(from: [2], to: 0, in: rows) == nil) // Outside Tools.
+        #expect(Section.insertion(from: [0], to: 6, in: rows) == nil) // After root disabled.
+        #expect(Section.insertion(from: [0], to: 7, in: rows) == nil) // After dimmed folder.
+        #expect(Section.insertion(from: [6], to: 0, in: rows) == nil) // Dimmed source.
+        #expect(Section.insertion(from: [0, 1], to: 5, in: rows) == nil)
+        #expect(Section.insertion(from: [7], to: 0, in: rows) == nil)
+        #expect(Section.insertion(from: [0], to: 8, in: rows) == nil)
+
+        let move = try #require(Section.insertion(from: [0], to: 5, in: rows))
+        #expect(try section.reorder(
+            move.source.id, relativeTo: move.anchor.id, position: move.position, in: move.source.parentID
+        ))
+        #expect(section.items == [.folder(folder), .plugin("a"), .plugin("disabled"), .folder(unavailable)])
+    }
+
+    @Test("Reordering a nested folder moves its entire subtree within the same parent")
+    func reorderNestedFolder() throws {
+        let dimmedChild = Folder(name: "Unavailable", children: [.plugin("unavailable")], isCollapsed: true)
+        let source = Folder(name: "Tools", children: [.folder(dimmedChild), .plugin("tool")], isCollapsed: true)
+        let sibling = Folder(name: "Other")
+        let parent = Folder(name: "Parent", children: [.folder(source), .plugin("hidden"), .folder(sibling)])
+        var section = try Section(items: [.plugin("root"), .folder(parent)])
+        #expect(try section.reorder(.folder(source.id), relativeTo: .folder(sibling.id), position: .after, in: parent.id))
+        var updatedParent = parent
+        updatedParent.children = [.plugin("hidden"), .folder(sibling), .folder(source)]
+        #expect(section.items == [.plugin("root"), .folder(updatedParent)])
+
+        let original = section
+        #expect(try !section.reorder(.folder(source.id), relativeTo: .plugin("root"), position: .before, in: parent.id))
+        #expect(try !section.reorder(.folder(source.id), relativeTo: .folder(source.id), position: .before, in: parent.id))
+        #expect(section == original)
+    }
+
     @Test("Default folder names use the first free suffix only within the requested parent")
     func createDefaultFolders() throws {
         let first = Folder(name: "New Folder")

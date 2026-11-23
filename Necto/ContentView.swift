@@ -202,6 +202,7 @@ struct ContentView: View {
                             .plainRow()
                         pluginRows(in: .device, active: activeDevice, disabled: disabledDevice)
                     }
+                    .id(window.selectedTarget)
                 }
 
                 if model.pluginSidebar[.desktop].isVisible(hasAvailablePlugins: !model.enabledPlugins.isEmpty) {
@@ -271,36 +272,43 @@ struct ContentView: View {
 
     @ViewBuilder
     private func pluginRows(
-        in kind: NectoPluginSidebarStore.Kind, active: [NectoInstalledPlugin], disabled: [NectoInstalledPlugin] = []
+        in kind: NectoPluginSidebarStore.Kind,
+        active: [NectoInstalledPlugin],
+        disabled: [NectoInstalledPlugin] = []
     ) -> some View {
         let section = model.pluginSidebar[kind]
-        if section.hasFolders {
-            let plugins = Dictionary((active + disabled).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            let disabledIDs = disabled.map(\.id)
-            ForEach(section.visibleRows(activePluginIDs: active.map(\.id), disabledPluginIDs: disabledIDs)) { row in
-                switch row.item {
-                case .plugin(let id):
-                    if let plugin = plugins[id] {
-                        pluginRow(plugin, kind: kind, isDisabled: row.isDimmed, depth: row.depth)
-                    }
-                case .folder(let folder):
-                    folderRow(folder, kind: kind, depth: row.depth, isDimmed: row.isDimmed)
+        let target = window.selectedTarget
+        let plugins = Dictionary((active + disabled).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let rows = section.visibleRows(activePluginIDs: active.map(\.id), disabledPluginIDs: disabled.map(\.id))
+        ForEach(rows) { row in
+            switch row.item {
+            case .plugin(let id):
+                if let plugin = plugins[id] {
+                    pluginRow(plugin, kind: kind, isDisabled: row.isDimmed, depth: row.depth)
+                        .moveDisabled(!row.canReorder)
+                        .tag(plugin.id)
                 }
+            case .folder(let folder):
+                folderRow(folder, kind: kind, depth: row.depth, isDimmed: row.isDimmed)
+                    .moveDisabled(!row.canReorder)
             }
-        } else {
-            ForEach(active) { plugin in pluginRow(plugin, kind: kind) }
-                .onMove { from, to in
-                    switch kind {
-                    case .device: model.moveDevicePlugins(from: from, to: to, target: window.selectedTarget)
-                    case .desktop: model.movePlugins(from: from, to: to)
-                    }
-                }
-            ForEach(disabled) { plugin in pluginRow(plugin, kind: kind, isDisabled: true) }
+        }
+        .onMove { sources, destination in
+            guard kind == .desktop || target == window.selectedTarget,
+                  let insertion = NectoPluginSidebarSection.insertion(from: sources, to: destination, in: rows) else { return }
+            model.reorderSidebar(
+                .init(kind: kind, id: insertion.source.id, parentID: insertion.source.parentID),
+                relativeTo: .init(kind: kind, id: insertion.anchor.id, parentID: insertion.anchor.parentID),
+                position: insertion.position, target: target
+            )
         }
     }
 
     private func pluginRow(
-        _ plugin: NectoInstalledPlugin, kind: NectoPluginSidebarStore.Kind, isDisabled: Bool = false, depth: Int = 1
+        _ plugin: NectoInstalledPlugin,
+        kind: NectoPluginSidebarStore.Kind,
+        isDisabled: Bool = false,
+        depth: Int = 1
     ) -> some View {
         SidebarItem(
             title: plugin.manifest.name,
@@ -317,21 +325,30 @@ struct ContentView: View {
             }
         }
         .plainRow(isSelected: window.selectedPluginID == plugin.id)
-        .tag(plugin.id)
     }
 
     private func folderRow(
-        _ folder: NectoPluginSidebarSection.Folder, kind: NectoPluginSidebarStore.Kind, depth: Int, isDimmed: Bool
+        _ folder: NectoPluginSidebarSection.Folder,
+        kind: NectoPluginSidebarStore.Kind,
+        depth: Int,
+        isDimmed: Bool
     ) -> some View {
         let isExpanded = !folder.isCollapsed
-        return Button { editSidebar(kind) { try $0.toggleFolder(folder.id) } } label: {
-            SidebarItem(
-                title: folder.name, systemImage: "folder", trailing: "", isSelected: false, scale: scale,
-                isDimmed: isDimmed, indentation: depth - 1, isExpanded: isExpanded
-            )
+        func toggle() {
+            editSidebar(kind) { try $0.toggleFolder(folder.id) }
         }
-        .buttonStyle(.plain)
+        return SidebarItem(
+            title: folder.name, systemImage: "folder", trailing: "", isSelected: false, scale: scale,
+            isDimmed: isDimmed, indentation: depth - 1, isExpanded: isExpanded, select: toggle
+        )
         .selectionDisabled()
+        .focusable(interactions: .activate)
+        .onKeyPress(keys: [.space, .return], phases: .down) { _ in
+            toggle()
+            return .handled
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { toggle() }
         .accessibilityLabel(folder.name)
         .accessibilityValue(NectoL10n.text(isExpanded ? "Expanded" : "Collapsed"))
         .accessibilityIdentifier("sidebar.plugin.folder.\(kind.rawValue).\(folder.id.uuidString)")
@@ -357,7 +374,8 @@ struct ContentView: View {
 
     @discardableResult
     private func editSidebar<Result>(
-        _ kind: NectoPluginSidebarStore.Kind, _ edit: (inout NectoPluginSidebarSection) throws -> Result
+        _ kind: NectoPluginSidebarStore.Kind,
+        _ edit: (inout NectoPluginSidebarSection) throws -> Result
     ) -> Result? {
         do {
             return try model.pluginSidebar.edit(kind, edit)
