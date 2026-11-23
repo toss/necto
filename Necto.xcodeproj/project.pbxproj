@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AF1000000000000000000024 /* NectoPluginLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000025 /* NectoPluginLibrary.swift */; };
+		AF1000000000000000000022 /* NectoPluginSidebarStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000023 /* NectoPluginSidebarStore.swift */; };
 		AF1000000000000000000020 /* NectoPluginSidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000021 /* NectoPluginSidebarSection.swift */; };
 		AF1000000000000000000018 /* NectoAgentSkills.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000019 /* NectoAgentSkills.swift */; };
 		AF1000000000000000000016 /* NectoCLIInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000017 /* NectoCLIInstaller.swift */; };
@@ -32,6 +34,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AF1000000000000000000025 /* NectoPluginLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoPluginLibrary.swift; sourceTree = SOURCE_ROOT; };
+		AF1000000000000000000023 /* NectoPluginSidebarStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoPluginSidebarStore.swift; sourceTree = SOURCE_ROOT; };
 		AF1000000000000000000021 /* NectoPluginSidebarSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoPluginSidebarSection.swift; sourceTree = SOURCE_ROOT; };
 		AF1000000000000000000019 /* NectoAgentSkills.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Necto/NectoAgentSkills.swift; sourceTree = SOURCE_ROOT; };
 		AE00000000000000000001 /* NectoE2ETests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NectoE2ETests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -298,6 +302,8 @@
 				AF1000000000000000000016 /* NectoCLIInstaller.swift in Sources */,
 				AF1000000000000000000018 /* NectoAgentSkills.swift in Sources */,
 				AF1000000000000000000020 /* NectoPluginSidebarSection.swift in Sources */,
+				AF1000000000000000000022 /* NectoPluginSidebarStore.swift in Sources */,
+				AF1000000000000000000024 /* NectoPluginLibrary.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

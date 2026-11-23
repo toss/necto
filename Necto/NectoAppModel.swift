@@ -32,9 +32,8 @@ final class NectoAppModel {
     private(set) var disabledIDs = NectoPluginLibrary.disabledIDs {
         didSet { refreshBackgroundPanels() }
     }
-    /// Mirrors `NectoPluginLibrary.deviceOrder` so a drop re-renders the list at
-    /// once: UserDefaults is where the order lives, but it is not observable.
-    private(set) var deviceOrder = NectoPluginLibrary.deviceOrder
+    /// The saved device ordering, published here so a drop re-renders the list.
+    private(set) var deviceOrder = NectoPluginLibrary.loadSidebarOrder(for: .device)
 
     typealias PendingInstall = InstallCoordinator.PendingInstall
     typealias PendingChoice = InstallCoordinator.PendingChoice
@@ -216,13 +215,9 @@ final class NectoAppModel {
         var arranged = activeDevicePlugins(for: target)
         arranged.move(fromOffsets: source, toOffset: destination)
 
-        // The moved block leads; ids it does not mention — disabled ones, other
-        // devices' plugins — keep their old standing behind it rather than being
-        // forgotten by an arrangement that never showed them.
-        let moved = arranged.map(\.id)
-        let kept = NectoPluginLibrary.deviceOrder.filter { !moved.contains($0) }
-        NectoPluginLibrary.deviceOrder = moved + kept
-        deviceOrder = NectoPluginLibrary.deviceOrder
+        // Publish the drop only if the saved section accepts the flat order.
+        guard let order = NectoPluginLibrary.saveFlatSidebarOrder(arranged.map(\.id), for: .device) else { return }
+        deviceOrder = order
     }
 
     /// What the sidebar lists, in the order the user arranged. A disabled plugin stays
@@ -236,12 +231,9 @@ final class NectoAppModel {
         var enabled = enabledPlugins
         enabled.move(fromOffsets: source, toOffset: destination)
 
-        // Disabled plugins keep their places, so turning one back on does not move it.
-        plugins = enabled + plugins.filter { disabledIDs.contains($0.id) }
-
-        // The whole list is written, not just the pair that moved: an order held as
-        // gaps between neighbours drifts as plugins come and go.
-        NectoPluginLibrary.order = plugins.map(\.id)
+        let arranged = enabled + plugins.filter { disabledIDs.contains($0.id) }
+        guard NectoPluginLibrary.saveFlatSidebarOrder(arranged.map(\.id), for: .desktop) != nil else { return }
+        plugins = arranged
     }
 
     /// Records a line and republishes what the badge reads.
@@ -938,7 +930,7 @@ final class NectoAppModel {
             }
         }
 
-        plugins = NectoPluginLibrary.sorted(installed)
+        plugins = NectoPluginLibrary.sorted(installed, by: NectoPluginLibrary.loadSidebarOrder(for: .desktop))
         pluginsAwaitingApproval = awaitingApproval
         pluginFailures = failures
 

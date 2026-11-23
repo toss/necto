@@ -6,12 +6,12 @@ import Foundation
 
 /// The arrangement of one sidebar section, independent of which plugins are available.
 struct NectoPluginSidebarSection: Equatable, Sendable {
-    enum Item: Equatable, Sendable {
+    enum Item: Codable, Equatable, Sendable {
         case plugin(String)
         case folder(Folder)
     }
 
-    struct Folder: Equatable, Sendable {
+    struct Folder: Codable, Equatable, Sendable {
         let id: UUID
         var name: String
         var children: [Item]
@@ -144,5 +144,16 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
                 return .folder(folder)
             }
         }
+    }
+}
+
+extension NectoPluginSidebarSection: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case items
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(items: container.decode([Item].self, forKey: .items))
     }
 }

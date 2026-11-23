@@ -6,6 +6,7 @@ import AppKit
 import NectoModel
 import NectoMacService
 import Foundation
+import OSLog
 
 /// Where installed plugins live, and which of them are switched on.
 ///
@@ -14,11 +15,11 @@ import Foundation
 @MainActor
 struct NectoPluginLibrary {
     private static let disabledKey = "disabledPluginIDs"
-    private static let orderKey = "pluginOrder"
     private static let grantsKey = "pluginGrants"
-    private static let deviceOrderKey = "devicePluginOrder"
     private static let shellPolicyKey = "shellPolicy"
     private static let installationsKey = "localPluginInstallations"
+    private static let sidebarStore = NectoPluginSidebarStore(defaults: .standard)
+    private static let sidebarLogger = Logger(subsystem: "Necto", category: "PluginSidebar")
 
     static var installations: [String: NectoLocalPluginInstallation] {
         get {
@@ -98,23 +99,29 @@ struct NectoPluginLibrary {
 
     // MARK: Order
 
-    /// The order the user dragged them into. Ids the list does not mention sort after
-    /// it by name, so a newly installed plugin appears at the end rather than jumping
-    /// into the middle of an arrangement someone chose.
-    static var order: [String] {
-        get { UserDefaults.standard.stringArray(forKey: orderKey) ?? [] }
-        set { UserDefaults.standard.set(newValue, forKey: orderKey) }
+    static func loadSidebarOrder(for kind: NectoPluginSidebarStore.Kind) -> [String] {
+        do {
+            return try sidebarStore.pluginOrder(for: kind)
+        } catch {
+            sidebarLogger.error("Could not load the \(kind.rawValue, privacy: .public) plugin sidebar section.")
+            return []
+        }
     }
 
-    /// The arrangement of the Device Plugins section, kept apart from the desktop
-    /// list so the two `onMove` writers never clobber each other.
-    static var deviceOrder: [String] {
-        get { UserDefaults.standard.stringArray(forKey: deviceOrderKey) ?? [] }
-        set { UserDefaults.standard.set(newValue, forKey: deviceOrderKey) }
+    /// A section with folders requires a folder-aware reorder.
+    static func saveFlatSidebarOrder(_ ids: [String], for kind: NectoPluginSidebarStore.Kind) -> [String]? {
+        do {
+            return try sidebarStore.saveFlatOrder(ids, for: kind)
+        } catch NectoPluginSidebarStore.StorageError.sectionContainsFolders {
+            return nil
+        } catch {
+            sidebarLogger.error("Could not save the \(kind.rawValue, privacy: .public) plugin sidebar order.")
+            return nil
+        }
     }
 
-    static func sorted(_ plugins: [NectoInstalledPlugin], by order: [String]? = nil) -> [NectoInstalledPlugin] {
-        let order = order ?? self.order
+    /// IDs missing from the saved order appear at the end, sorted by name.
+    static func sorted(_ plugins: [NectoInstalledPlugin], by order: [String]) -> [NectoInstalledPlugin] {
         let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
 
         return plugins.sorted { first, second in
