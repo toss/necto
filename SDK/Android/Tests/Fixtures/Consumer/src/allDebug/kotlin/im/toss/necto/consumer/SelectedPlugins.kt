@@ -7,15 +7,18 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import im.toss.necto.android.NectoAndroidControlPlugin
 import im.toss.necto.android.NectoDataStorePreferencesPlugin
 import im.toss.necto.android.NectoProcessMetricPlugin
+import im.toss.necto.ktor.NectoKtorCapture
 import im.toss.necto.okhttp.OkHttpNetworkPlugin
 import im.toss.necto.plugins.NectoEventsPlugin
 import im.toss.necto.plugins.NectoFilesPlugin
 import im.toss.necto.sdk.NectoPlugin
+import io.ktor.client.HttpClientConfig
 import java.io.File
 
 fun selectedPlugins(app: Application): List<NectoPlugin> = listOf(
     NectoEventsPlugin(),
-    OkHttpNetworkPlugin(),
+    // The Ktor capture reports to the same network plugin, so minification sees both sources.
+    OkHttpNetworkPlugin().also { HttpClientConfig<Nothing>().install(NectoKtorCapture(it.network)) },
     NectoFilesPlugin(app),
     NectoProcessMetricPlugin(app),
     NectoAndroidControlPlugin(app),

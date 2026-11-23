@@ -57,6 +57,8 @@ dependencies {
     implementation(project(":necto-process-metric-plugin"))
     implementation(project(":necto-datastore-preferences-plugin"))
     implementation(project(":necto-okhttp-capture-plugin"))
+    implementation(project(":necto-ktor-capture-plugin"))
+    implementation("io.ktor:ktor-client-cio:3.0.3")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation(platform("androidx.compose:compose-bom:2025.02.00"))

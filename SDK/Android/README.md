@@ -37,7 +37,7 @@ The device appears as `android:<serial>`, labelled `Android <version>`.
 ## Modules
 
 `necto-android` supplies the Android connection and depends only on `necto-core` and
-coroutines. It carries no feature panels, DataStore, OkHttp or Compose. Add and register
+coroutines. It carries no feature panels, DataStore, OkHttp, Ktor or Compose. Add and register
 only the plugins the app needs; `NectoAndroid.start(context)` alone starts the bridge
 without registering any plugins.
 
@@ -48,6 +48,7 @@ without registering any plugins.
 | `necto-events-plugin` | Events reporting and panel: `NectoEventsPlugin` |
 | `necto-network-plugin` | Network reporting and panel: `NectoNetworkPlugin`; no capture dependency |
 | `necto-okhttp-capture-plugin` | Optional OkHttp capture: `OkHttpNetworkPlugin` or `NectoOkHttpInterceptor`; depends on `necto-network-plugin` |
+| `necto-ktor-capture-plugin` | Optional Ktor client capture on any engine: `KtorNetworkPlugin` or `NectoKtorCapture`; Ktor 3, depends on `necto-network-plugin` |
 | `necto-files-plugin` | Files panel and selected roots: `NectoFilesPlugin(context)` or `NectoFilesPlugin(roots)` |
 | `necto-performance-plugin` | Custom metric reporting and panel: `NectoPerformancePlugin`; no process sampler |
 | `necto-process-metric-plugin` | Optional Android process sampling: `NectoProcessMetricPlugin(context)`; depends on `necto-performance-plugin` |
@@ -143,6 +144,25 @@ val client = OkHttpClient.Builder()
     .addInterceptor(network.interceptor)
     .build()
 ```
+
+For a Ktor client, add `necto-ktor-capture-plugin` instead and install the capture in the
+client, whatever its engine:
+
+```kotlin
+val network = KtorNetworkPlugin()
+NectoAndroid.start(app, listOf(network))
+val client = HttpClient(CIO) {
+    install(network.capture)
+}
+```
+
+It needs Ktor 3: the module is built against Ktor 3.0.3 using only its public API, and its
+tests also pass on Ktor 3.6.1. A newer Ktor 3 in the app is kept, since Gradle resolves the
+higher version. Ktor 2 is not supported. Install the capture after a plugin that retries,
+such as `HttpRequestRetry`, so each attempt is its own record; each hop of a redirect is one
+already. On the OkHttp engine, use this module or the OkHttp interceptor, not both, or every
+request is listed twice. A response from `HttpCache` is listed without a body, and a body
+that Ktor's `SSE` plugin turns into events is not captured.
 
 To inspect DataStore, add `necto-datastore-preferences-plugin` and register
 `NectoDataStorePreferencesPlugin(mapOf("settings" to app.settings))` with the app's own

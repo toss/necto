@@ -10,6 +10,7 @@ What was checked, and how to check it again. Update it when behaviour changes.
 | --- | --- |
 | `necto-core` | Protocol, JSON, schema validation, runtime lifecycle, request limits and plugin routing, with Events and Network as test-only consumers |
 | `necto-network-plugin`, `necto-okhttp-capture-plugin` | Reporting, cURL quoting, truncated UTF-8, upload/response capture, failures and streaming bodies |
+| `necto-ktor-capture-plugin` | Upload/response capture, failures, cancellation and streaming bodies on `MockEngine`, plus gzip decoding, redirect and retry records, cached responses and a failed upload stopping its producer; `-Pnecto.ktorTestVersion=3.6.1` runs them against a newer Ktor |
 | `necto-files-plugin` | Listing, previews, writes, path containment and deleting links without entering their targets |
 | `necto-performance-plugin`, `necto-process-metric-plugin` | Custom series and budgets, failing sampler cleanup and initial frame-rate availability |
 | `necto-ui-control-plugin` | Geometry, Views and Compose discovery/actions, cancellation, coverage and other-window focus |
@@ -21,7 +22,7 @@ carries no feature implementation or panel, and no SDK AAR declares a permission
 `script/test-android-consumer` publishes the artifacts to a local repository and builds
 five independent minified consumers. The bridge consumer has no plugins; OkHttp,
 DataStore and Control consumers resolve only their selected feature; an all-plugins
-consumer resolves all eleven SDK modules. None includes
+consumer resolves all twelve SDK modules. None includes
 Compose, and release builds have no Necto dependency. The fixture's bridge release
 also compiles to catch SDK references accidentally placed in shared sources.
 `script/test-android-consumer --jitpack <tag-or-commit>` runs the same consumer checks

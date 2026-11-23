@@ -29,7 +29,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "necto-android"
 
-include(":necto-core", ":necto-plugin-support", ":necto-events-plugin", ":necto-network-plugin", ":necto-performance-plugin", ":necto-okhttp-capture-plugin")
+include(":necto-core", ":necto-plugin-support", ":necto-events-plugin", ":necto-network-plugin", ":necto-performance-plugin", ":necto-okhttp-capture-plugin", ":necto-ktor-capture-plugin")
 
 // Build the platform-independent reporting plugins without an Android SDK.
 if (providers.gradleProperty("necto.skipAndroid").orNull != "true") {
@@ -41,6 +41,7 @@ mapOf(
     "necto-events-plugin" to "Events",
     "necto-network-plugin" to "Network",
     "necto-okhttp-capture-plugin" to "OkHttpCapture",
+    "necto-ktor-capture-plugin" to "KtorCapture",
     "necto-files-plugin" to "Files",
     "necto-performance-plugin" to "Performance",
     "necto-process-metric-plugin" to "ProcessMetric",
