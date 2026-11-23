@@ -218,9 +218,30 @@ const gearIcon = `<svg class="necto-icon" viewBox="0 0 16 16" aria-hidden="true"
 const lights = `<span class="win-lights"><i></i><i></i><i></i></span>`;
 const heading = `<span class="win-heading">${netIcon}<span>Network</span></span>`;
 
-const pluginSearchButton = `<button type="button" class="gallery-plugin-search" aria-label="Search plugins" popovertarget="gallery-plugin-search-popover">
-  <svg class="necto-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4"/><path d="m10 10 4 4"/></svg>
-</button>`;
+const searchIcon = `<svg class="necto-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4"/><path d="m10 10 4 4"/></svg>`;
+const pluginSearchButton = `<button type="button" class="gallery-plugin-search" aria-label="Search plugins" popovertarget="gallery-plugin-search-popover">${searchIcon}</button>`;
+
+const folderIcon = `<svg class="necto-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4v8.5h13V5H8L6 3H2.5z"/></svg>`;
+const newFolderIcon = `<svg class="necto-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 4v8.5h13V5H8L6 3H2.5zM8 7v4m-2-2h4"/></svg>`;
+const disclosure = `<svg class="necto-icon gallery-folder-chevron" viewBox="0 0 8 10" aria-hidden="true"><path d="m2.25 1.65 3.5 3.35-3.5 3.35"/></svg>`;
+const sidebarFolders = document.getElementById("sidebar-folders");
+if (sidebarFolders) sidebarFolders.innerHTML = `
+  <div class="necto-sidebar-group gallery-plugin-group">
+    <span>Desktop Plugins</span>
+    <span class="gallery-folder-actions" aria-hidden="true"><span>${newFolderIcon}</span><span>${searchIcon}</span></span>
+  </div>
+  <details open>
+    <summary class="necto-sidebar-item">${disclosure}${folderIcon}<span>Tools</span></summary>
+    <div class="gallery-folder-children">
+      <div class="necto-sidebar-item">${netIcon}<span>Network</span><span class="necto-trailing">1.0.0</span></div>
+      <details>
+        <summary class="necto-sidebar-item">${disclosure}${folderIcon}<span>Archive</span></summary>
+        <div class="gallery-folder-children">
+          <div class="necto-sidebar-item">${logIcon}<span>Events</span><span class="necto-trailing">0.4.1</span></div>
+        </div>
+      </details>
+    </div>
+  </details>`;
 
 const updateDot = '<span class="update-dot" role="img" aria-label="Update available" title="Update available"></span>';
 const sidebar = (onSettings = false, hasUpdate = false) => `

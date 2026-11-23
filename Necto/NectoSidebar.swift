@@ -37,6 +37,72 @@ struct SidebarGroup: View {
     }
 }
 
+struct SidebarIconButtonStyle: ButtonStyle {
+    let scale: CGFloat
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let size = NectoTheme.buttonHeight * max(1, scale)
+        let restingBackground = isHovering ? NectoTheme.hover : .clear
+
+        return configuration.label
+            .font(.necto(.label, scale: scale))
+            .foregroundStyle(NectoTheme.textTertiary)
+            .frame(width: size, height: size)
+            .background(
+                configuration.isPressed ? NectoTheme.selected : restingBackground,
+                in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl)
+            )
+            .contentShape(Rectangle())
+            .onHover { isHovering = $0 }
+    }
+}
+
+struct SidebarFolderRenameSheet: View {
+    @State var name: String
+    let scale: CGFloat
+    let cancel: () -> Void
+    let rename: (String) throws -> Void
+    @State private var failure: String? = nil
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        NectoDialog(title: NectoL10n.text("Rename Folder"), scale: scale) {
+            VStack(alignment: .leading, spacing: 8) {
+                NectoField(placeholder: NectoL10n.text("Folder name"), text: $name, scale: scale)
+                    .focused($isFocused)
+                    .onSubmit(submit)
+                    .accessibilityIdentifier("sidebar.plugin.folder.rename.name")
+                if let failure {
+                    Text(failure)
+                        .font(.necto(.caption, scale: scale))
+                        .foregroundStyle(NectoTheme.danger)
+                }
+            }
+        } actions: {
+            Button(NectoL10n.text("Cancel"), action: cancel)
+                .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+                .keyboardShortcut(.cancelAction)
+            Button(NectoL10n.text("Rename"), action: submit)
+                .buttonStyle(NectoButtonStyle(scale: scale, primary: true))
+                .keyboardShortcut(.defaultAction)
+        }
+        .onAppear { isFocused = true }
+    }
+
+    private func submit() {
+        do {
+            try rename(name)
+        } catch NectoPluginSidebarSection.ValidationError.emptyFolderName {
+            failure = NectoL10n.text("Enter a folder name.")
+        } catch NectoPluginSidebarSection.ValidationError.duplicateFolderName {
+            failure = NectoL10n.text("A folder with that name already exists here.")
+        } catch {
+            failure = NectoL10n.text("Could not save the folder.")
+        }
+    }
+}
+
 struct SidebarPluginSearch: View {
     let devicePlugins: [NectoInstalledPlugin]
     let desktopPlugins: [NectoInstalledPlugin]
@@ -60,9 +126,8 @@ struct SidebarPluginSearch: View {
             isSearching = true
         } label: {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(NectoTheme.textTertiary)
         }
-        .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+        .buttonStyle(SidebarIconButtonStyle(scale: scale))
         .help(NectoL10n.text("Search plugins"))
         .accessibilityLabel(NectoL10n.text("Search plugins"))
         .accessibilityIdentifier("sidebar.plugin.search.open")
@@ -147,18 +212,34 @@ struct SidebarItem: View {
     /// Sunken: a disabled plugin, present but not in play.
     var isDimmed = false
     var hasUpdate = false
+    var indentation = 0
+    var isExpanded: Bool?
     var select: (() -> Void)?
 
     @State private var isHovering = false
+    private static let iconWidth: CGFloat = 16
 
     /// A tap rather than a `Button`: a button takes the mouse down for itself, and
     /// `List` never gets the chance to start a drag. Reordering the sidebar is worth
     /// more than the button's own press animation, which this row does not use anyway.
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .foregroundStyle(NectoTheme.textTertiary)
-                .frame(width: 16)
+            if let isExpanded {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.right")
+                        .font(.necto(.caption, scale: scale))
+                        .imageScale(.small)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0), anchor: .center)
+                        .foregroundStyle(NectoTheme.textTertiary)
+                        .accessibilityHidden(true)
+                    icon
+                        .frame(minWidth: Self.iconWidth)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+            } else {
+                icon
+                    .frame(width: Self.iconWidth)
+            }
 
             Text(title)
                 .lineLimit(1)
@@ -176,7 +257,7 @@ struct SidebarItem: View {
         }
         .font(.necto(.label, scale: scale))
         .foregroundStyle(isDimmed ? NectoTheme.textTertiary : isSelected ? NectoTheme.text : NectoTheme.textSecondary)
-        .padding(.leading, 8)
+        .padding(.leading, 8 + CGFloat(indentation) * Self.iconWidth)
         .padding(.trailing, 16)
         .frame(height: NectoTheme.rowHeight * scale)
         .background(background, in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
@@ -186,6 +267,11 @@ struct SidebarItem: View {
         .modifier(TapIfPresent(action: select))
         .accessibilityElement(children: .combine)
         .accessibilityValue(hasUpdate ? NectoL10n.text("Update available") : "")
+    }
+
+    private var icon: some View {
+        Image(systemName: systemImage)
+            .foregroundStyle(NectoTheme.textTertiary)
     }
 
     private var background: Color {

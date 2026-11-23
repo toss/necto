@@ -241,3 +241,13 @@
 
 "Search plugins" = "플러그인 검색";
 "No plugins found" = "검색 결과 없음";
+"New Folder" = "새 폴더";
+"Rename Folder" = "폴더 이름 변경";
+"Delete Folder" = "폴더 삭제";
+"Folder name" = "폴더 이름";
+"Rename" = "변경";
+"Expanded" = "펼쳐짐";
+"Collapsed" = "접힘";
+"Enter a folder name." = "폴더 이름을 입력해 주세요.";
+"A folder with that name already exists here." = "이 위치에 같은 이름의 폴더가 있어요.";
+"Could not save the folder." = "폴더를 저장하지 못했어요.";

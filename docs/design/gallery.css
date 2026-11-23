@@ -131,6 +131,23 @@ h3.stepped { margin: var(--necto-space-5) 0 var(--necto-space-1); font-size: 14p
   .gallery-network-list td:nth-child(n+4) { display: none; }
 }
 .gallery-plugin-group { display:flex; align-items:center; justify-content:space-between; padding-right:var(--necto-space-5); }
+.gallery-folder-actions { display:flex; }
+.gallery-folder-actions > span {
+  display:grid;
+  place-items:center;
+  width:max(var(--necto-space-5), var(--necto-button-height));
+  aspect-ratio:1;
+}
+.gallery-folder-example summary { gap:0; }
+.gallery-folder-example summary::-webkit-details-marker { display:none; }
+.gallery-folder-example summary > .necto-icon { margin-inline-end:var(--necto-space-2); }
+.gallery-folder-example summary > .gallery-folder-chevron {
+  width:calc(var(--necto-space-2) * var(--necto-font-scale));
+  height:auto;
+  margin-inline-end:var(--necto-space-1);
+}
+.gallery-folder-example details[open] > summary .gallery-folder-chevron { transform:rotate(90deg); }
+.gallery-folder-children { padding-inline-start:var(--necto-space-4); }
 .gallery-plugin-search { margin-left:auto; display:flex; padding:0; border:0; background:none; color:inherit; cursor:pointer; }
 .gallery-plugin-search-popover {
   width:280px;
