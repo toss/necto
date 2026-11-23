@@ -281,10 +281,10 @@ struct ContentView: View {
                 switch row.item {
                 case .plugin(let id):
                     if let plugin = plugins[id] {
-                        pluginRow(plugin, kind: kind, isDisabled: disabledIDs.contains(id), depth: row.depth)
+                        pluginRow(plugin, kind: kind, isDisabled: row.isDimmed, depth: row.depth)
                     }
                 case .folder(let folder):
-                    folderRow(folder, kind: kind, depth: row.depth, isExpanded: !folder.isCollapsed)
+                    folderRow(folder, kind: kind, depth: row.depth, isDimmed: row.isDimmed)
                 }
             }
         } else {
@@ -312,7 +312,7 @@ struct ContentView: View {
         .contextMenu {
             if kind == .device {
                 Button(NectoL10n.text(isDisabled ? "Enable" : "Disable")) {
-                    model.setPlugin(plugin.id, enabled: isDisabled)
+                    model.setPlugin(plugin, enabled: isDisabled)
                 }
             }
         }
@@ -321,12 +321,13 @@ struct ContentView: View {
     }
 
     private func folderRow(
-        _ folder: NectoPluginSidebarSection.Folder, kind: NectoPluginSidebarStore.Kind, depth: Int, isExpanded: Bool
+        _ folder: NectoPluginSidebarSection.Folder, kind: NectoPluginSidebarStore.Kind, depth: Int, isDimmed: Bool
     ) -> some View {
-        Button { editSidebar(kind) { try $0.toggleFolder(folder.id) } } label: {
+        let isExpanded = !folder.isCollapsed
+        return Button { editSidebar(kind) { try $0.toggleFolder(folder.id) } } label: {
             SidebarItem(
                 title: folder.name, systemImage: "folder", trailing: "", isSelected: false, scale: scale,
-                indentation: depth - 1, isExpanded: isExpanded
+                isDimmed: isDimmed, indentation: depth - 1, isExpanded: isExpanded
             )
         }
         .buttonStyle(.plain)
@@ -466,7 +467,7 @@ struct ContentView: View {
                 Text("The app still carries it. Nothing is shown on this Mac.")
                     .font(.necto(.caption, scale: scale))
                     .foregroundStyle(NectoTheme.textTertiary)
-                Button(NectoL10n.text("Enable")) { model.setPlugin(plugin.id, enabled: true) }
+                Button(NectoL10n.text("Enable")) { model.setPlugin(plugin, enabled: true) }
                     .buttonStyle(NectoButtonStyle(scale: scale, primary: true))
                     .padding(.top, 12)
             }

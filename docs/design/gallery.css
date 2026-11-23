@@ -147,6 +147,7 @@ h3.stepped { margin: var(--necto-space-5) 0 var(--necto-space-1); font-size: 14p
   margin-inline-end:var(--necto-space-1);
 }
 .gallery-folder-example details[open] > summary .gallery-folder-chevron { transform:rotate(90deg); }
+.gallery-folder-example .gallery-folder-dimmed { color:var(--necto-text-tertiary); }
 .gallery-folder-children { padding-inline-start:var(--necto-space-4); }
 .gallery-plugin-search { margin-left:auto; display:flex; padding:0; border:0; background:none; color:inherit; cursor:pointer; }
 .gallery-plugin-search-popover {

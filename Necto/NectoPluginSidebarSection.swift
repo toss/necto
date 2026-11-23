@@ -91,18 +91,47 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         }
     }
 
+    mutating func renameFolder(_ id: UUID, to name: String) throws {
+        try updateFolder(id) { folder, _ in
+            var folder = folder
+            folder.name = name
+            return [.folder(folder)]
+        }
+    }
+
+    mutating func deleteFolder(_ id: UUID) throws {
+        try updateFolder(id) { folder, siblings in
+            let siblingNames = Self.folderNames(in: siblings, excluding: id)
+            // Reserve promoted folders' original names before assigning suffixes.
+            var reservedNames = siblingNames.union(Self.folderNames(in: folder.children))
+            return folder.children.map { item in
+                guard case .folder(var child) = item, siblingNames.contains(child.name) else { return item }
+                child.name = Self.reserveFolderName(child.name, in: &reservedNames)
+                return .folder(child)
+            }
+        }
+    }
+
     mutating func toggleFolder(_ id: UUID) throws {
-        try replaceFolder(id) { folder, _ in
+        try updateFolder(id) { folder, _ in
             var folder = folder
             folder.isCollapsed.toggle()
             return [.folder(folder)]
         }
     }
 
+    mutating func movePluginToRoot(_ id: String) throws -> Bool {
+        var updatedItems = items
+        guard Self.removePlugin(id, from: &updatedItems, insideFolder: false) else { return false }
+        updatedItems.append(.plugin(id))
+        self = try Self(items: updatedItems)
+        return true
+    }
+
     private mutating func appendFolder(to parentID: UUID?, name: ([Item]) -> String) throws -> UUID {
         let id = UUID()
         if let parentID {
-            try replaceFolder(parentID, expandingAncestors: true, missingError: .parentFolderNotFound) { parent, _ in
+            try updateFolder(parentID, expandingAncestors: true, missingError: .parentFolderNotFound) { parent, _ in
                 var parent = parent
                 let folder = Folder(id: id, name: name(parent.children))
                 parent.children.append(.folder(folder))
@@ -116,25 +145,57 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         return id
     }
 
-    mutating func renameFolder(_ id: UUID, to name: String) throws {
-        try replaceFolder(id) { folder, _ in
-            var folder = folder
-            folder.name = name
-            return [.folder(folder)]
+    private mutating func updateFolder(
+        _ id: UUID,
+        expandingAncestors: Bool = false,
+        missingError: ValidationError = .folderNotFound,
+        with replacement: (Folder, [Item]) -> [Item]
+    ) throws {
+        var updatedItems = items
+        guard Self.replaceFolderInTree(id, in: &updatedItems, expandingAncestors: expandingAncestors, with: replacement) else {
+            throw missingError
         }
+        self = try Self(items: updatedItems)
     }
 
-    mutating func deleteFolder(_ id: UUID) throws {
-        try replaceFolder(id) { folder, siblings in
-            let siblingNames = Self.folderNames(in: siblings, excluding: id)
-            // Reserve promoted folders' original names before assigning suffixes.
-            var reservedNames = siblingNames.union(Self.folderNames(in: folder.children))
-            return folder.children.map { item in
-                guard case .folder(var child) = item, siblingNames.contains(child.name) else { return item }
-                child.name = Self.reserveFolderName(child.name, in: &reservedNames)
-                return .folder(child)
+    private static func replaceFolderInTree(
+        _ id: UUID,
+        in items: inout [Item],
+        expandingAncestors: Bool,
+        with replacement: (Folder, [Item]) -> [Item]
+    ) -> Bool {
+        for index in items.indices {
+            guard case .folder(var folder) = items[index] else { continue }
+            if folder.id == id {
+                let replacements = replacement(folder, items)
+                items.replaceSubrange(index...index, with: replacements)
+                return true
+            }
+            if replaceFolderInTree(id, in: &folder.children, expandingAncestors: expandingAncestors, with: replacement) {
+                if expandingAncestors { folder.isCollapsed = false }
+                items[index] = .folder(folder)
+                return true
             }
         }
+        return false
+    }
+
+    private static func removePlugin(_ id: String, from items: inout [Item], insideFolder: Bool) -> Bool {
+        for index in items.indices {
+            switch items[index] {
+            case .plugin(let pluginID) where insideFolder && pluginID == id:
+                items.remove(at: index)
+                return true
+            case .folder(var folder):
+                if removePlugin(id, from: &folder.children, insideFolder: true) {
+                    items[index] = .folder(folder)
+                    return true
+                }
+            default:
+                continue
+            }
+        }
+        return false
     }
 
     private static func reserveFolderName(_ baseName: String, in names: inout Set<String>) -> String {
@@ -161,41 +222,6 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
             case .folder(let folder): pluginIDs(in: folder.children)
             }
         }
-    }
-
-    private mutating func replaceFolder(
-        _ id: UUID,
-        expandingAncestors: Bool = false,
-        missingError: ValidationError = .folderNotFound,
-        with replacement: (Folder, [Item]) -> [Item]
-    ) throws {
-        var updatedItems = items
-        guard Self.replaceFolder(id, in: &updatedItems, expandingAncestors: expandingAncestors, with: replacement) else {
-            throw missingError
-        }
-        self = try Self(items: updatedItems)
-    }
-
-    private static func replaceFolder(
-        _ id: UUID,
-        in items: inout [Item],
-        expandingAncestors: Bool,
-        with replacement: (Folder, [Item]) -> [Item]
-    ) -> Bool {
-        for index in items.indices {
-            guard case .folder(var folder) = items[index] else { continue }
-            if folder.id == id {
-                let replacements = replacement(folder, items)
-                items.replaceSubrange(index...index, with: replacements)
-                return true
-            }
-            if replaceFolder(id, in: &folder.children, expandingAncestors: expandingAncestors, with: replacement) {
-                if expandingAncestors { folder.isCollapsed = false }
-                items[index] = .folder(folder)
-                return true
-            }
-        }
-        return false
     }
 
     private static func validatedItems(

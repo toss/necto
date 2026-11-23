@@ -230,7 +230,114 @@ struct NectoPluginSidebarStoreTests {
         ])
     }
 
-    private func plugin(id: String, name: String) -> NectoInstalledPlugin {
+    @Test("Disabling a nested desktop plugin keeps its folders and re-enabling it lists it at the root")
+    func detachDisabledDesktopPlugin() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let inspector = plugin(id: "inspector", name: "Inspector")
+        let deepest = Section.Folder(name: "Utilities", children: [.plugin(inspector.id)], isCollapsed: true)
+        let middle = Section.Folder(name: "Tools", children: [.folder(deepest)])
+        let sibling = Section.Folder(name: "Archive", isCollapsed: true)
+        let outer = Section.Folder(name: "Workspace", children: [.folder(middle), .folder(sibling)], isCollapsed: true)
+        let original = try Section(items: [.plugin("before"), .folder(outer), .plugin("after")])
+        try fixture.store.save(original, for: .desktop)
+        let state = NectoPluginSidebarState(store: fixture.store)
+
+        #expect(try state.setEnabled(inspector, enabled: false) == [inspector.id])
+        #expect(fixture.defaults.stringArray(forKey: "disabledPluginIDs") == [inspector.id])
+        var empty = deepest
+        empty.children = []
+        var updatedMiddle = middle
+        updatedMiddle.children = [.folder(empty)]
+        var updatedOuter = outer
+        updatedOuter.children = [.folder(updatedMiddle), .folder(sibling)]
+        let detached: [Section.Item] = [.plugin("before"), .folder(updatedOuter), .plugin("after"), .plugin(inspector.id)]
+        #expect(state[.desktop].items == detached)
+        #expect(try fixture.store.load(.desktop).items == detached)
+        let whileDisabled = state[.desktop].visibleRows(activePluginIDs: ["before", "after"], disabledPluginIDs: [])
+        #expect(whileDisabled.map(\.id) == [.plugin("before"), .folder(outer.id), .plugin("after")])
+        #expect(whileDisabled.allSatisfy { !$0.isDimmed })
+
+        let enabled = try state.setEnabled(inspector, enabled: true)
+        #expect(enabled.isEmpty)
+        #expect(state[.desktop].items == detached)
+        let catalog = [inspector, plugin(id: "after", name: "After"), plugin(id: "before", name: "Before")]
+        let sorted = NectoPluginLibrary.sorted(catalog, by: state[.desktop].pluginIDs).map(\.id)
+        #expect(sorted == ["before", "after", inspector.id])
+        let afterEnable = state[.desktop].visibleRows(activePluginIDs: sorted, disabledPluginIDs: [])
+        #expect(afterEnable.last?.id == .plugin(inspector.id))
+        #expect(afterEnable.last?.depth == 1)
+    }
+
+    @Test("Disabling a desktop plugin already at the root preserves its stored placement")
+    func keepDesktopRootPlacement() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let root = plugin(id: "root", name: "Root")
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let latest = try Section(items: [.plugin(root.id), .plugin("tail")])
+        try fixture.store.save(latest, for: .desktop)
+        let key = Store.Kind.desktop.sectionKey
+        let original = try #require(fixture.defaults.data(forKey: key))
+
+        #expect(try state.setEnabled(root, enabled: false) == [root.id])
+        #expect(try state.setEnabled(root, enabled: true).isEmpty)
+        #expect(fixture.defaults.data(forKey: key) == original)
+        #expect(state[.desktop] == latest)
+    }
+
+    @Test("Device disablement and re-enabling preserve both sections and recompute the folder state")
+    func retainDeviceMembership() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let device = plugin(id: "stream", name: "Stream", source: .device(appName: "Example", appBundleID: "com.example.app"))
+        let deviceFolder = Section.Folder(name: "Capture", children: [.plugin(device.id)])
+        let desktopFolder = Section.Folder(name: "Tools", children: [.plugin(device.id)])
+        let deviceSection = try Section(items: [.folder(deviceFolder), .plugin("tail")])
+        let desktopSection = try Section(items: [.folder(desktopFolder)])
+        try fixture.store.save(deviceSection, for: .device)
+        try fixture.store.save(desktopSection, for: .desktop)
+        let state = NectoPluginSidebarState(store: fixture.store)
+
+        #expect(try state.setEnabled(device, enabled: false) == [device.id])
+        let disabled = state[.device].visibleRows(activePluginIDs: ["tail"], disabledPluginIDs: [device.id])
+        #expect(disabled.map(\.id) == [.plugin("tail"), .folder(deviceFolder.id), .plugin(device.id)])
+        #expect(disabled.filter(\.isDimmed).map(\.id) == [.folder(deviceFolder.id), .plugin(device.id)])
+        let unavailable = state[.device].visibleRows(activePluginIDs: ["tail"], disabledPluginIDs: [])
+        #expect(unavailable.map(\.id) == [.plugin("tail"), .folder(deviceFolder.id)])
+        #expect(unavailable.last?.isDimmed == true)
+
+        #expect(try state.setEnabled(device, enabled: true).isEmpty)
+        let reenabled = state[.device].visibleRows(activePluginIDs: [device.id, "tail"], disabledPluginIDs: [])
+        #expect(reenabled.map(\.id) == [.folder(deviceFolder.id), .plugin(device.id), .plugin("tail")])
+        #expect(reenabled.allSatisfy { !$0.isDimmed })
+        #expect(state[.device] == deviceSection)
+        #expect(state[.desktop] == desktopSection)
+        #expect(try fixture.store.load(.device) == deviceSection)
+        #expect(try fixture.store.load(.desktop) == desktopSection)
+    }
+
+    @Test("A corrupt saved desktop section stops a disable before it changes enablement")
+    func keepEnablementOnFailure() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let original = state[.desktop]
+        let corrupt = Data("invalid".utf8)
+        let key = Store.Kind.desktop.sectionKey
+        fixture.defaults.set(corrupt, forKey: key)
+        fixture.defaults.set(["already-disabled"], forKey: "disabledPluginIDs")
+
+        let inspector = plugin(id: "inspector", name: "Inspector")
+        #expect(throws: Store.StorageError.invalidSavedSection) {
+            try state.setEnabled(inspector, enabled: false)
+        }
+        #expect(state[.desktop] == original)
+        #expect(fixture.defaults.data(forKey: key) == corrupt)
+        #expect(fixture.defaults.stringArray(forKey: "disabledPluginIDs") == ["already-disabled"])
+    }
+
+    private func plugin(id: String, name: String, source: NectoInstalledPlugin.Source = .installed) -> NectoInstalledPlugin {
         let manifest = NectoPluginManifest(
             id: id, name: name, description: "", version: "1.0.0", author: "Necto tests",
             icon: .init(systemName: "circle"), assets: [], allowedOrigins: [], operations: []
@@ -238,7 +345,7 @@ struct NectoPluginSidebarStoreTests {
         let archive = NectoPanelArchive(files: [])
         return NectoInstalledPlugin(
             manifest: manifest, rootURL: FileManager.default.temporaryDirectory,
-            source: .installed, archive: archive, contentIdentity: archive.contentHash
+            source: source, archive: archive, contentIdentity: archive.contentHash
         )
     }
 }

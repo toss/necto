@@ -41,6 +41,19 @@ final class NectoPluginSidebarState {
         return result
     }
 
+    func setEnabled(_ plugin: NectoInstalledPlugin, enabled: Bool) throws -> Set<String> {
+        if plugin.source == .installed && !enabled {
+            var section = try store.load(.desktop)
+            if try section.movePluginToRoot(plugin.id) {
+                try store.save(section, for: .desktop)
+            }
+            if self[.desktop] != section {
+                sections[.desktop] = section
+            }
+        }
+        return NectoPluginLibrary.setEnabled(plugin.id, enabled, in: store.defaults)
+    }
+
     /// A section with folders requires a folder-aware reorder.
     @discardableResult
     func saveFlatOrder(_ ids: [String], for kind: NectoPluginSidebarStore.Kind) -> Bool {
@@ -66,6 +79,7 @@ extension NectoPluginSidebarSection {
 
         let item: Item
         let depth: Int
+        var isDimmed = false
 
         var id: ID {
             switch item {
@@ -77,31 +91,58 @@ extension NectoPluginSidebarSection {
 
     func visibleRows(activePluginIDs: [String], disabledPluginIDs: [String]) -> [Row] {
         let availableIDs = activePluginIDs + disabledPluginIDs
-        let available = Set(availableIDs)
+        let active = Set(activePluginIDs)
         let disabled = Set(disabledPluginIDs)
+        let available = active.union(disabled)
         var placed = Set<String>()
-        var rows: [Row] = []
 
-        func visit(_ items: [Item], depth: Int, visible: Bool) {
+        func visit(_ items: [Item], depth: Int, visible: Bool) -> (rows: [Row], hasPlugins: Bool, hasActivePlugin: Bool) {
+            var normal: [Row] = []
+            var dimmedFolders: [Row] = []
+            var hasPlugins = false
+            var hasActivePlugin = false
+
             for item in items {
                 switch item {
                 case .plugin(let id):
+                    hasPlugins = true
+                    hasActivePlugin = hasActivePlugin || active.contains(id)
+
                     // Keep the existing root-level disabled area. Nested rows keep their saved positions.
-                    guard depth > 1 || !disabled.contains(id) else { continue }
+                    let isDisabled = disabled.contains(id)
+                    guard depth > 1 || !isDisabled else { continue }
                     placed.insert(id)
-                    if visible && available.contains(id) { rows.append(Row(item: item, depth: depth)) }
+                    if visible && available.contains(id) {
+                        normal.append(Row(item: item, depth: depth, isDimmed: isDisabled))
+                    }
                 case .folder(let folder):
-                    if visible { rows.append(Row(item: item, depth: depth)) }
-                    // Descendants of collapsed folders still own their saved placements.
-                    visit(folder.children, depth: depth + 1, visible: visible && !folder.isCollapsed)
+                    // Collapsed children still affect the folder's state and own their saved placements.
+                    let children = visit(folder.children, depth: depth + 1, visible: visible && !folder.isCollapsed)
+                    hasPlugins = hasPlugins || children.hasPlugins
+                    hasActivePlugin = hasActivePlugin || children.hasActivePlugin
+                    guard visible else { continue }
+
+                    let isDimmed = children.hasPlugins && !children.hasActivePlugin
+                    let row = Row(item: item, depth: depth, isDimmed: isDimmed)
+                    if isDimmed {
+                        dimmedFolders.append(row)
+                        dimmedFolders.append(contentsOf: children.rows)
+                    } else {
+                        normal.append(row)
+                        normal.append(contentsOf: children.rows)
+                    }
                 }
             }
+
+            if depth == 1 {
+                // Append new active plugins and the root disabled area before dimmed root folders.
+                for id in availableIDs where placed.insert(id).inserted {
+                    normal.append(Row(item: .plugin(id), depth: 1, isDimmed: disabled.contains(id)))
+                }
+            }
+            return (normal + dimmedFolders, hasPlugins, hasActivePlugin)
         }
 
-        visit(items, depth: 1, visible: true)
-        for id in availableIDs where placed.insert(id).inserted {
-            rows.append(Row(item: .plugin(id), depth: 1))
-        }
-        return rows
+        return visit(items, depth: 1, visible: true).rows
     }
 }

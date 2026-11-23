@@ -217,10 +217,9 @@ final class NectoAppModel {
         pluginSidebar.saveFlatOrder(arranged.map(\.id), for: .device)
     }
 
-    /// What the sidebar lists, in the order the user arranged. A disabled plugin stays
-    /// installed and keeps its folder, it just stops being somewhere to navigate to.
+    /// The enabled catalog entries in the sidebar's saved order.
     var enabledPlugins: [NectoInstalledPlugin] {
-        plugins.filter { !disabledIDs.contains($0.id) }
+        NectoPluginLibrary.sorted(plugins.filter { !disabledIDs.contains($0.id) }, by: pluginSidebar[.desktop].pluginIDs)
     }
 
     /// Takes the move `List` already worked out, once, when the row is dropped.
@@ -257,10 +256,12 @@ final class NectoAppModel {
         unreadIssueCount = await diagnostics.unreadIssueCount()
     }
 
-    func setPlugin(_ id: String, enabled: Bool) {
-        NectoPluginLibrary.setEnabled(id, enabled)
-        disabledIDs = NectoPluginLibrary.disabledIDs
-
+    func setPlugin(_ plugin: NectoInstalledPlugin, enabled: Bool) {
+        do {
+            disabledIDs = try pluginSidebar.setEnabled(plugin, enabled: enabled)
+        } catch {
+            Task { await log(.failure, .plugin, "Could not save plugin enablement") }
+        }
     }
 
     // MARK: Installing

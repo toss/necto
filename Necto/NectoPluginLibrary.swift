@@ -57,8 +57,16 @@ struct NectoPluginLibrary {
     /// Installed and enabled are separate. Turning a plugin off is how you find out
     /// whether it is the one misbehaving, without losing it or its settings.
     static var disabledIDs: Set<String> {
-        get { Set(UserDefaults.standard.stringArray(forKey: disabledKey) ?? []) }
-        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: disabledKey) }
+        get { disabledIDs(in: .standard) }
+        set { saveDisabledIDs(newValue, in: .standard) }
+    }
+
+    private static func disabledIDs(in defaults: UserDefaults) -> Set<String> {
+        Set(defaults.stringArray(forKey: disabledKey) ?? [])
+    }
+
+    private static func saveDisabledIDs(_ ids: Set<String>, in defaults: UserDefaults) {
+        defaults.set(Array(ids).sorted(), forKey: disabledKey)
     }
 
     static func isEnabled(_ id: String) -> Bool { !disabledIDs.contains(id) }
@@ -87,10 +95,11 @@ struct NectoPluginLibrary {
         }
     }
 
-    static func setEnabled(_ id: String, _ enabled: Bool) {
-        var ids = disabledIDs
+    static func setEnabled(_ id: String, _ enabled: Bool, in defaults: UserDefaults) -> Set<String> {
+        var ids = disabledIDs(in: defaults)
         if enabled { ids.remove(id) } else { ids.insert(id) }
-        disabledIDs = ids
+        saveDisabledIDs(ids, in: defaults)
+        return ids
     }
 
 
