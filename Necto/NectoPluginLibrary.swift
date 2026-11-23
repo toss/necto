@@ -6,7 +6,6 @@ import AppKit
 import NectoModel
 import NectoMacService
 import Foundation
-import OSLog
 
 /// Where installed plugins live, and which of them are switched on.
 ///
@@ -18,8 +17,6 @@ struct NectoPluginLibrary {
     private static let grantsKey = "pluginGrants"
     private static let shellPolicyKey = "shellPolicy"
     private static let installationsKey = "localPluginInstallations"
-    private static let sidebarStore = NectoPluginSidebarStore(defaults: .standard)
-    private static let sidebarLogger = Logger(subsystem: "Necto", category: "PluginSidebar")
 
     static var installations: [String: NectoLocalPluginInstallation] {
         get {
@@ -98,27 +95,6 @@ struct NectoPluginLibrary {
 
 
     // MARK: Order
-
-    static func loadSidebarOrder(for kind: NectoPluginSidebarStore.Kind) -> [String] {
-        do {
-            return try sidebarStore.pluginOrder(for: kind)
-        } catch {
-            sidebarLogger.error("Could not load the \(kind.rawValue, privacy: .public) plugin sidebar section.")
-            return []
-        }
-    }
-
-    /// A section with folders requires a folder-aware reorder.
-    static func saveFlatSidebarOrder(_ ids: [String], for kind: NectoPluginSidebarStore.Kind) -> [String]? {
-        do {
-            return try sidebarStore.saveFlatOrder(ids, for: kind)
-        } catch NectoPluginSidebarStore.StorageError.sectionContainsFolders {
-            return nil
-        } catch {
-            sidebarLogger.error("Could not save the \(kind.rawValue, privacy: .public) plugin sidebar order.")
-            return nil
-        }
-    }
 
     /// IDs missing from the saved order appear at the end, sorted by name.
     static func sorted(_ plugins: [NectoInstalledPlugin], by order: [String]) -> [NectoInstalledPlugin] {

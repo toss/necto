@@ -6,7 +6,7 @@ import Foundation
 
 @MainActor
 struct NectoPluginSidebarStore {
-    enum Kind: String {
+    enum Kind: String, CaseIterable {
         case desktop
         case device
 
@@ -48,12 +48,8 @@ struct NectoPluginSidebarStore {
         try write(section, for: kind)
     }
 
-    func pluginOrder(for kind: Kind) throws -> [String] {
-        Self.pluginIDs(in: try load(kind).items)
-    }
-
     /// Keeps the old flat drag behavior until the sidebar supports folder-aware reordering.
-    func saveFlatOrder(_ ids: [String], for kind: Kind) throws -> [String] {
+    func saveFlatOrder(_ ids: [String], for kind: Kind) throws -> NectoPluginSidebarSection {
         let previousIDs = try load(kind).items.map { item in
             guard case .plugin(let id) = item else { throw StorageError.sectionContainsFolders }
             return id
@@ -62,7 +58,7 @@ struct NectoPluginSidebarStore {
         let order = Self.uniqueIDs(ids + previousIDs)
         let updated = try NectoPluginSidebarSection(items: order.map { .plugin($0) })
         try write(updated, for: kind)
-        return order
+        return updated
     }
 
     private func savedSection(for kind: Kind) throws -> NectoPluginSidebarSection? {
@@ -77,15 +73,6 @@ struct NectoPluginSidebarStore {
     private func write(_ section: NectoPluginSidebarSection, for kind: Kind) throws {
         let data = try JSONEncoder().encode(section)
         defaults.set(data, forKey: kind.sectionKey)
-    }
-
-    private static func pluginIDs(in items: [NectoPluginSidebarSection.Item]) -> [String] {
-        items.flatMap { item in
-            switch item {
-            case .plugin(let id): [id]
-            case .folder(let folder): pluginIDs(in: folder.children)
-            }
-        }
     }
 
     private static func uniqueIDs(_ ids: [String]) -> [String] {

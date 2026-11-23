@@ -11,6 +11,50 @@ struct NectoPluginSidebarSectionTests {
     typealias Folder = Section.Folder
     typealias Item = Section.Item
 
+    @Test("Default folder names use the first free suffix only within the requested parent")
+    func createDefaultFolders() throws {
+        let first = Folder(name: "New Folder")
+        let third = Folder(name: "New Folder(2)")
+        var section = try Section(items: [.folder(first), .folder(third)])
+        let second = try section.createFolder(defaultName: "New Folder")
+        let fourth = try section.createFolder(defaultName: "New Folder")
+        let child = try section.createFolder(defaultName: "New Folder", in: first.id)
+        #expect(section.items == [
+            .folder(.init(id: first.id, name: first.name, children: [.folder(.init(id: child, name: "New Folder"))])),
+            .folder(third),
+            .folder(.init(id: second, name: "New Folder(1)")),
+            .folder(.init(id: fourth, name: "New Folder(3)")),
+        ])
+    }
+
+    @Test("Folders keep sections visible and unavailable plugins stay hidden")
+    func visibleRows() throws {
+        let flat = try Section(items: [.plugin("unavailable")])
+        #expect(flat.isVisible(hasAvailablePlugins: false) == false)
+        #expect(flat.isVisible(hasAvailablePlugins: true))
+
+        let empty = Folder(name: "Empty")
+        let tools = Folder(name: "Tools", children: [
+            .plugin("nested"), .plugin("nested-disabled"), .plugin("unavailable"),
+        ])
+        var section = try Section(items: [.plugin("root-disabled"), .folder(tools), .folder(empty)])
+        #expect(section.isVisible(hasAvailablePlugins: false))
+        #expect(section.visibleRows(activePluginIDs: [], disabledPluginIDs: []).map(\.id) == [
+            .folder(tools.id), .folder(empty.id),
+        ])
+
+        let active = ["nested", "unplaced"]
+        let disabled = ["root-disabled", "nested-disabled"]
+        #expect(section.visibleRows(activePluginIDs: active, disabledPluginIDs: disabled).map(\.id) == [
+            .folder(tools.id), .plugin("nested"), .plugin("nested-disabled"), .folder(empty.id),
+            .plugin("unplaced"), .plugin("root-disabled"),
+        ])
+        try section.toggleFolder(tools.id)
+        #expect(section.visibleRows(activePluginIDs: active, disabledPluginIDs: disabled).map(\.id) == [
+            .folder(tools.id), .folder(empty.id), .plugin("unplaced"), .plugin("root-disabled"),
+        ])
+    }
+
     @Test("Creating folders appends within the requested parent and trims names")
     func createFolders() throws {
         let existing = Folder(name: "Existing", children: [.plugin("b")])
@@ -32,9 +76,9 @@ struct NectoPluginSidebarSectionTests {
 
     @Test("A folder at depth three can contain plugins but cannot contain another folder")
     func limitFolderDepth() throws {
-        let deepest = Folder(name: "Debug", children: [.plugin("a")])
-        let child = Folder(name: "Logs", children: [.folder(deepest)])
-        let root = Folder(name: "Tools", children: [.folder(child)])
+        let deepest = Folder(name: "Debug", children: [.plugin("a")], isCollapsed: true)
+        let child = Folder(name: "Logs", children: [.folder(deepest)], isCollapsed: true)
+        let root = Folder(name: "Tools", children: [.folder(child)], isCollapsed: true)
         var section = try Section(items: [.folder(root)])
         #expect(section.items == [.folder(root)])
 
@@ -73,12 +117,12 @@ struct NectoPluginSidebarSectionTests {
     func validateSiblingNames() throws {
         let logs = Folder(name: " Logs \n")
         let traces = Folder(name: "Traces")
-        let tools = Folder(name: "Tools", children: [.folder(logs), .folder(traces)])
+        let tools = Folder(name: "Tools", children: [.folder(logs), .folder(traces)], isCollapsed: true)
         let debug = Folder(name: "Debug")
         var section = try Section(items: [.folder(tools), .folder(debug)])
         let savedLogs = Folder(id: logs.id, name: "Logs")
         #expect(section.items == [
-            .folder(.init(id: tools.id, name: "Tools", children: [.folder(savedLogs), .folder(traces)])),
+            .folder(.init(id: tools.id, name: "Tools", children: [.folder(savedLogs), .folder(traces)], isCollapsed: true)),
             .folder(debug),
         ])
 
@@ -105,18 +149,19 @@ struct NectoPluginSidebarSectionTests {
         }
     }
 
-    @Test("Renaming a nested folder keeps its ID, children and position")
+    @Test("Renaming a nested folder keeps its ID, children, position and collapse state")
     func renameFolder() throws {
-        let child = Folder(name: "Logs", children: [
-            .plugin("unavailable"), .folder(.init(name: "Archive", children: [.plugin("b")])),
-        ])
+        let archive = Folder(name: "Archive", children: [.plugin("b")], isCollapsed: true)
+        let child = Folder(name: "Logs", children: [.plugin("unavailable"), .folder(archive)], isCollapsed: true)
         let root = Folder(name: "Tools", children: [.plugin("a"), .folder(child), .plugin("c")])
         var section = try Section(items: [.folder(root)])
         try section.renameFolder(child.id, to: " Logs ")
         #expect(section.items == [.folder(root)])
         try section.renameFolder(child.id, to: " Network ")
+        var renamed = child
+        renamed.name = "Network"
         #expect(section.items == [.folder(.init(id: root.id, name: "Tools", children: [
-            .plugin("a"), .folder(.init(id: child.id, name: "Network", children: child.children)), .plugin("c"),
+            .plugin("a"), .folder(renamed), .plugin("c"),
         ]))])
     }
 
@@ -158,7 +203,7 @@ struct NectoPluginSidebarSectionTests {
     @Test("Promotion keeps existing and nonconflicting names and can reuse the deleted folder's name")
     func resolvePromotionNameCollisions() throws {
         let existing = Folder(name: "Logs", children: [.plugin("a")])
-        let conflicting = Folder(name: "Logs", children: [.plugin("b")])
+        let conflicting = Folder(name: "Logs", children: [.plugin("b")], isCollapsed: true)
         let suffixed = Folder(name: "Logs(1)", children: [.plugin("c")])
         let removed = Folder(name: "Logs(2)", children: [.folder(conflicting), .folder(suffixed)])
         let parent = Folder(name: "Tools", children: [.folder(existing), .folder(removed)])
@@ -166,7 +211,7 @@ struct NectoPluginSidebarSectionTests {
         try section.deleteFolder(removed.id)
         #expect(section.items == [.folder(.init(id: parent.id, name: "Tools", children: [
             .folder(existing),
-            .folder(.init(id: conflicting.id, name: "Logs(2)", children: conflicting.children)),
+            .folder(.init(id: conflicting.id, name: "Logs(2)", children: conflicting.children, isCollapsed: true)),
             .folder(suffixed),
         ]))])
     }

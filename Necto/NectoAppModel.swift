@@ -32,8 +32,7 @@ final class NectoAppModel {
     private(set) var disabledIDs = NectoPluginLibrary.disabledIDs {
         didSet { refreshBackgroundPanels() }
     }
-    /// The saved device ordering, published here so a drop re-renders the list.
-    private(set) var deviceOrder = NectoPluginLibrary.loadSidebarOrder(for: .device)
+    let pluginSidebar = NectoPluginSidebarState(store: NectoPluginSidebarStore(defaults: .standard))
 
     typealias PendingInstall = InstallCoordinator.PendingInstall
     typealias PendingChoice = InstallCoordinator.PendingChoice
@@ -197,7 +196,7 @@ final class NectoAppModel {
             devicePlugins
                 .filter { $0.target == target && !disabledIDs.contains($0.id) }
                 .map(\.plugin),
-            by: deviceOrder
+            by: pluginSidebar[.device].pluginIDs
         )
     }
 
@@ -215,9 +214,7 @@ final class NectoAppModel {
         var arranged = activeDevicePlugins(for: target)
         arranged.move(fromOffsets: source, toOffset: destination)
 
-        // Publish the drop only if the saved section accepts the flat order.
-        guard let order = NectoPluginLibrary.saveFlatSidebarOrder(arranged.map(\.id), for: .device) else { return }
-        deviceOrder = order
+        pluginSidebar.saveFlatOrder(arranged.map(\.id), for: .device)
     }
 
     /// What the sidebar lists, in the order the user arranged. A disabled plugin stays
@@ -232,7 +229,7 @@ final class NectoAppModel {
         enabled.move(fromOffsets: source, toOffset: destination)
 
         let arranged = enabled + plugins.filter { disabledIDs.contains($0.id) }
-        guard NectoPluginLibrary.saveFlatSidebarOrder(arranged.map(\.id), for: .desktop) != nil else { return }
+        guard pluginSidebar.saveFlatOrder(arranged.map(\.id), for: .desktop) else { return }
         plugins = arranged
     }
 
@@ -930,7 +927,7 @@ final class NectoAppModel {
             }
         }
 
-        plugins = NectoPluginLibrary.sorted(installed, by: NectoPluginLibrary.loadSidebarOrder(for: .desktop))
+        plugins = NectoPluginLibrary.sorted(installed, by: pluginSidebar[.desktop].pluginIDs)
         pluginsAwaitingApproval = awaitingApproval
         pluginFailures = failures
 
