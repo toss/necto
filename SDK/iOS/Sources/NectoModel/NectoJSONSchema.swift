@@ -66,10 +66,11 @@ public enum NectoJSONSchema {
             }
 
         case let .string(text):
-            if let minLength = schema["minLength"]?.numberValue, Double(text.count) < minLength {
+            lazy var length = Double(text.unicodeScalars.count)
+            if let minLength = schema["minLength"]?.numberValue, length < minLength {
                 return ValidationFailure(path: path, reason: "must be at least \(Int(minLength)) characters")
             }
-            if let maxLength = schema["maxLength"]?.numberValue, Double(text.count) > maxLength {
+            if let maxLength = schema["maxLength"]?.numberValue, length > maxLength {
                 return ValidationFailure(path: path, reason: "must be at most \(Int(maxLength)) characters")
             }
 

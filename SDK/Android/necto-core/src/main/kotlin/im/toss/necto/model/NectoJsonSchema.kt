@@ -44,7 +44,7 @@ public object NectoJsonSchema {
                 }
             }
             is NectoJsonValue.Str -> {
-                // Swift counts grapheme clusters; code points are the closest cheap match.
+                // JSON Schema measures string length in Unicode code points.
                 val length = value.value.codePointCount(0, value.value.length).toDouble()
                 schema["minLength"]?.numberValue?.let { minLength ->
                     if (length < minLength) return ValidationFailure(path, "must be at least ${minLength.toInt()} characters")

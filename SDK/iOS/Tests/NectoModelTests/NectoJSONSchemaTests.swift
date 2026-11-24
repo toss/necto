@@ -45,6 +45,16 @@ import Testing
     #expect(NectoJSONSchema.validate(3.5, against: schema) != nil)
 }
 
+@Test(arguments: [("😀", 1), ("🇰🇷", 2), ("e\u{0301}", 2)])
+func validatesStringLengthInUnicodeCodePoints(text: String, length: Int) {
+    let value = NectoJSONValue.string(text)
+    let exact = NectoJSONValue.number(Double(length))
+
+    #expect(NectoJSONSchema.validate(value, against: ["minLength": exact, "maxLength": exact]) == nil)
+    #expect(NectoJSONSchema.validate(value, against: ["minLength": .number(Double(length + 1))]) != nil)
+    #expect(NectoJSONSchema.validate(value, against: ["maxLength": .number(Double(length - 1))]) != nil)
+}
+
 @Test func validatesArrayItemsAndBounds() {
     let schema: NectoJSONValue = [
         "type": "array",
