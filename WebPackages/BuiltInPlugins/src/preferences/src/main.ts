@@ -6,7 +6,7 @@ import "./style.css";
 
 import { createDetailPane, necto, isNectoBridgeError, type NectoJSONValue } from "@necto/bridge";
 import { t } from "./localization";
-import { arrayItems, dictionaryFields, display, element, numberValue } from "./model";
+import { arrayItems, dictionaryFields, display, element, invalidDictionaryKey, numberValue } from "./model";
 
 interface Entry {
   key: string;
@@ -382,16 +382,10 @@ function detailBody(): Node[] {
       renderRows();
 
       const save = saveButton(() => {
-        const seen = new Set<string>();
-        for (const [key] of fields) {
-          if (!key.trim()) {
-            note.textContent = t("A pair is missing its key");
-            return;
-          }
-          if (!seen.add(key)) {
-            note.textContent = t("Duplicate key '{key}'", { key });
-            return;
-          }
+        const key = invalidDictionaryKey(fields);
+        if (key !== undefined) {
+          note.textContent = key.trim() ? t("Duplicate key '{key}'", { key }) : t("A pair is missing its key");
+          return;
         }
         void write(Object.fromEntries(fields.map(([key, value]) => [key, element(value)]))).catch(failed);
       });
