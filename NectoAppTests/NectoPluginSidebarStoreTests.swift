@@ -211,6 +211,119 @@ struct NectoPluginSidebarStoreTests {
         #expect(try fixture.store.load(.device).items == [.plugin("root-disabled"), .folder(expectedFolder), .plugin("tail")])
     }
 
+    @Test("An unplaced disabled Device plugin can enter a folder and return to the alphabetized root area")
+    func moveDisabledDevicePlugin() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let folder = Section.Folder(name: "Tools", children: [.plugin("unavailable")], isCollapsed: true)
+        let device = try Section(items: [.folder(folder), .plugin("active")])
+        let desktop = try Section(items: [.plugin("m-disabled")])
+        try fixture.store.save(device, for: .device)
+        try fixture.store.save(desktop, for: .desktop)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let active = ["active"]
+        let disabled = ["a-disabled", "m-disabled", "z-disabled"]
+        let plugin = Section.Item.ID.plugin("m-disabled")
+
+        #expect(state.move(
+            location(plugin), to: .into(parentID: folder.id), in: .device,
+            activePluginIDs: active, disabledPluginIDs: disabled
+        ))
+        var updatedFolder = folder
+        updatedFolder.isCollapsed = false
+        updatedFolder.children.append(.plugin("m-disabled"))
+        #expect(state[.device].items == [.folder(updatedFolder), .plugin("active")])
+        #expect(try fixture.store.load(.device) == state[.device])
+        #expect(state[.desktop] == desktop)
+
+        #expect(state.move(
+            location(plugin, parentID: folder.id), to: .into(parentID: nil), in: .device,
+            activePluginIDs: active, disabledPluginIDs: disabled
+        ))
+        let rows = state[.device].visibleRows(activePluginIDs: active, disabledPluginIDs: disabled)
+        #expect(rows.map(\.id) == [
+            .plugin("active"), .plugin("a-disabled"), plugin, .plugin("z-disabled"), .folder(folder.id),
+        ])
+        #expect(rows.filter { $0.id == plugin }.allSatisfy { $0.parentID == nil && $0.isDimmed })
+        #expect(try fixture.store.load(.device) == state[.device])
+    }
+
+    @Test("A dimmed folder receives an active plugin and returns to its saved position")
+    func moveIntoDimmedFolder() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let folder = Section.Folder(name: "Tools", children: [.plugin("unavailable")], isCollapsed: true)
+        let saved = try Section(items: [.folder(folder), .plugin("sibling")])
+        try fixture.store.save(saved, for: .device)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let active = ["sibling", "new", "other-new"]
+        #expect(state[.device].visibleRows(activePluginIDs: active, disabledPluginIDs: []).last?.id == .folder(folder.id))
+
+        #expect(state.move(
+            location(.plugin("new")), to: .into(parentID: folder.id), in: .device,
+            activePluginIDs: active, disabledPluginIDs: []
+        ))
+
+        let rows = state[.device].visibleRows(activePluginIDs: active, disabledPluginIDs: [])
+        #expect(rows.map(\.id) == [.folder(folder.id), .plugin("new"), .plugin("sibling"), .plugin("other-new")])
+        #expect(rows.first?.isDimmed == false)
+        #expect(state[.device].pluginIDs == ["unavailable", "new", "sibling"])
+    }
+
+    @Test("Invalid parent changes leave shared state and stored data unchanged")
+    func refuseInvalidParentChanges() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let hidden = Section.Folder(name: "Hidden", children: [.plugin("unavailable")])
+        let target = Section.Folder(name: "Target")
+        let closed = Section.Folder(name: "Closed", children: [.folder(target)], isCollapsed: true)
+        let original = try Section(items: [.folder(hidden), .folder(closed), .plugin("active")])
+        try fixture.store.save(original, for: .device)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let active = ["active"]
+        let key = Store.Kind.device.sectionKey
+        let bytes = fixture.defaults.data(forKey: key)
+
+        #expect(!state.move(
+            location(.folder(hidden.id)), to: .into(parentID: closed.id), in: .device,
+            activePluginIDs: active, disabledPluginIDs: []
+        ))
+        #expect(!state.move(
+            location(.plugin("active"), in: .desktop), to: .into(parentID: closed.id), in: .device,
+            activePluginIDs: active, disabledPluginIDs: []
+        ))
+        #expect(!state.move(
+            location(.plugin("active")), to: .into(parentID: target.id), in: .device,
+            activePluginIDs: active, disabledPluginIDs: []
+        ))
+        #expect(fixture.defaults.data(forKey: key) == bytes)
+        #expect(state[.device] == original)
+
+        let rootSource = location(.plugin("active"))
+        try #require(state.move(
+            rootSource, to: .into(parentID: closed.id), in: .device,
+            activePluginIDs: active, disabledPluginIDs: []
+        ))
+        let newer = state[.device]
+        let newerBytes = fixture.defaults.data(forKey: key)
+        #expect(!state.move(
+            rootSource, to: .into(parentID: hidden.id), in: .device,
+            activePluginIDs: active, disabledPluginIDs: []
+        ))
+        #expect(try fixture.store.load(.device) == newer)
+        #expect(fixture.defaults.data(forKey: key) == newerBytes)
+        #expect(state[.device] == newer)
+
+        let corrupt = Data([0, 1, 2])
+        fixture.defaults.set(corrupt, forKey: key)
+        #expect(!state.move(
+            location(.plugin("active"), parentID: closed.id), to: .into(parentID: hidden.id), in: .device,
+            activePluginIDs: active, disabledPluginIDs: []
+        ))
+        #expect(fixture.defaults.data(forKey: key) == corrupt)
+        #expect(state[.device] == newer)
+    }
+
     @Test("A drop whose source or destination is hidden, dimmed or in another section leaves storage unchanged")
     func refuseUnavailableAndCrossSectionDrops() throws {
         let fixture = try Fixture()

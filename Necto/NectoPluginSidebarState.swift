@@ -89,9 +89,67 @@ final class NectoPluginSidebarState {
             return false
         }
     }
+
+    @discardableResult
+    func move(
+        _ source: ItemLocation,
+        to destination: NectoPluginSidebarSection.MoveDestination,
+        in kind: NectoPluginSidebarStore.Kind,
+        activePluginIDs: [String],
+        disabledPluginIDs: [String]
+    ) -> Bool {
+        guard let updated = self[kind].candidateForMove(
+            source,
+            to: destination,
+            in: kind,
+            activePluginIDs: activePluginIDs,
+            disabledPluginIDs: disabledPluginIDs
+        ) else { return false }
+        do {
+            try store.save(updated, for: kind)
+            sections[kind] = updated
+            return true
+        } catch {
+            Self.logger.error("Could not save the \(kind.rawValue, privacy: .public) plugin sidebar move.")
+            return false
+        }
+    }
 }
 
 extension NectoPluginSidebarSection {
+    /// The same candidate used for drop feedback and before saving against the latest section.
+    func candidateForMove(
+        _ source: NectoPluginSidebarState.ItemLocation,
+        to destination: MoveDestination,
+        in kind: NectoPluginSidebarStore.Kind,
+        activePluginIDs: [String],
+        disabledPluginIDs: [String]
+    ) -> Self? {
+        guard source.kind == kind, source.parentID != destination.parentID else { return nil }
+        let rows = visibleRows(activePluginIDs: activePluginIDs, disabledPluginIDs: disabledPluginIDs)
+        guard let sourceRow = rows.first(where: { $0.id == source.id && $0.parentID == source.parentID }),
+              sourceRow.canChangeParent(in: kind) else { return nil }
+        switch destination {
+        case .into(let parentID):
+            if let parentID, !rows.contains(where: { $0.id == .folder(parentID) }) { return nil }
+        case .beside(let anchor, _, let parentID):
+            guard rows.contains(where: { $0.id == anchor && $0.parentID == parentID && $0.canReorder }) else {
+                return nil
+            }
+        }
+
+        // A root disabled source may be available but not yet present in the saved section.
+        var rootPluginIDs = activePluginIDs
+        if sourceRow.isDimmed, source.parentID == nil, case .plugin(let id) = source.id {
+            rootPluginIDs.append(id)
+        }
+        var candidate = self
+        guard (try? candidate.move(
+            source.id, from: source.parentID, to: destination, unplacedRootPluginIDs: rootPluginIDs
+        )) == true else { return nil }
+        return candidate
+    }
+
     struct Row: Identifiable {
         let item: Item
         let depth: Int
@@ -104,6 +162,13 @@ extension NectoPluginSidebarSection {
         var canReorder: Bool {
             switch item {
             case .plugin: parentID != nil || !isDimmed
+            case .folder: !isDimmed
+            }
+        }
+
+        func canChangeParent(in kind: NectoPluginSidebarStore.Kind) -> Bool {
+            switch item {
+            case .plugin: !isDimmed || kind == .device
             case .folder: !isDimmed
             }
         }
