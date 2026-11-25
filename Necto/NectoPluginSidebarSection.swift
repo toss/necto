@@ -101,6 +101,17 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
 
     var pluginIDs: [String] { Self.pluginIDs(in: items) }
 
+    func folder(withID id: UUID) -> Folder? {
+        func find(in items: [Item]) -> Folder? {
+            for case .folder(let folder) in items {
+                if folder.id == id { return folder }
+                if let nested = find(in: folder.children) { return nested }
+            }
+            return nil
+        }
+        return find(in: items)
+    }
+
     func isVisible(hasAvailablePlugins: Bool) -> Bool {
         hasAvailablePlugins || hasFolders
     }

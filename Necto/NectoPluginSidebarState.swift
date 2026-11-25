@@ -174,6 +174,17 @@ extension NectoPluginSidebarSection {
         }
     }
 
+    /// Each disclosure group gives its ForEach the immediate children in their displayed order.
+    func visibleSiblings(activePluginIDs: [String], disabledPluginIDs: [String]) -> [UUID?: [Row]] {
+        let rows = visibleRows(activePluginIDs: activePluginIDs, disabledPluginIDs: disabledPluginIDs)
+        return Dictionary(grouping: rows.map { row in
+            var sibling = row
+            // The descendants are elements of a different ForEach, not part of this insertion offset.
+            sibling.lastVisibleDescendantID = nil
+            return sibling
+        }, by: \.parentID)
+    }
+
     static func insertion(
         from sources: IndexSet,
         to destination: Int,

@@ -212,34 +212,15 @@ struct SidebarItem: View {
     /// Sunken: a disabled plugin, present but not in play.
     var isDimmed = false
     var hasUpdate = false
-    var indentation = 0
-    var isExpanded: Bool?
     var select: (() -> Void)?
 
     @State private var isHovering = false
     private static let iconWidth: CGFloat = 16
 
-    /// A tap rather than a `Button`: a button takes the mouse down for itself, and
-    /// `List` never gets the chance to start a drag. Reordering the sidebar is worth
-    /// more than the button's own press animation, which this row does not use anyway.
     var body: some View {
         HStack(spacing: 8) {
-            if let isExpanded {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.right")
-                        .font(.necto(.caption, scale: scale))
-                        .imageScale(.small)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0), anchor: .center)
-                        .foregroundStyle(NectoTheme.textTertiary)
-                        .accessibilityHidden(true)
-                    icon
-                        .frame(minWidth: Self.iconWidth)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-            } else {
-                icon
-                    .frame(width: Self.iconWidth)
-            }
+            icon
+                .frame(width: Self.iconWidth)
 
             Text(title)
                 .lineLimit(1)
@@ -257,7 +238,7 @@ struct SidebarItem: View {
         }
         .font(.necto(.label, scale: scale))
         .foregroundStyle(isDimmed ? NectoTheme.textTertiary : isSelected ? NectoTheme.text : NectoTheme.textSecondary)
-        .padding(.leading, 8 + CGFloat(indentation) * Self.iconWidth)
+        .padding(.leading, 8)
         .padding(.trailing, 16)
         .frame(height: NectoTheme.rowHeight * scale)
         .background(background, in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
