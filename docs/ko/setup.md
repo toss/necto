@@ -186,6 +186,7 @@ dependencies {
 | `necto-process-metric-plugin` | 프로세스 지표 자동 수집 |
 | `necto-ui-control-plugin` | View와 Jetpack Compose의 UI 조회·조작 |
 | `necto-okhttp-capture-plugin` | OkHttp 요청 자동 기록 |
+| `necto-ktor-capture-plugin` | Ktor 클라이언트 요청 자동 기록, 엔진 무관 |
 
 ### Release 빌드에서 제외하기
 
@@ -236,6 +237,23 @@ val client = OkHttpClient.Builder()
 
 요청 본문의 타입을 검사하는 인터셉터가 있으면 그 뒤에 추가하세요. 수동 로깅만
 필요하다면 `necto-network-plugin`만 사용하세요.
+
+### Ktor 요청 캡처하기
+
+디버그 의존성에 `necto-ktor-capture-plugin`을 추가하고, 앱의 클라이언트에 캡처를
+설치해요. 엔진은 상관없어요.
+
+```kotlin
+val network = KtorNetworkPlugin()
+NectoAndroid.start(app, listOf(network))
+val client = HttpClient(CIO) {
+    install(network.capture)
+}
+```
+
+Ktor 3을 지원하고, Ktor 2는 지원하지 않아요. `HttpRequestRetry`처럼 재시도하는 플러그인이
+있으면 캡처를 그 뒤에 설치하세요. 그래야 시도마다 따로 기록돼요. OkHttp 엔진에서는 이 모듈과
+OkHttp 인터셉터 중 하나만 쓰세요. 둘 다 쓰면 요청이 두 번씩 기록돼요.
 
 ## 연결 방식
 

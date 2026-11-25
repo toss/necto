@@ -208,6 +208,7 @@ only its own code and panel, plus its declared dependencies.
 | `necto-process-metric-plugin` | Automatic process metrics |
 | `necto-ui-control-plugin` | UI inspection and interaction, for Views and Jetpack Compose |
 | `necto-okhttp-capture-plugin` | Automatic OkHttp recording |
+| `necto-ktor-capture-plugin` | Automatic Ktor client recording, on any engine |
 
 ### Keeping it out of release builds
 
@@ -259,6 +260,23 @@ val client = OkHttpClient.Builder()
 
 Add the interceptor after any interceptor that checks a request body's type. For
 manual logging, use `necto-network-plugin` on its own.
+
+### Capturing Ktor requests
+
+Add `necto-ktor-capture-plugin` to the debug dependencies and install the capture in the
+app's client, on any engine:
+
+```kotlin
+val network = KtorNetworkPlugin()
+NectoAndroid.start(app, listOf(network))
+val client = HttpClient(CIO) {
+    install(network.capture)
+}
+```
+
+It supports Ktor 3; Ktor 2 is not supported. Install the capture after a plugin that retries,
+such as `HttpRequestRetry`, so each attempt is its own record. On the OkHttp engine, use this
+or the OkHttp interceptor, not both, or every request is listed twice.
 
 ## What connecting involves
 

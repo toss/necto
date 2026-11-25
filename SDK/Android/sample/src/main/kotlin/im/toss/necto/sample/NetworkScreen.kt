@@ -22,6 +22,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.ktor.client.HttpClient
+import io.ktor.client.request.header
+import io.ktor.client.request.request
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
+import io.ktor.http.content.TextContent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,18 +84,32 @@ private fun calls(): List<Call> {
     )
 }
 
+/** Sent through Ktor on the CIO engine, so the Ktor capture has rows of its own. */
+private fun ktorCalls(): List<Call> {
+    val api = LocalApi.origin
+    return listOf(
+        Call("List posts (Ktor)", "GET", "$api/posts"),
+        Call("Create a post (Ktor)", "POST", "$api/posts", mapOf("title" to "Necto", "body" to "Sent through Ktor", "userId" to "1")),
+        Call("Not found (Ktor)", "GET", "$api/posts/999"),
+    )
+}
+
 @Composable
 fun NetworkScreen() {
-    val client = (LocalContext.current.applicationContext as SampleApp).client
+    val app = LocalContext.current.applicationContext as SampleApp
+    val client = app.client
     val scope = rememberCoroutineScope()
     val attempts = remember { mutableStateListOf<Attempt>() }
     var isRunning by remember { mutableStateOf(false) }
+    val ktor = remember { ktorCalls() }
 
     suspend fun send(call: Call) {
         isRunning = true
         try {
             val started = System.nanoTime()
-            val outcome = withContext(Dispatchers.IO) { execute(client, call) }
+            val outcome = withContext(Dispatchers.IO) {
+                if (call in ktor) executeKtor(app.ktorClient, call) else execute(client, call)
+            }
             attempts.add(0, Attempt(call.title, call.method, outcome, (System.nanoTime() - started) / 1_000_000))
         } finally {
             isRunning = false
@@ -106,6 +129,13 @@ fun NetworkScreen() {
 
             SectionHeader("One at a time")
             calls().forEach { call ->
+                LabeledRow(call.title, Modifier.clickable(enabled = !isRunning) { scope.launch { send(call) } }) {
+                    Text(call.method, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            SectionHeader("Through Ktor")
+            ktor.forEach { call ->
                 LabeledRow(call.title, Modifier.clickable(enabled = !isRunning) { scope.launch { send(call) } }) {
                     Text(call.method, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -138,4 +168,16 @@ private fun execute(client: OkHttpClient, call: Call): String {
         // list that only says "failed".
         error.javaClass.simpleName.ifEmpty { "failed" }
     }
+}
+
+private suspend fun executeKtor(client: HttpClient, call: Call): String = try {
+    val response = client.request(call.url) {
+        method = HttpMethod.parse(call.method)
+        header(HttpHeaders.Accept, "application/json")
+        call.body?.let { setBody(TextContent(JSONObject(it).toString(), ContentType.Application.Json)) }
+    }
+    response.bodyAsText()
+    response.status.value.toString()
+} catch (error: Exception) {
+    error.javaClass.simpleName.ifEmpty { "failed" }
 }

@@ -18,8 +18,11 @@ import im.toss.necto.android.NectoAndroid
 import im.toss.necto.android.NectoAndroidControlPlugin
 import im.toss.necto.plugins.NectoFilesPlugin
 import im.toss.necto.android.NectoDataStorePreferencesPlugin
+import im.toss.necto.ktor.NectoKtorCapture
 import im.toss.necto.okhttp.NectoOkHttpInterceptor
 import im.toss.necto.plugins.NectoNetworkPlugin
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +41,10 @@ class SampleApp : Application() {
     lateinit var client: OkHttpClient
         private set
 
+    /** The Ktor client for the Network tab's Ktor rows, on an engine OkHttp plays no part in. */
+    lateinit var ktorClient: HttpClient
+        private set
+
     override fun onCreate() {
         super.onCreate()
         // Serves the Network tab's sample requests without internet access.
@@ -50,6 +57,8 @@ class SampleApp : Application() {
             // the same and calls `report(...)` from wherever it already knows about a request.
             val network = NectoNetworkPlugin()
             builder.addInterceptor(NectoOkHttpInterceptor(network))
+            // A Ktor client reports to the same plugin through its own capture.
+            ktorClient = HttpClient(CIO) { install(NectoKtorCapture(network)) }
 
             // Preferences, files and UI Control need nothing reported: they read what is
             // already there. The seeds give the first two panels something real to show on
@@ -76,6 +85,7 @@ class SampleApp : Application() {
             ExampleTelemetry.start()
         }
         client = builder.build()
+        if (!::ktorClient.isInitialized) ktorClient = HttpClient(CIO)
     }
 
     /** A few files of each shape a real app keeps, written once. */
