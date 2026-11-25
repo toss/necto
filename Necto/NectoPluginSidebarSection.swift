@@ -28,6 +28,17 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         case after
     }
 
+    enum MoveDestination: Sendable {
+        case into(parentID: UUID?)
+        case beside(Item.ID, position: InsertionPosition, parentID: UUID?)
+
+        var parentID: UUID? {
+            switch self {
+            case .into(let parentID), .beside(_, _, let parentID): parentID
+            }
+        }
+    }
+
     struct Folder: Codable, Equatable, Sendable {
         let id: UUID
         var name: String
@@ -171,6 +182,80 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         }
         self = try Self(items: updatedItems)
         return true
+    }
+
+    mutating func move(
+        _ source: Item.ID,
+        from sourceParentID: UUID?,
+        to destination: MoveDestination,
+        unplacedRootPluginIDs: [String] = []
+    ) throws -> Bool {
+        guard sourceParentID != destination.parentID else { return false }
+        var updatedItems = items
+        if destination.parentID == nil {
+            var placed = Set(pluginIDs)
+            for id in unplacedRootPluginIDs where placed.insert(id).inserted {
+                updatedItems.append(.plugin(id))
+            }
+        } else if sourceParentID == nil, case .plugin(let id) = source,
+                  unplacedRootPluginIDs.contains(id), !pluginIDs.contains(id) {
+            updatedItems.append(.plugin(id))
+        }
+
+        var moved: Item?
+        Self.editChildren(of: sourceParentID, in: &updatedItems) { siblings in
+            guard let index = siblings.firstIndex(where: { $0.id == source }) else { return false }
+            moved = siblings.remove(at: index)
+            return true
+        }
+        guard let moved else { return false }
+
+        let openParent: Bool
+        switch destination {
+        case .into: openParent = true
+        case .beside: openParent = false
+        }
+        // Searching after detaching also excludes the source folder and its descendants as destinations.
+        let inserted = Self.editChildren(of: destination.parentID, in: &updatedItems, openParent: openParent) { siblings in
+            let index: Int
+            switch destination {
+            case .into:
+                index = siblings.endIndex
+            case .beside(let anchor, let position, _):
+                guard let anchorIndex = siblings.firstIndex(where: { $0.id == anchor }) else { return false }
+                index = position == .before ? anchorIndex : anchorIndex + 1
+            }
+            if case .folder(var folder) = moved {
+                var names = Self.folderNames(in: siblings)
+                folder.name = Self.reserveFolderName(folder.name, in: &names)
+                siblings.insert(.folder(folder), at: index)
+            } else {
+                siblings.insert(moved, at: index)
+            }
+            return true
+        }
+        guard inserted else { return false }
+
+        self = try Self(items: updatedItems)
+        return true
+    }
+
+    @discardableResult
+    private static func editChildren(
+        of parentID: UUID?,
+        in items: inout [Item],
+        openParent: Bool = false,
+        _ change: (inout [Item]) -> Bool
+    ) -> Bool {
+        guard let parentID else { return change(&items) }
+        var changed = false
+        _ = Self.replaceFolderInTree(parentID, in: &items, expandingAncestors: false) { folder, _ in
+            var folder = folder
+            changed = change(&folder.children)
+            if changed && openParent { folder.isCollapsed = false }
+            return [.folder(folder)]
+        }
+        return changed
     }
 
     private mutating func appendFolder(to parentID: UUID?, name: ([Item]) -> String) throws -> UUID {

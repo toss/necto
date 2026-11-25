@@ -77,6 +77,77 @@ struct NectoPluginSidebarSectionTests {
         #expect(section == original)
     }
 
+    @Test("Moving into a collapsed folder appends the subtree and resolves only the moved folder's name")
+    func moveFolderIntoFolder() throws {
+        let child = Folder(name: "Child", children: [.plugin("unavailable-in-child")], isCollapsed: true)
+        let moved = Folder(name: "Tools", children: [.plugin("tool"), .folder(child)], isCollapsed: true)
+        let duplicate = Folder(name: "Tools")
+        let suffixed = Folder(name: "Tools(1)")
+        let destination = Folder(name: "Archive", children: [
+            .folder(duplicate), .plugin("unavailable-in-archive"), .folder(suffixed),
+        ], isCollapsed: true)
+        var section = try Section(items: [.folder(moved), .plugin("root"), .folder(destination)])
+
+        #expect(try section.move(.folder(moved.id), from: nil, to: .into(parentID: destination.id)))
+
+        var renamed = moved
+        renamed.name = "Tools(2)"
+        var opened = destination
+        opened.isCollapsed = false
+        opened.children.append(.folder(renamed))
+        #expect(section.items == [.plugin("root"), .folder(opened)])
+    }
+
+    @Test("Moving a plugin to a root anchor retains other hidden and unplaced root siblings")
+    func moveBesideUnplacedRootAnchor() throws {
+        let folder = Folder(name: "Tools", children: [.plugin("nested"), .plugin("unavailable-child")])
+        var section = try Section(items: [.plugin("a"), .folder(folder), .plugin("unavailable-root")])
+        var appended = section
+
+        #expect(try section.move(
+            .plugin("nested"), from: folder.id, to: .beside(.plugin("new-b"), position: .before, parentID: nil),
+            unplacedRootPluginIDs: ["a", "new-a", "new-b", "nested", "unavailable-child"]
+        ))
+
+        var updatedFolder = folder
+        updatedFolder.children = [.plugin("unavailable-child")]
+        #expect(section.items == [
+            .plugin("a"), .folder(updatedFolder), .plugin("unavailable-root"), .plugin("new-a"),
+            .plugin("nested"), .plugin("new-b"),
+        ])
+
+        #expect(try appended.move(
+            .plugin("nested"), from: folder.id, to: .into(parentID: nil), unplacedRootPluginIDs: ["a", "new-a", "new-b"]
+        ))
+        #expect(appended.items == [
+            .plugin("a"), .folder(updatedFolder), .plugin("unavailable-root"), .plugin("new-a"),
+            .plugin("new-b"), .plugin("nested"),
+        ])
+    }
+
+    @Test("A bad destination or an overflowing hidden subtree leaves membership, names and collapse unchanged")
+    func rejectInvalidFolderMoves() throws {
+        let deepest = Folder(name: "Deepest", isCollapsed: true)
+        let child = Folder(name: "Child", children: [.folder(deepest)], isCollapsed: true)
+        let moved = Folder(name: "Tools", children: [.folder(child)])
+        let destination = Folder(name: "Archive", children: [.folder(.init(name: "Tools"))], isCollapsed: true)
+        var section = try Section(items: [.folder(moved), .folder(destination), .plugin("root")])
+        let original = section
+
+        #expect(try !section.move(.folder(moved.id), from: nil, to: .into(parentID: moved.id)))
+        #expect(try !section.move(.folder(moved.id), from: nil, to: .into(parentID: child.id)))
+        #expect(try !section.move(.plugin("root"), from: nil, to: .into(parentID: UUID())))
+        #expect(try !section.move(.plugin("root"), from: nil, to: .into(parentID: nil)))
+        #expect(throws: Section.ValidationError.folderDepthExceeded) {
+            try section.move(.folder(moved.id), from: nil, to: .into(parentID: destination.id))
+        }
+        #expect(section == original)
+
+        #expect(try section.move(.plugin("root"), from: nil, to: .into(parentID: deepest.id)))
+        #expect(section.pluginIDs == ["root"])
+        #expect(section.items.count == 2)
+    }
+
     @Test("Default folder names use the first free suffix only within the requested parent")
     func createDefaultFolders() throws {
         let first = Folder(name: "New Folder")
