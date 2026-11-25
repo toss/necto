@@ -9,6 +9,13 @@ pluginManagement {
                 includeGroupByRegex("androidx.*")
             }
         }
+        // Maven Central rate limits hosted CI runners with 429 responses, so CI asks Google's
+        // mirror of it first. The mirror syncs about once a day, and what it does not have
+        // yet is still found on Maven Central after the mirror answers 404. Not for local
+        // builds: a mirror that cannot be reached fails the build instead of falling through.
+        if (System.getenv("CI") != null) {
+            maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralMirror" }
+        }
         mavenCentral()
         gradlePluginPortal()
     }
@@ -22,6 +29,9 @@ dependencyResolutionManagement {
                 includeGroupByRegex("com\\.google.*")
                 includeGroupByRegex("androidx.*")
             }
+        }
+        if (System.getenv("CI") != null) {
+            maven("https://maven-central.storage-download.googleapis.com/maven2/") { name = "MavenCentralMirror" }
         }
         mavenCentral()
     }
