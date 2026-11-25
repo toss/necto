@@ -59,6 +59,61 @@ struct NectoPluginSidebarSectionTests {
         #expect(section.items == [.folder(folder), .plugin("a"), .plugin("disabled"), .folder(unavailable)])
     }
 
+    @Test("A gap above a root sibling inserts an extracted item before that sibling")
+    func insertAcrossFolderBoundary() throws {
+        let tools = Folder(name: "Tools", children: [.plugin("tool-a"), .plugin("tool-b")])
+        let saved = try Section(items: [.folder(tools), .plugin("hidden"), .plugin("end")])
+        let active = ["tool-a", "tool-b", "end"]
+        let rows = saved.visibleRows(activePluginIDs: active, disabledPluginIDs: [])
+
+        #expect(Section.rootDestination(at: 2, in: rows) == nil)
+        #expect(Section.insertion(from: [1], to: 3, in: rows)?.anchor.id == .plugin("tool-b"))
+        let rootGap = try #require(Section.rootDestination(at: 3, in: rows))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .plugin("tool-a"), parentID: tools.id),
+            to: rootGap, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+        var remaining = tools
+        remaining.children = [.plugin("tool-b")]
+        #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .plugin("tool-a"), .plugin("end")])
+    }
+
+    @Test("The gap after a sole expanded folder can extract its only visible child")
+    func extractToEndAfterOnlyFolder() throws {
+        let folder = Folder(name: "Tools", children: [.plugin("a")])
+        let saved = try Section(items: [.folder(folder), .plugin("hidden")])
+        let rows = saved.visibleRows(activePluginIDs: ["a"], disabledPluginIDs: [])
+
+        #expect(Section.insertion(from: [1], to: rows.count, in: rows) == nil)
+        let rootGap = try #require(Section.rootDestination(at: rows.count, in: rows))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .plugin("a"), parentID: folder.id),
+            to: rootGap, in: .device, activePluginIDs: ["a"], disabledPluginIDs: []
+        )
+        var emptied = folder
+        emptied.children = []
+        #expect(moved?.items == [.folder(emptied), .plugin("a"), .plugin("hidden")])
+    }
+
+    @Test("A root gap among dimmed folders extracts a disabled child without requiring a reorderable anchor")
+    func extractDisabledChildAmongDimmedRoots() throws {
+        let folder = Folder(name: "Tools", children: [.plugin("off"), .plugin("missing")])
+        let other = Folder(name: "Unavailable", children: [.plugin("other-missing")])
+        let saved = try Section(items: [.folder(folder), .plugin("hidden"), .folder(other)])
+        let rows = saved.visibleRows(activePluginIDs: [], disabledPluginIDs: ["off"])
+        #expect(rows.map(\.id) == [.folder(folder.id), .plugin("off"), .folder(other.id)])
+        #expect(rows[0].isDimmed && rows[2].isDimmed)
+
+        let rootGap = try #require(Section.rootDestination(at: 2, in: rows))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .plugin("off"), parentID: folder.id),
+            to: rootGap, in: .device, activePluginIDs: [], disabledPluginIDs: ["off"]
+        )
+        var remaining = folder
+        remaining.children = [.plugin("missing")]
+        #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .folder(other), .plugin("off")])
+    }
+
     @Test("Reordering a nested folder moves its entire subtree within the same parent")
     func reorderNestedFolder() throws {
         let dimmedChild = Folder(name: "Unavailable", children: [.plugin("unavailable")], isCollapsed: true)

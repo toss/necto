@@ -221,14 +221,39 @@ final class NectoAppModel {
         position: NectoPluginSidebarSection.InsertionPosition,
         target: NectoTarget?
     ) {
-        let active = source.kind == .device ? activeDevicePlugins(for: target) : enabledPlugins
-        let disabled = source.kind == .device ? disabledDevicePlugins(for: target) : []
+        let ids = sidebarPluginIDs(in: source.kind, for: target)
         let saved = pluginSidebar.reorder(
             source, relativeTo: anchor, position: position,
-            activePluginIDs: active.map(\.id), disabledPluginIDs: disabled.map(\.id)
+            activePluginIDs: ids.active, disabledPluginIDs: ids.disabled
         )
         if saved && source.kind == .desktop {
             plugins = NectoPluginLibrary.sorted(plugins, by: pluginSidebar[.desktop].pluginIDs)
+        }
+    }
+
+    func moveSidebar(
+        _ source: NectoPluginSidebarState.ItemLocation,
+        to destination: NectoPluginSidebarSection.MoveDestination,
+        in kind: NectoPluginSidebarStore.Kind,
+        target: NectoTarget?
+    ) {
+        let ids = sidebarPluginIDs(in: kind, for: target)
+        let saved = pluginSidebar.move(
+            source, to: destination, in: kind,
+            activePluginIDs: ids.active, disabledPluginIDs: ids.disabled
+        )
+        if saved && kind == .desktop {
+            plugins = NectoPluginLibrary.sorted(plugins, by: pluginSidebar[.desktop].pluginIDs)
+        }
+    }
+
+    func sidebarPluginIDs(
+        in kind: NectoPluginSidebarStore.Kind,
+        for target: NectoTarget?
+    ) -> (active: [String], disabled: [String]) {
+        switch kind {
+        case .device: (activeDevicePlugins(for: target).map(\.id), disabledDevicePlugins(for: target).map(\.id))
+        case .desktop: (enabledPlugins.map(\.id), [])
         }
     }
 

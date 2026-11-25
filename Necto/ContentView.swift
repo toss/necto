@@ -8,6 +8,7 @@ import SwiftUI
 struct ContentView: View {
     let model: NectoAppModel
     @State private var window: NectoWindowState
+    @State private var sidebarDrag = NectoPluginSidebarDrag()
 
     init(model: NectoAppModel) {
         self.model = model
@@ -42,7 +43,10 @@ struct ContentView: View {
             .environment(\.locale, selectedLanguage.locale)
         .background(NectoWindowAttachment(state: window).frame(width: 0, height: 0))
         .task { await model.load(); claimBackgroundPanel() }
-        .onChange(of: window.isMain) { _, _ in claimBackgroundPanel() }
+        .onChange(of: window.isMain) { _, isMain in
+            if !isMain { sidebarDrag.clear() }
+            claimBackgroundPanel()
+        }
         .onChange(of: window.selectedPluginID) { _, _ in claimBackgroundPanel() }
         .onChange(of: window.isShowingSettings) { _, _ in claimBackgroundPanel() }
         .onChange(of: model.enabledPlugins.map { "\($0.id)|\($0.contentIdentity)|\($0.principal?.sourceIdentity ?? "")" }) { _, _ in claimBackgroundPanel() }
@@ -152,8 +156,23 @@ struct ContentView: View {
         var id: UUID { folder.id }
     }
 
+    private var sidebarDragContext: NectoPluginSidebarDrag.Context {
+        let target = window.selectedTarget
+        let device = model.sidebarPluginIDs(in: .device, for: target)
+        return .init(
+            target: target,
+            device: .init(
+                layout: model.pluginSidebar[.device], activePluginIDs: device.active, disabledPluginIDs: device.disabled
+            ),
+            desktop: .init(
+                layout: model.pluginSidebar[.desktop], activePluginIDs: model.sidebarPluginIDs(in: .desktop, for: target).active
+            )
+        )
+    }
+
     /// A `List` for its selection, keyboard, accessibility and reordering.
     private var sidebarList: some View {
+        let context = sidebarDragContext
         let activeDevice = window.activeDevicePlugins
         let disabledDevice = window.disabledDevicePlugins
         let showsDevice = model.pluginSidebar[.device].isVisible(
@@ -199,7 +218,7 @@ struct ContentView: View {
                     Section {
                         pluginGroup("Device Plugins", kind: .device, showsSearch: true)
                             .plainRow()
-                        pluginRows(in: .device, active: activeDevice, disabled: disabledDevice)
+                        pluginRows(in: .device, active: activeDevice, disabled: disabledDevice, context: context)
                     }
                     .id(window.selectedTarget)
                 }
@@ -208,7 +227,7 @@ struct ContentView: View {
                     Section {
                         pluginGroup("Desktop Plugins", kind: .desktop, showsSearch: !showsDevice)
                             .plainRow()
-                        pluginRows(in: .desktop, active: model.enabledPlugins)
+                        pluginRows(in: .desktop, active: model.enabledPlugins, context: context)
                     }
                 }
             }
@@ -220,6 +239,8 @@ struct ContentView: View {
             // AppKit rejects a zero minimum; use the same height as the rows themselves.
             .environment(\.defaultMinListRowHeight, NectoTheme.rowHeight * scale)
             .clipped()
+            .onChange(of: context) { _, _ in sidebarDrag.clear() }
+            .onDisappear { sidebarDrag.clear() }
             .onChange(of: Set(model.connectedApps.map(\.id))) { previous, current in
                 guard !current.subtracting(previous).isEmpty, let first = model.apps.first else { return }
                 // Wait for List to apply the inserted rows before resolving their positions.
@@ -272,14 +293,20 @@ struct ContentView: View {
     private func pluginRows(
         in kind: NectoPluginSidebarStore.Kind,
         active: [NectoInstalledPlugin],
-        disabled: [NectoInstalledPlugin] = []
+        disabled: [NectoInstalledPlugin] = [],
+        context: NectoPluginSidebarDrag.Context
     ) -> some View {
-        let section = model.pluginSidebar[kind]
-        let target = window.selectedTarget
+        let section = context[kind]
+        func allowsDrop(to destination: NectoPluginSidebarSection.MoveDestination) -> Bool {
+            context == sidebarDragContext && sidebarDrag.allowsDrop(to: destination, in: kind, context: context)
+        }
         return NectoPluginSidebarRows(
             kind: kind,
-            siblingsByParent: section.visibleSiblings(
-                activePluginIDs: active.map(\.id), disabledPluginIDs: disabled.map(\.id)
+            siblingsByParent: section.layout.visibleSiblings(
+                activePluginIDs: section.activePluginIDs, disabledPluginIDs: section.disabledPluginIDs
+            ),
+            visibleRows: section.layout.visibleRows(
+                activePluginIDs: section.activePluginIDs, disabledPluginIDs: section.disabledPluginIDs
             ),
             plugins: Dictionary((active + disabled).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
             scale: scale,
@@ -291,13 +318,27 @@ struct ContentView: View {
                 deleteFolder: { id in editSidebar(kind) { try $0.deleteFolder(id) } },
                 setEnabled: { model.setPlugin($0, enabled: $1) },
                 reorder: { source, anchor, position, parentID in
-                    guard kind == .desktop || target == window.selectedTarget else { return }
+                    let location = NectoPluginSidebarState.ItemLocation(kind: kind, id: source, parentID: parentID)
+                    guard context == sidebarDragContext, sidebarDrag.source(in: context) == location else { return }
+                    _ = sidebarDrag.takeNativeSource(in: context)
                     model.reorderSidebar(
-                        .init(kind: kind, id: source, parentID: parentID),
+                        location,
                         relativeTo: .init(kind: kind, id: anchor, parentID: parentID),
                         position: position,
-                        target: target
+                        target: context.target
                     )
+                },
+                dragProvider: { row in
+                    guard context == sidebarDragContext else { return nil }
+                    return sidebarDrag.provider(for: .init(kind: kind, id: row.id, parentID: row.parentID), in: context)
+                },
+                acceptsDrop: { context == sidebarDragContext && sidebarDrag.acceptsDrop(in: context) },
+                allowsDrop: allowsDrop,
+                receiveDrop: { destination, providers in
+                    guard allowsDrop(to: destination) else { return false }
+                    return sidebarDrag.receive(providers, context: context, currentContext: { sidebarDragContext }) { source in
+                        model.moveSidebar(source, to: destination, in: kind, target: context.target)
+                    }
                 }
             )
         )

@@ -210,6 +210,26 @@ extension NectoPluginSidebarSection {
         return (source, anchor, position)
     }
 
+    /// Resolves a gap at a root row edge or at the end of the section.
+    static func rootDestination(at gap: Int, in rows: [Row]) -> MoveDestination? {
+        guard (0...rows.count).contains(gap) else { return nil }
+        let next = rows.indices.contains(gap) ? rows[gap] : nil
+        let before = next.flatMap { $0.depth == 1 ? $0 : nil }
+        if let before, before.canReorder {
+            return .beside(before.id, position: .before, parentID: nil)
+        }
+
+        let previousID = gap > 0 ? rows[gap - 1].id : nil
+        let after = rows.first { $0.depth == 1 && ($0.lastVisibleDescendantID ?? $0.id) == previousID }
+        if let after, after.canReorder {
+            return .beside(after.id, position: .after, parentID: nil)
+        }
+
+        // Dimmed root rows still mark section boundaries.
+        guard before != nil || after != nil else { return nil }
+        return .into(parentID: nil)
+    }
+
     func visibleRows(activePluginIDs: [String], disabledPluginIDs: [String]) -> [Row] {
         let availableIDs = activePluginIDs + disabledPluginIDs
         let active = Set(activePluginIDs)

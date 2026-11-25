@@ -231,11 +231,11 @@ if (sidebarFolders) sidebarFolders.innerHTML = `
     <span class="gallery-folder-actions" aria-hidden="true"><span>${newFolderIcon}</span><span>${searchIcon}</span></span>
   </div>
   <details open>
-    <summary class="necto-sidebar-item">${disclosure}${folderIcon}<span>Tools</span></summary>
+    <summary class="necto-sidebar-item gallery-root-drop-target">${disclosure}${folderIcon}<span>Tools</span></summary>
     <div class="gallery-folder-children">
       <div class="necto-sidebar-item">${netIcon}<span>Network</span><span class="necto-trailing">1.0.0</span></div>
       <details>
-        <summary class="necto-sidebar-item gallery-folder-dimmed">${disclosure}${folderIcon}<span>Archive</span></summary>
+        <summary class="necto-sidebar-item gallery-folder-dimmed gallery-folder-drop-target">${disclosure}${folderIcon}<span>Archive</span></summary>
         <div class="gallery-folder-children">
           <div class="necto-sidebar-item gallery-folder-dimmed">${logIcon}<span>Events</span><span class="necto-trailing">off</span></div>
         </div>
