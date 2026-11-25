@@ -230,6 +230,18 @@ extension NectoPluginSidebarSection {
         return .into(parentID: nil)
     }
 
+    /// Resolves a child row's top edge within its expanded parent.
+    static func childDestination(before id: Item.ID, in siblings: [Row]) -> MoveDestination? {
+        guard let index = siblings.firstIndex(where: { $0.id == id }),
+              let parentID = siblings[index].parentID else { return nil }
+        if siblings[index].canReorder {
+            return .beside(id, position: .before, parentID: parentID)
+        }
+        // A dimmed folder still bounds a gap after a reorderable sibling.
+        guard index > 0, siblings[index - 1].canReorder else { return nil }
+        return .beside(siblings[index - 1].id, position: .after, parentID: parentID)
+    }
+
     func visibleRows(activePluginIDs: [String], disabledPluginIDs: [String]) -> [Row] {
         let availableIDs = activePluginIDs + disabledPluginIDs
         let active = Set(activePluginIDs)

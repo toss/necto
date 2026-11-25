@@ -157,8 +157,8 @@ h3.stepped { margin: var(--necto-space-5) 0 var(--necto-space-1); font-size: 14p
   border-radius:var(--necto-radius-control);
   pointer-events:none;
 }
-.gallery-root-drop-target { position:relative; }
-.gallery-root-drop-target::before {
+.gallery-insertion-drop-target { position:relative; }
+.gallery-insertion-drop-target::before {
   content:"";
   position:absolute;
   inset:0 0 auto;

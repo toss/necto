@@ -114,6 +114,48 @@ struct NectoPluginSidebarSectionTests {
         #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .folder(other), .plugin("off")])
     }
 
+    @Test("A child row edge inserts before that child and preserves hidden sibling order")
+    func insertBeforeVisibleChild() throws {
+        let tools = Folder(name: "Tools", children: [.plugin("a"), .plugin("hidden"), .plugin("b"), .plugin("c")])
+        let saved = try Section(items: [.plugin("root"), .folder(tools)])
+        let active = ["root", "a", "b", "c"]
+        let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
+        let destination = try #require(Section.childDestination(before: .plugin("b"), in: siblings[tools.id, default: []]))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .plugin("root"), parentID: nil),
+            to: destination, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+
+        var updated = tools
+        updated.children = [.plugin("a"), .plugin("hidden"), .plugin("root"), .plugin("b"), .plugin("c")]
+        #expect(moved?.items == [.folder(updated)])
+    }
+
+    @Test("The edge above a dimmed child folder preserves the preceding sibling subtree when inserting a folder")
+    func moveFolderBeforeDimmedSibling() throws {
+        let moving = Folder(name: "Work", children: [.plugin("payload")], isCollapsed: true)
+        let source = Folder(name: "Source", children: [.folder(moving)])
+        let preceding = Folder(name: "Work", children: [.plugin("active")])
+        let dimmed = Folder(name: "Unavailable", children: [.plugin("missing")])
+        let tools = Folder(name: "Tools", children: [.folder(preceding), .plugin("hidden"), .folder(dimmed)])
+        let saved = try Section(items: [.folder(source), .folder(tools)])
+        let active = ["payload", "active"]
+        let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
+        let destination = try #require(Section.childDestination(before: .folder(dimmed.id), in: siblings[tools.id, default: []]))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .folder(moving.id), parentID: source.id),
+            to: destination, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+
+        var emptied = source
+        emptied.children = []
+        var renamed = moving
+        renamed.name = "Work(1)"
+        var updated = tools
+        updated.children = [.folder(preceding), .folder(renamed), .plugin("hidden"), .folder(dimmed)]
+        #expect(moved?.items == [.folder(emptied), .folder(updated)])
+    }
+
     @Test("Reordering a nested folder moves its entire subtree within the same parent")
     func reorderNestedFolder() throws {
         let dimmedChild = Folder(name: "Unavailable", children: [.plugin("unavailable")], isCollapsed: true)

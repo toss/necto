@@ -55,7 +55,7 @@ struct NectoPluginSidebarRows: View {
             case .plugin(let id):
                 if let plugin = plugins[id] {
                     pluginRow(plugin, isDimmed: row.isDimmed)
-                        .overlay { rootEdges(for: row) }
+                        .overlay { insertionEdges(for: row) }
                         .moveDisabled(provider == nil)
                         .tag(entry.id)
                         .itemProvider(provider)
@@ -95,17 +95,20 @@ struct NectoPluginSidebarRows: View {
     }
 
     @ViewBuilder
-    private func rootEdges(for row: Section.Row) -> some View {
-        if row.depth == 1 || row.id == visibleRows.last?.id {
+    private func insertionEdges(for row: Section.Row) -> some View {
+        let top = topDestination(for: row)
+        let bottom = row.id == visibleRows.last?.id
+            ? Section.rootDestination(at: visibleRows.count, in: visibleRows) : nil
+        if top != nil || bottom != nil {
             GeometryReader { geometry in
                 let height = geometry.size.height * 0.22
                 VStack(spacing: 0) {
-                    if row.depth == 1, let index = visibleRows.firstIndex(where: { $0.id == row.id }) {
-                        rootEdge(at: index, alignment: .top).frame(height: height)
+                    if let top {
+                        insertionEdge(to: top, alignment: .top).frame(height: height)
                     }
                     Spacer(minLength: 0)
-                    if row.id == visibleRows.last?.id {
-                        rootEdge(at: visibleRows.count, alignment: .bottom).frame(height: height)
+                    if let bottom {
+                        insertionEdge(to: bottom, alignment: .bottom).frame(height: height)
                     }
                 }
                 .padding(.horizontal, 8)
@@ -113,13 +116,20 @@ struct NectoPluginSidebarRows: View {
         }
     }
 
-    @ViewBuilder
-    private func rootEdge(at gap: Int, alignment: Alignment) -> some View {
-        if let destination = Section.rootDestination(at: gap, in: visibleRows) {
-            let allowsDrop = { actions.allowsDrop(destination) }
-            NectoPluginSidebarDropTarget(highlight: .insertion(alignment), acceptsDrop: allowsDrop, allowsDrop: allowsDrop) {
-                actions.receiveDrop(destination, $0)
-            }
+    private func topDestination(for row: Section.Row) -> Section.MoveDestination? {
+        if let parentID = row.parentID {
+            return Section.childDestination(before: row.id, in: siblingsByParent[parentID, default: []])
+        }
+        guard let index = visibleRows.firstIndex(where: { $0.id == row.id }) else { return nil }
+        return Section.rootDestination(at: index, in: visibleRows)
+    }
+
+    private func insertionEdge(to destination: Section.MoveDestination, alignment: Alignment) -> some View {
+        let allowsDrop = { actions.allowsDrop(destination) }
+        return NectoPluginSidebarDropTarget(
+            highlight: .insertion(alignment), acceptsDrop: allowsDrop, allowsDrop: allowsDrop
+        ) {
+            actions.receiveDrop(destination, $0)
         }
     }
 
@@ -169,7 +179,7 @@ struct NectoPluginSidebarRows: View {
                     .position(x: size.width / 2, y: size.height / 2)
                 }
             }
-            .overlay { rootEdges(for: row) }
+            .overlay { insertionEdges(for: row) }
             .accessibilityIdentifier("sidebar.plugin.folder.\(kind.rawValue).\(folder.id.uuidString)")
             .contextMenu {
                 if row.depth < Section.maximumFolderDepth {
