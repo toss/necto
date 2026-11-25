@@ -274,29 +274,38 @@ struct SidebarItem: View {
 /// `ListOutlineItem.item(forRowAt:)` then reads past the end of the row ids.
 ///
 /// There is no SwiftUI spelling for this, so it is reached through the view it belongs
-/// to. Applied on every update because a row view is reused as the list scrolls.
+/// to. Recheck after updates because AppKit can reuse a row as the list scrolls.
 private struct ListChromeOff: NSViewRepresentable {
     let isSelected: Bool
 
     func makeNSView(context _: Context) -> NSView {
         let view = NSView()
-        // A row has no ancestors yet while it is being made.
-        DispatchQueue.main.async { apply(from: view) }
+        scheduleUpdate(from: view)
         return view
     }
 
     func updateNSView(_ view: NSView, context _: Context) {
-        apply(from: view)
+        scheduleUpdate(from: view)
+    }
+
+    private func scheduleUpdate(from view: NSView) {
+        // Changing the enclosing row or table style can invalidate layout.
+        DispatchQueue.main.async { [weak view] in
+            guard let view else { return }
+            apply(from: view)
+        }
     }
 
     private func apply(from view: NSView) {
         var ancestor = view.superview
         while let current = ancestor {
-            if let row = current as? NSTableRowView {
+            if let row = current as? NSTableRowView, row.selectionHighlightStyle != .none {
                 row.selectionHighlightStyle = .none
             }
             if let table = current as? NSTableView {
-                table.selectionHighlightStyle = .none
+                if table.selectionHighlightStyle != .none {
+                    table.selectionHighlightStyle = .none
+                }
                 return
             }
             ancestor = current.superview
