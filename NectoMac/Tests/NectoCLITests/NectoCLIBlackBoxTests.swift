@@ -38,6 +38,45 @@ struct NectoCLIBlackBoxTests {
         }
     }
 
+    @Test("sidebar folder commands send IDs and report the result returned by Necto", arguments: ["create", "rename", "delete"])
+    func sidebarFolderCommand(action: String) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let id = "A90E4362-A108-4B7C-98C2-64E6D532CD37"
+        let parent = "30375E6D-4F88-43F8-90B2-912EDF1864AC"
+        let selectors: [String]
+        let input: NectoJSONValue
+        var response: NectoJSONValue = ["section": "desktop", "folderID": .string(id), "name": "Tools(1)", "changed": true]
+        switch action {
+        case "create":
+            selectors = ["Tools", "--parent", parent.lowercased(), "--json"]
+            input = ["section": "desktop", "action": "createFolder", "name": "Tools", "parentID": .string(parent)]
+        case "rename":
+            selectors = [id.lowercased(), "Tools(1)"]
+            input = ["section": "desktop", "action": "renameFolder", "folderID": .string(id), "name": "Tools(1)"]
+            response = ["section": "desktop", "folderID": .string(id), "name": "Tools(1)", "changed": false]
+        default:
+            selectors = [id, "--json"]
+            input = ["section": "desktop", "action": "deleteFolder", "folderID": .string(id)]
+            response = ["section": "desktop", "folderID": .string(id), "name": "Tools(1)", "changed": true, "deleted": true]
+        }
+        let value = response
+        let server = fixture.respond { request, session in
+            #expect(request.kind == .sidebar)
+            #expect(request.input == input)
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: value))
+        }
+        let result = try await fixture.run(["sidebar", "folder", action, "--section", "desktop"] + selectors)
+        try await server.value
+        #expect(result.status == 0)
+        #expect(result.error.isEmpty)
+        if action == "rename" {
+            #expect(result.output == "Unchanged Tools(1) [folder:\(id)]\n")
+        } else {
+            #expect(try result.json() == value)
+        }
+    }
+
     @Test("device discovery prints usable identifiers grouped by device")
     func deviceDiscovery() async throws {
         let fixture = try CLIProcessFixture()
@@ -116,6 +155,8 @@ struct NectoCLIBlackBoxTests {
         ["plugin", "subscribe", "sample", "observe", "--desktop", "--device", "sim-1", "--app", "com.example.app"],
         ["sidebar", "list"],
         ["sidebar", "list", "--section", "all"],
+        ["sidebar", "folder", "create", "Tools"],
+        ["sidebar", "folder", "delete", "Tools", "--section", "device"],
     ])
     func invalidScopes(arguments: [String]) async throws {
         let fixture = try CLIProcessFixture()

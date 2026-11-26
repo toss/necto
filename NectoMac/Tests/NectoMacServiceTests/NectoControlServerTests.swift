@@ -17,7 +17,10 @@ private struct StubHandler: NectoControlHandling {
         return ["deleted": true, "pluginID": .string(id)]
     }
     func sidebar(_ request: NectoSidebarRequest) async throws -> NectoJSONValue {
-        ["section": .string(request.section.rawValue), "items": []]
+        switch request.action {
+        case .list: ["section": .string(request.section.rawValue), "items": []]
+        case .folder: request.input
+        }
     }
     var streamForever = false
     var invokeForever = false
@@ -131,6 +134,34 @@ struct NectoControlServerTests {
         }
         for input: NectoJSONValue in [["action": "list"], ["section": "all", "action": "list"],
                                        ["section": "device", "action": "replace"]] {
+            try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
+            #expect(try await client.receive().error?.code == "INVALID_INPUT")
+        }
+    }
+
+    @Test("sidebar folder commands route typed UUIDs and reject malformed arguments")
+    func sidebarFolderRoundTrip() async throws {
+        let (server, url) = try makeServer()
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        let id = "A90E4362-A108-4B7C-98C2-64E6D532CD37"
+        let commands: [NectoJSONValue] = [
+            ["section": "desktop", "action": "createFolder", "name": "Tools"],
+            ["section": "device", "action": "createFolder", "name": "Logs", "parentID": .string(id)],
+            ["section": "desktop", "action": "renameFolder", "folderID": .string(id), "name": "Logs"],
+            ["section": "device", "action": "deleteFolder", "folderID": .string(id)],
+        ]
+        for input in commands {
+            try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
+            #expect(try await client.receive().value == input)
+        }
+        let malformed: [NectoJSONValue] = [
+            ["section": "device", "action": "createFolder", "name": "Logs", "parentID": 1],
+            ["section": "device", "action": "createFolder"],
+            ["section": "desktop", "action": "renameFolder", "folderID": "Logs", "name": "Traces"],
+            ["section": "desktop", "action": "deleteFolder"],
+        ]
+        for input in malformed {
             try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
             #expect(try await client.receive().error?.code == "INVALID_INPUT")
         }

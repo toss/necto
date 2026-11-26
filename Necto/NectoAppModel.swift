@@ -257,7 +257,7 @@ final class NectoAppModel {
         }
     }
 
-    private func sidebarFromCLI(_ request: NectoSidebarRequest) -> NectoJSONValue {
+    private func sidebarFromCLI(_ request: NectoSidebarRequest) throws -> NectoJSONValue {
         switch (request.action, request.section) {
         case (.list, .device):
             let targets = Set(connectedApps.map(\.target))
@@ -265,6 +265,8 @@ final class NectoAppModel {
             return pluginSidebar.listForCLI(.device, catalog: catalog, disabledIDs: disabledIDs)
         case (.list, .desktop):
             return pluginSidebar.listForCLI(.desktop, catalog: plugins, disabledIDs: disabledIDs)
+        case (.folder(let edit), let section):
+            return try pluginSidebar.editFolderForCLI(edit, in: section == .device ? .device : .desktop)
         }
     }
 
@@ -530,7 +532,7 @@ final class NectoAppModel {
             },
             sidebar: { [weak self] request in
                 guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
-                return await self.sidebarFromCLI(request)
+                return try await self.sidebarFromCLI(request)
             }
         ))
         do {

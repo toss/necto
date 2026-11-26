@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import NectoCLIService
 import NectoModel
 import Observation
 import OSLog
@@ -82,11 +83,47 @@ final class NectoPluginSidebarState {
         _ kind: NectoPluginSidebarStore.Kind,
         _ change: (inout NectoPluginSidebarSection) throws -> Result
     ) throws -> Result {
-        var updated = self[kind]
+        let current = self[kind]
+        var updated = current
         let result = try change(&updated)
-        try store.save(updated, for: kind)
-        sections[kind] = updated
+        if updated != current {
+            try store.save(updated, for: kind)
+            sections[kind] = updated
+        }
         return result
+    }
+
+    func editFolderForCLI(_ command: NectoSidebarRequest.FolderEdit, in kind: NectoPluginSidebarStore.Kind) throws -> NectoJSONValue {
+        do {
+            return try edit(kind) { section in
+                let original = section
+                let id: UUID
+                switch command {
+                case .create(let name, let parentID):
+                    id = try section.createFolder(defaultName: name, in: parentID, revealParent: false)
+                case .rename(let folderID, let name):
+                    id = folderID
+                    try section.renameFolder(id, to: name)
+                case .delete(let folderID):
+                    id = folderID
+                    try section.deleteFolder(id)
+                }
+
+                let before = original.folder(withID: id)
+                let after = section.folder(withID: id)
+                guard let folder = after ?? before else { throw NectoPluginSidebarSection.ValidationError.folderNotFound }
+                var result: [String: NectoJSONValue] = [
+                    "section": .string(kind.rawValue), "folderID": .string(id.uuidString),
+                    "name": .string(folder.name), "changed": .bool(before?.name != after?.name),
+                ]
+                if case .delete = command { result["deleted"] = true }
+                return .object(result)
+            }
+        } catch let error as NectoPluginSidebarSection.ValidationError {
+            throw NectoBridgeError(code: .invalidInput, message: error.description)
+        } catch NectoPluginSidebarStore.StorageError.invalidSavedSection {
+            throw NectoBridgeError(code: .providerFailed, message: "The saved \(kind.rawValue) sidebar is invalid and could not be updated.")
+        }
     }
 
     func setEnabled(

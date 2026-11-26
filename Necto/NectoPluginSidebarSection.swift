@@ -68,7 +68,7 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         }
     }
 
-    enum ValidationError: Error, Equatable {
+    enum ValidationError: Error, Equatable, CustomStringConvertible {
         case emptyFolderName
         case duplicateFolderName
         case duplicateFolderID
@@ -76,6 +76,18 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         case folderDepthExceeded
         case parentFolderNotFound
         case folderNotFound
+
+        var description: String {
+            switch self {
+            case .emptyFolderName: "A folder name cannot be empty."
+            case .duplicateFolderName: "A sibling folder already has that name."
+            case .duplicateFolderID: "A folder ID appears more than once in this section."
+            case .duplicatePluginID: "A plugin ID appears more than once in this section."
+            case .folderDepthExceeded: "A sidebar folder can be at most \(NectoPluginSidebarSection.maximumFolderDepth) levels deep."
+            case .parentFolderNotFound: "The parent folder does not exist in this section."
+            case .folderNotFound: "The folder does not exist in this section."
+            }
+        }
     }
 
     static let maximumFolderDepth = 3
@@ -122,8 +134,8 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
     }
 
     @discardableResult
-    mutating func createFolder(defaultName: String, in parentID: UUID? = nil) throws -> UUID {
-        try appendFolder(to: parentID) { siblings in
+    mutating func createFolder(defaultName: String, in parentID: UUID? = nil, revealParent: Bool = true) throws -> UUID {
+        try appendFolder(to: parentID, revealParent: revealParent) { siblings in
             var names = Self.folderNames(in: siblings)
             let baseName = defaultName.trimmingCharacters(in: .whitespacesAndNewlines)
             return Self.reserveFolderName(baseName, in: &names)
@@ -297,14 +309,16 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         return changed
     }
 
-    private mutating func appendFolder(to parentID: UUID?, name: ([Item]) -> String) throws -> UUID {
+    private mutating func appendFolder(
+        to parentID: UUID?, revealParent: Bool = true, name: ([Item]) -> String
+    ) throws -> UUID {
         let id = UUID()
         if let parentID {
-            try updateFolder(parentID, expandingAncestors: true, missingError: .parentFolderNotFound) { parent, _ in
+            try updateFolder(parentID, expandingAncestors: revealParent, missingError: .parentFolderNotFound) { parent, _ in
                 var parent = parent
                 let folder = Folder(id: id, name: name(parent.children))
                 parent.children.append(.folder(folder))
-                parent.isCollapsed = false
+                if revealParent { parent.isCollapsed = false }
                 return [.folder(parent)]
             }
         } else {

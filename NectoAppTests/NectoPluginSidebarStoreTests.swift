@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import NectoCLIService
 import NectoMacService
 import NectoModel
 import Testing
@@ -85,6 +86,85 @@ struct NectoPluginSidebarStoreTests {
         #expect(other["items"]?.arrayValue?.map { $0["id"]?.stringValue } == ["desktop-only"])
         #expect(fixture.defaults.persistentDomain(forName: fixture.suiteName) as NSDictionary? == before)
         #expect(state[.device] == device)
+    }
+
+    @Test("CLI folder edits preserve collapsed ancestors and promote saved children in place")
+    func sidebarFolderEdits() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let sibling = Section.Folder(name: "Archive", isCollapsed: true)
+        var promoted = Section.Folder(name: "Archive", children: [.plugin("nested-offline")], isCollapsed: true)
+        let removed = Section.Folder(name: "Old", children: [.plugin("offline"), .folder(promoted)], isCollapsed: true)
+        var parent = Section.Folder(name: "Tools", children: [
+            .plugin("front"), .folder(sibling), .folder(removed), .plugin("tail"),
+        ], isCollapsed: true)
+        let desktop = try Section(items: [.plugin("desktop-only")])
+        try fixture.store.save(try Section(items: [.folder(parent)]), for: .device)
+        try fixture.store.save(desktop, for: .desktop)
+        _ = NectoPluginLibrary.setEnabled("offline", false, in: fixture.defaults)
+        let state = NectoPluginSidebarState(store: fixture.store)
+
+        let created = try state.editFolderForCLI(.create(name: " Archive ", parentID: removed.id), in: .device)
+        let id = try #require(created["folderID"]?.stringValue.flatMap(UUID.init(uuidString:)))
+        #expect(created["section"] == "device")
+        #expect(created["name"] == "Archive(1)")
+        #expect(created["changed"] == true)
+        #expect(state[.device].folder(withID: parent.id)?.isCollapsed == true)
+        #expect(state[.device].folder(withID: removed.id)?.isCollapsed == true)
+        #expect(state[.device].folder(withID: id)?.isCollapsed == false)
+
+        let renamed = try state.editFolderForCLI(.rename(id: id, name: " New Name "), in: .device)
+        #expect(renamed["folderID"] == .string(id.uuidString))
+        #expect(renamed["name"] == "New Name")
+        #expect(renamed["changed"] == true)
+        let key = Store.Kind.device.sectionKey
+        let saved = fixture.defaults.data(forKey: key)
+        let unchanged = try state.editFolderForCLI(.rename(id: id, name: " New Name "), in: .device)
+        #expect(unchanged["changed"] == false)
+        #expect(fixture.defaults.data(forKey: key) == saved)
+
+        let deleted = try state.editFolderForCLI(.delete(id: removed.id), in: .device)
+        #expect(deleted["folderID"] == .string(removed.id.uuidString))
+        #expect(deleted["deleted"] == true)
+        promoted.name = "Archive(1)"
+        parent.children = [
+            .plugin("front"), .folder(sibling), .plugin("offline"), .folder(promoted),
+            .folder(.init(id: id, name: "New Name")), .plugin("tail"),
+        ]
+        #expect(state[.device].items == [.folder(parent)])
+        #expect(NectoPluginSidebarState(store: fixture.store)[.device] == state[.device])
+        #expect(try fixture.store.load(.desktop) == desktop)
+        #expect(!NectoPluginLibrary.isEnabled("offline", in: fixture.defaults))
+    }
+
+    @Test("Invalid CLI folder edits keep the persisted and published section")
+    func invalidSidebarFolderEdits() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let deepest = Section.Folder(name: "Deepest")
+        let child = Section.Folder(name: "Child", children: [.folder(deepest)])
+        let parent = Section.Folder(name: "Parent", children: [.folder(child)])
+        let sibling = Section.Folder(name: "Sibling")
+        let section = try Section(items: [.folder(parent), .folder(sibling)])
+        try fixture.store.save(section, for: .desktop)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let key = Store.Kind.desktop.sectionKey
+        let saved = fixture.defaults.data(forKey: key)
+        let unknown = UUID()
+        let cases: [(NectoSidebarRequest.FolderEdit, String)] = [
+            (.create(name: " \n", parentID: nil), "A folder name cannot be empty."),
+            (.rename(id: sibling.id, name: "Parent"), "A sibling folder already has that name."),
+            (.create(name: "Unplaced", parentID: unknown), "The parent folder does not exist in this section."),
+            (.create(name: "Too Deep", parentID: deepest.id), "A sidebar folder can be at most 3 levels deep."),
+            (.delete(id: unknown), "The folder does not exist in this section."),
+        ]
+        for (command, message) in cases {
+            #expect(throws: NectoBridgeError(code: .invalidInput, message: message)) {
+                try state.editFolderForCLI(command, in: .desktop)
+            }
+            #expect(state[.desktop] == section)
+            #expect(fixture.defaults.data(forKey: key) == saved)
+        }
     }
 
     @Test("Legacy orders migrate once per section with their first occurrence of each ID")
