@@ -75,6 +75,7 @@ struct NectoPluginSidebarRows: View {
                     )
                 } label: {
                     folderLabel(folder, row: row)
+                        .modifier(FolderHover(scale: scale))
                         .overlay { dropRegions(for: row, in: siblings, center: .into(parentID: folder.id)) }
                         .tag(entry.id)
                         .listRowSeparator(.hidden)
@@ -155,5 +156,22 @@ struct NectoPluginSidebarRows: View {
                 Button(NectoL10n.text("Rename Folder")) { actions.renameFolder(folder) }
                 Button(NectoL10n.text("Delete Folder"), role: .destructive) { actions.deleteFolder(folder.id) }
             }
+    }
+}
+
+private struct FolderHover: ViewModifier {
+    let scale: CGFloat
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: NectoTheme.radiusControl)
+                    .fill(isHovering ? NectoTheme.hover : .clear)
+                    .frame(height: NectoTheme.rowHeight * scale)
+                    .padding(.trailing, 8)
+                    .allowsHitTesting(false)
+            }
+            .onHover { isHovering = $0 }
     }
 }
