@@ -471,7 +471,15 @@ struct ContentView: View {
         Binding(
             get: { sidebarSelection.wrappedValue.map(NectoPluginSidebarRowID.plugin) },
             set: { row in
-                if case .plugin(let id) = row { sidebarSelection.wrappedValue = id }
+                switch row {
+                case .plugin(let id):
+                    sidebarSelection.wrappedValue = id
+                case .folder(let kind, let id):
+                    guard let folder = model.pluginSidebar[kind].folder(withID: id) else { return }
+                    setFolderExpanded(folder.isCollapsed, folderID: id, in: kind)
+                case nil:
+                    break
+                }
             }
         )
     }
