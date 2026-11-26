@@ -210,36 +210,26 @@ extension NectoPluginSidebarSection {
         return (source, anchor, position)
     }
 
-    /// Resolves a gap at a root row edge or at the end of the section.
-    static func rootDestination(at gap: Int, in rows: [Row]) -> MoveDestination? {
-        guard (0...rows.count).contains(gap) else { return nil }
-        let next = rows.indices.contains(gap) ? rows[gap] : nil
-        let before = next.flatMap { $0.depth == 1 ? $0 : nil }
-        if let before, before.canReorder {
-            return .beside(before.id, position: .before, parentID: nil)
+    /// A row edge belongs to that row's sibling list, even at the end of an expanded subtree.
+    static func dropDestination(
+        beside id: Item.ID, position: InsertionPosition, in siblings: [Row]
+    ) -> MoveDestination? {
+        guard let index = siblings.firstIndex(where: { $0.id == id }) else { return nil }
+        let row = siblings[index]
+        if row.canReorder {
+            return .beside(id, position: position, parentID: row.parentID)
         }
-
-        let previousID = gap > 0 ? rows[gap - 1].id : nil
-        let after = rows.first { $0.depth == 1 && ($0.lastVisibleDescendantID ?? $0.id) == previousID }
-        if let after, after.canReorder {
-            return .beside(after.id, position: .after, parentID: nil)
+        // Keep the line on the same visible gap if the row itself cannot be an anchor.
+        let neighbor = position == .before ? index - 1 : index + 1
+        if siblings.indices.contains(neighbor), siblings[neighbor].canReorder {
+            let opposite: InsertionPosition = position == .before ? .after : .before
+            return .beside(siblings[neighbor].id, position: opposite, parentID: row.parentID)
         }
-
-        // Dimmed root rows still mark section boundaries.
-        guard before != nil || after != nil else { return nil }
+        // In an all-dimmed root, extracted disabled plugins appear before the folders.
+        guard position == .before, row.parentID == nil, case .folder = row.item,
+              !siblings.contains(where: \.canReorder),
+              !siblings[..<index].contains(where: { if case .folder = $0.item { true } else { false } }) else { return nil }
         return .into(parentID: nil)
-    }
-
-    /// Resolves a child row's top edge within its expanded parent.
-    static func childDestination(before id: Item.ID, in siblings: [Row]) -> MoveDestination? {
-        guard let index = siblings.firstIndex(where: { $0.id == id }),
-              let parentID = siblings[index].parentID else { return nil }
-        if siblings[index].canReorder {
-            return .beside(id, position: .before, parentID: parentID)
-        }
-        // A dimmed folder still bounds a gap after a reorderable sibling.
-        guard index > 0, siblings[index - 1].canReorder else { return nil }
-        return .beside(siblings[index - 1].id, position: .after, parentID: parentID)
     }
 
     func visibleRows(activePluginIDs: [String], disabledPluginIDs: [String]) -> [Row] {

@@ -233,7 +233,7 @@ if (sidebarFolders) sidebarFolders.innerHTML = `
   <details open>
     <summary class="necto-sidebar-item gallery-insertion-drop-target">${disclosure}${folderIcon}<span>Tools</span></summary>
     <div class="gallery-folder-children">
-      <div class="necto-sidebar-item gallery-insertion-drop-target">${netIcon}<span>Network</span><span class="necto-trailing">1.0.0</span></div>
+      <div class="necto-sidebar-item gallery-insertion-drop-target gallery-insertion-drop-after">${netIcon}<span>Network</span><span class="necto-trailing">1.0.0</span></div>
       <details>
         <summary class="necto-sidebar-item gallery-folder-dimmed gallery-folder-drop-target">${disclosure}${folderIcon}<span>Archive</span></summary>
         <div class="gallery-folder-children">

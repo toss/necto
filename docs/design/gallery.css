@@ -169,6 +169,7 @@ h3.stepped { margin: var(--necto-space-5) 0 var(--necto-space-1); font-size: 14p
   background:var(--necto-accent);
   pointer-events:none;
 }
+.gallery-insertion-drop-after::before { inset: auto 0 0; }
 .gallery-folder-children { padding-inline-start:var(--necto-space-4); }
 .gallery-plugin-search { margin-left:auto; display:flex; padding:0; border:0; background:none; color:inherit; cursor:pointer; }
 .gallery-plugin-search-popover {

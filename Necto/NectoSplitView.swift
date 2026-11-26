@@ -103,8 +103,8 @@ struct NectoSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresentabl
                 }
                 if let outline = table as? NSOutlineView {
                     DispatchQueue.main.async { [weak outline] in
-                        guard let outline, outline.indentationPerLevel != 8 else { return }
-                        outline.indentationPerLevel = 8
+                        guard let outline, outline.indentationPerLevel != NectoTheme.sidebarIndentation else { return }
+                        outline.indentationPerLevel = NectoTheme.sidebarIndentation
                     }
                 }
                 return

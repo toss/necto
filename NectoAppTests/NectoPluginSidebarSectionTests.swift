@@ -65,10 +65,12 @@ struct NectoPluginSidebarSectionTests {
         let saved = try Section(items: [.folder(tools), .plugin("hidden"), .plugin("end")])
         let active = ["tool-a", "tool-b", "end"]
         let rows = saved.visibleRows(activePluginIDs: active, disabledPluginIDs: [])
+        let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
 
-        #expect(Section.rootDestination(at: 2, in: rows) == nil)
         #expect(Section.insertion(from: [1], to: 3, in: rows)?.anchor.id == .plugin("tool-b"))
-        let rootGap = try #require(Section.rootDestination(at: 3, in: rows))
+        let rootGap = try #require(Section.dropDestination(
+            beside: .plugin("end"), position: .before, in: siblings[nil, default: []]
+        ))
         let moved = saved.candidateForMove(
             .init(kind: .device, id: .plugin("tool-a"), parentID: tools.id),
             to: rootGap, in: .device, activePluginIDs: active, disabledPluginIDs: []
@@ -78,14 +80,25 @@ struct NectoPluginSidebarSectionTests {
         #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .plugin("tool-a"), .plugin("end")])
     }
 
-    @Test("The gap after a sole expanded folder can extract its only visible child")
+    @Test("The lower edge of an expanded root folder extracts its child after the whole subtree")
     func extractToEndAfterOnlyFolder() throws {
         let folder = Folder(name: "Tools", children: [.plugin("a")])
         let saved = try Section(items: [.folder(folder), .plugin("hidden")])
         let rows = saved.visibleRows(activePluginIDs: ["a"], disabledPluginIDs: [])
+        let siblings = saved.visibleSiblings(activePluginIDs: ["a"], disabledPluginIDs: [])
 
         #expect(Section.insertion(from: [1], to: rows.count, in: rows) == nil)
-        let rootGap = try #require(Section.rootDestination(at: rows.count, in: rows))
+        let lastChild = try #require(Section.dropDestination(
+            beside: .plugin("a"), position: .after, in: siblings[folder.id, default: []]
+        ))
+        #expect(lastChild.parentID == folder.id)
+        #expect(saved.candidateForMove(
+            .init(kind: .device, id: .plugin("a"), parentID: folder.id),
+            to: lastChild, in: .device, activePluginIDs: ["a"], disabledPluginIDs: []
+        ) == nil)
+        let rootGap = try #require(Section.dropDestination(
+            beside: .folder(folder.id), position: .after, in: siblings[nil, default: []]
+        ))
         let moved = saved.candidateForMove(
             .init(kind: .device, id: .plugin("a"), parentID: folder.id),
             to: rootGap, in: .device, activePluginIDs: ["a"], disabledPluginIDs: []
@@ -95,16 +108,22 @@ struct NectoPluginSidebarSectionTests {
         #expect(moved?.items == [.folder(emptied), .plugin("a"), .plugin("hidden")])
     }
 
-    @Test("A root gap among dimmed folders extracts a disabled child without requiring a reorderable anchor")
+    @Test("An extracted disabled child is placed before the first dimmed root folder")
     func extractDisabledChildAmongDimmedRoots() throws {
         let folder = Folder(name: "Tools", children: [.plugin("off"), .plugin("missing")])
         let other = Folder(name: "Unavailable", children: [.plugin("other-missing")])
         let saved = try Section(items: [.folder(folder), .plugin("hidden"), .folder(other)])
         let rows = saved.visibleRows(activePluginIDs: [], disabledPluginIDs: ["off"])
+        let siblings = saved.visibleSiblings(activePluginIDs: [], disabledPluginIDs: ["off"])
         #expect(rows.map(\.id) == [.folder(folder.id), .plugin("off"), .folder(other.id)])
         #expect(rows[0].isDimmed && rows[2].isDimmed)
 
-        let rootGap = try #require(Section.rootDestination(at: 2, in: rows))
+        #expect(Section.dropDestination(
+            beside: .folder(other.id), position: .before, in: siblings[nil, default: []]
+        ) == nil)
+        let rootGap = try #require(Section.dropDestination(
+            beside: .folder(folder.id), position: .before, in: siblings[nil, default: []]
+        ))
         let moved = saved.candidateForMove(
             .init(kind: .device, id: .plugin("off"), parentID: folder.id),
             to: rootGap, in: .device, activePluginIDs: [], disabledPluginIDs: ["off"]
@@ -112,6 +131,7 @@ struct NectoPluginSidebarSectionTests {
         var remaining = folder
         remaining.children = [.plugin("missing")]
         #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .folder(other), .plugin("off")])
+        #expect(moved?.visibleRows(activePluginIDs: [], disabledPluginIDs: ["off"]).first?.id == .plugin("off"))
     }
 
     @Test("A child row edge inserts before that child and preserves hidden sibling order")
@@ -120,7 +140,9 @@ struct NectoPluginSidebarSectionTests {
         let saved = try Section(items: [.plugin("root"), .folder(tools)])
         let active = ["root", "a", "b", "c"]
         let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
-        let destination = try #require(Section.childDestination(before: .plugin("b"), in: siblings[tools.id, default: []]))
+        let destination = try #require(Section.dropDestination(
+            beside: .plugin("b"), position: .before, in: siblings[tools.id, default: []]
+        ))
         let moved = saved.candidateForMove(
             .init(kind: .device, id: .plugin("root"), parentID: nil),
             to: destination, in: .device, activePluginIDs: active, disabledPluginIDs: []
@@ -129,6 +151,34 @@ struct NectoPluginSidebarSectionTests {
         var updated = tools
         updated.children = [.plugin("a"), .plugin("hidden"), .plugin("root"), .plugin("b"), .plugin("c")]
         #expect(moved?.items == [.folder(updated)])
+    }
+
+    @Test("An expanded nested folder and its last child have different lower-edge destinations")
+    func insertAfterExpandedNestedFolder() throws {
+        let nested = Folder(name: "Nested", children: [.plugin("child")])
+        let tools = Folder(name: "Tools", children: [.folder(nested), .plugin("hidden"), .plugin("sibling")])
+        let saved = try Section(items: [.plugin("root"), .folder(tools)])
+        let active = ["root", "child", "sibling"]
+        let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
+        let source = NectoPluginSidebarState.ItemLocation(kind: .device, id: .plugin("root"), parentID: nil)
+
+        let folderEdge = try #require(Section.dropDestination(
+            beside: .folder(nested.id), position: .after, in: siblings[tools.id, default: []]
+        ))
+        let folderMove = saved.candidateForMove(
+            source, to: folderEdge, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+        #expect(folderMove?.folder(withID: tools.id)?.children == [
+            .folder(nested), .plugin("root"), .plugin("hidden"), .plugin("sibling"),
+        ])
+
+        let childEdge = try #require(Section.dropDestination(
+            beside: .plugin("child"), position: .after, in: siblings[nested.id, default: []]
+        ))
+        let childMove = saved.candidateForMove(
+            source, to: childEdge, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+        #expect(childMove?.folder(withID: nested.id)?.children == [.plugin("child"), .plugin("root")])
     }
 
     @Test("The edge above a dimmed child folder preserves the preceding sibling subtree when inserting a folder")
@@ -141,7 +191,9 @@ struct NectoPluginSidebarSectionTests {
         let saved = try Section(items: [.folder(source), .folder(tools)])
         let active = ["payload", "active"]
         let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
-        let destination = try #require(Section.childDestination(before: .folder(dimmed.id), in: siblings[tools.id, default: []]))
+        let destination = try #require(Section.dropDestination(
+            beside: .folder(dimmed.id), position: .before, in: siblings[tools.id, default: []]
+        ))
         let moved = saved.candidateForMove(
             .init(kind: .device, id: .folder(moving.id), parentID: source.id),
             to: destination, in: .device, activePluginIDs: active, disabledPluginIDs: []

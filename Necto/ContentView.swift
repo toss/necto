@@ -9,6 +9,7 @@ struct ContentView: View {
     let model: NectoAppModel
     @State private var window: NectoWindowState
     @State private var sidebarDrag = NectoPluginSidebarDrag()
+    @State private var sidebarDropFeedback = NectoPluginSidebarDropTarget.Feedback()
 
     init(model: NectoAppModel) {
         self.model = model
@@ -44,7 +45,7 @@ struct ContentView: View {
         .background(NectoWindowAttachment(state: window).frame(width: 0, height: 0))
         .task { await model.load(); claimBackgroundPanel() }
         .onChange(of: window.isMain) { _, isMain in
-            if !isMain { sidebarDrag.clear() }
+            if !isMain { clearSidebarDrag() }
             claimBackgroundPanel()
         }
         .onChange(of: window.selectedPluginID) { _, _ in claimBackgroundPanel() }
@@ -240,8 +241,8 @@ struct ContentView: View {
             .environment(\.defaultMinListRowHeight, NectoTheme.rowHeight * scale)
             .clipped()
             .padding(.leading, 6)
-            .onChange(of: context) { _, _ in sidebarDrag.clear() }
-            .onDisappear { sidebarDrag.clear() }
+            .onChange(of: context) { _, _ in clearSidebarDrag() }
+            .onDisappear { clearSidebarDrag() }
             .onChange(of: Set(model.connectedApps.map(\.id))) { previous, current in
                 guard !current.subtracting(previous).isEmpty, let first = model.apps.first else { return }
                 // Wait for List to apply the inserted rows before resolving their positions.
@@ -298,6 +299,9 @@ struct ContentView: View {
         context: NectoPluginSidebarDrag.Context
     ) -> some View {
         let section = context[kind]
+        let visibleRows = section.layout.visibleRows(
+            activePluginIDs: section.activePluginIDs, disabledPluginIDs: section.disabledPluginIDs
+        )
         func allowsDrop(to destination: NectoPluginSidebarSection.MoveDestination) -> Bool {
             context == sidebarDragContext && sidebarDrag.allowsDrop(to: destination, in: kind, context: context)
         }
@@ -306,9 +310,7 @@ struct ContentView: View {
             siblingsByParent: section.layout.visibleSiblings(
                 activePluginIDs: section.activePluginIDs, disabledPluginIDs: section.disabledPluginIDs
             ),
-            visibleRows: section.layout.visibleRows(
-                activePluginIDs: section.activePluginIDs, disabledPluginIDs: section.disabledPluginIDs
-            ),
+            visibleRows: visibleRows,
             plugins: Dictionary((active + disabled).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
             scale: scale,
             selectedPluginID: window.isShowingSettings ? nil : window.selectedPluginID,
@@ -322,6 +324,7 @@ struct ContentView: View {
                     let location = NectoPluginSidebarState.ItemLocation(kind: kind, id: source, parentID: parentID)
                     guard context == sidebarDragContext, sidebarDrag.source(in: context) == location else { return }
                     _ = sidebarDrag.takeNativeSource(in: context)
+                    sidebarDropFeedback.clear()
                     model.reorderSidebar(
                         location,
                         relativeTo: .init(kind: kind, id: anchor, parentID: parentID),
@@ -331,18 +334,31 @@ struct ContentView: View {
                 },
                 dragProvider: { row in
                     guard context == sidebarDragContext else { return nil }
-                    return sidebarDrag.provider(for: .init(kind: kind, id: row.id, parentID: row.parentID), in: context)
+                    let source = NectoPluginSidebarState.ItemLocation(kind: kind, id: row.id, parentID: row.parentID)
+                    if sidebarDrag.source(in: context) != source { sidebarDropFeedback.highlight = nil }
+                    let nativeReorderSource = row.canReorder ? source : nil
+                    if sidebarDropFeedback.nativeReorderSource != nativeReorderSource {
+                        sidebarDropFeedback.nativeReorderSource = nativeReorderSource
+                    }
+                    return sidebarDrag.provider(for: source, in: context)
                 },
+                dropFeedback: sidebarDropFeedback,
                 acceptsDrop: { context == sidebarDragContext && sidebarDrag.acceptsDrop(in: context) },
                 allowsDrop: allowsDrop,
                 receiveDrop: { destination, providers in
                     guard allowsDrop(to: destination) else { return false }
+                    sidebarDropFeedback.clear()
                     return sidebarDrag.receive(providers, context: context, currentContext: { sidebarDragContext }) { source in
                         model.moveSidebar(source, to: destination, in: kind, target: context.target)
                     }
                 }
             )
         )
+    }
+
+    private func clearSidebarDrag() {
+        sidebarDrag.clear()
+        sidebarDropFeedback.clear()
     }
 
     private func setFolderExpanded(_ expanded: Bool, folderID: UUID, in kind: NectoPluginSidebarStore.Kind) {
