@@ -42,15 +42,8 @@ final class NectoPluginSidebarState {
         _ kind: NectoPluginSidebarStore.Kind, catalog: [NectoInstalledPlugin], disabledIDs: Set<String>
     ) -> NectoJSONValue {
         let section = self[kind]
-        let manifests = Dictionary(catalog.map { ($0.id, $0.manifest) }, uniquingKeysWith: { first, _ in first })
-        let placed = Set(section.pluginIDs)
-        let unplaced = manifests.values.filter { !placed.contains($0.id) }.sorted { first, second in
-            // Device roots display available, enabled plugins before the disabled ones.
-            let firstDisabled = kind == .device && disabledIDs.contains(first.id)
-            let secondDisabled = kind == .device && disabledIDs.contains(second.id)
-            if firstDisabled != secondDisabled { return !firstDisabled }
-            return (first.name, first.id) < (second.name, second.id)
-        }
+        let manifests = Self.catalogManifests(catalog)
+        let unplaced = Self.unplacedRootPluginIDs(in: section, kind: kind, manifests: manifests, disabledIDs: disabledIDs)
 
         func describe(_ item: NectoPluginSidebarSection.Item) -> NectoJSONValue {
             switch item {
@@ -74,8 +67,26 @@ final class NectoPluginSidebarState {
             }
         }
 
-        let items = section.items + unplaced.map { NectoPluginSidebarSection.Item.plugin($0.id) }
+        let items = section.items + unplaced.map(NectoPluginSidebarSection.Item.plugin)
         return ["section": .string(kind.rawValue), "items": .array(items.map(describe))]
+    }
+
+    private static func catalogManifests(_ catalog: [NectoInstalledPlugin]) -> [String: NectoPluginManifest] {
+        Dictionary(catalog.map { ($0.id, $0.manifest) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private static func unplacedRootPluginIDs(
+        in section: NectoPluginSidebarSection, kind: NectoPluginSidebarStore.Kind,
+        manifests: [String: NectoPluginManifest], disabledIDs: Set<String>
+    ) -> [String] {
+        let placed = Set(section.pluginIDs)
+        return manifests.values.filter { !placed.contains($0.id) }.sorted { first, second in
+            // Device roots display available, enabled plugins before the disabled ones.
+            let firstDisabled = kind == .device && disabledIDs.contains(first.id)
+            let secondDisabled = kind == .device && disabledIDs.contains(second.id)
+            if firstDisabled != secondDisabled { return !firstDisabled }
+            return (first.name, first.id) < (second.name, second.id)
+        }.map(\.id)
     }
 
     @discardableResult
@@ -94,31 +105,90 @@ final class NectoPluginSidebarState {
     }
 
     func editFolderForCLI(_ command: NectoSidebarRequest.FolderEdit, in kind: NectoPluginSidebarStore.Kind) throws -> NectoJSONValue {
-        do {
-            return try edit(kind) { section in
-                let original = section
-                let id: UUID
-                switch command {
-                case .create(let name, let parentID):
-                    id = try section.createFolder(defaultName: name, in: parentID, revealParent: false)
-                case .rename(let folderID, let name):
-                    id = folderID
-                    try section.renameFolder(id, to: name)
-                case .delete(let folderID):
-                    id = folderID
-                    try section.deleteFolder(id)
-                }
-
-                let before = original.folder(withID: id)
-                let after = section.folder(withID: id)
-                guard let folder = after ?? before else { throw NectoPluginSidebarSection.ValidationError.folderNotFound }
-                var result: [String: NectoJSONValue] = [
-                    "section": .string(kind.rawValue), "folderID": .string(id.uuidString),
-                    "name": .string(folder.name), "changed": .bool(before?.name != after?.name),
-                ]
-                if case .delete = command { result["deleted"] = true }
-                return .object(result)
+        try editForCLI(kind) { section in
+            let original = section
+            let id: UUID
+            switch command {
+            case .create(let name, let parentID):
+                id = try section.createFolder(defaultName: name, in: parentID, revealParent: false)
+            case .rename(let folderID, let name):
+                id = folderID
+                try section.renameFolder(id, to: name)
+            case .delete(let folderID):
+                id = folderID
+                try section.deleteFolder(id)
             }
+
+            let before = original.folder(withID: id)
+            let after = section.folder(withID: id)
+            guard let folder = after ?? before else { throw NectoPluginSidebarSection.ValidationError.folderNotFound }
+            var result: [String: NectoJSONValue] = [
+                "section": .string(kind.rawValue), "folderID": .string(id.uuidString),
+                "name": .string(folder.name), "changed": .bool(before?.name != after?.name),
+            ]
+            if case .delete = command { result["deleted"] = true }
+            return .object(result)
+        }
+    }
+
+    func moveForCLI(
+        _ command: NectoSidebarRequest.Move, in kind: NectoPluginSidebarStore.Kind,
+        catalog: [NectoInstalledPlugin], disabledIDs: Set<String>
+    ) throws -> (changed: Bool, parentID: UUID?, name: String?) {
+        try editForCLI(kind) { section in
+            let unplaced = Self.unplacedRootPluginIDs(
+                in: section, kind: kind, manifests: Self.catalogManifests(catalog), disabledIDs: disabledIDs
+            )
+
+            func locate(_ reference: NectoSidebarRequest.ItemID) -> ItemLocation? {
+                let id = reference.layoutID
+                if let location = section.location(of: id) {
+                    return ItemLocation(kind: kind, id: id, parentID: location.parentID)
+                }
+                if case .plugin(let pluginID) = id, unplaced.contains(pluginID) {
+                    return ItemLocation(kind: kind, id: id, parentID: nil)
+                }
+                return nil
+            }
+
+            guard let source = locate(command.item) else {
+                throw NectoBridgeError(code: .invalidInput, message: "Item '\(command.item.reference)' does not exist in this section.")
+            }
+            if let parentID = command.parentID, section.folder(withID: parentID) == nil {
+                throw NectoPluginSidebarSection.ValidationError.parentFolderNotFound
+            }
+
+            let destination: NectoPluginSidebarSection.MoveDestination
+            if let reference = command.before ?? command.after {
+                guard let anchor = locate(reference) else {
+                    throw NectoBridgeError(code: .invalidInput, message: "Anchor '\(reference.reference)' does not exist in this section.")
+                }
+                if let parentID = command.parentID, parentID != anchor.parentID {
+                    throw NectoBridgeError(code: .invalidInput, message: "The anchor is not a child of the specified parent folder.")
+                }
+                destination = .beside(anchor.id, position: command.before == nil ? .after : .before, parentID: anchor.parentID)
+            } else {
+                destination = .into(parentID: command.parentID)
+            }
+
+            let changed = try section.move(
+                source.id, from: source.parentID, to: destination, unplacedRootPluginIDs: unplaced, revealParent: false
+            )
+            // The source and destination were found above. Detaching the source can
+            // only hide the destination if it was the source folder or part of its subtree.
+            if !changed, source.parentID != destination.parentID {
+                throw NectoBridgeError(code: .invalidInput, message: "A folder cannot move into itself or its descendants.")
+            }
+            let name: String? = if case .folder(let id) = source.id { section.folder(withID: id)?.name } else { nil }
+            return (changed, destination.parentID, name)
+        }
+    }
+
+    private func editForCLI<Result>(
+        _ kind: NectoPluginSidebarStore.Kind, _ change: (inout NectoPluginSidebarSection) throws -> Result
+    ) throws -> Result {
+        do {
+            return try edit(kind, change)
         } catch let error as NectoPluginSidebarSection.ValidationError {
             throw NectoBridgeError(code: .invalidInput, message: error.description)
         } catch NectoPluginSidebarStore.StorageError.invalidSavedSection {
@@ -196,6 +266,15 @@ final class NectoPluginSidebarState {
         } catch {
             Self.logger.error("Could not save the \(kind.rawValue, privacy: .public) plugin sidebar move.")
             return false
+        }
+    }
+}
+
+private extension NectoSidebarRequest.ItemID {
+    var layoutID: NectoPluginSidebarSection.Item.ID {
+        switch self {
+        case .plugin(let id): .plugin(id)
+        case .folder(let id): .folder(id)
         }
     }
 }

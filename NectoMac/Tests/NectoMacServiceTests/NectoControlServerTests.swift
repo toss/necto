@@ -19,7 +19,7 @@ private struct StubHandler: NectoControlHandling {
     func sidebar(_ request: NectoSidebarRequest) async throws -> NectoJSONValue {
         switch request.action {
         case .list: ["section": .string(request.section.rawValue), "items": []]
-        case .folder: request.input
+        case .folder, .move: request.input
         }
     }
     var streamForever = false
@@ -160,6 +160,29 @@ struct NectoControlServerTests {
             ["section": "device", "action": "createFolder"],
             ["section": "desktop", "action": "renameFolder", "folderID": "Logs", "name": "Traces"],
             ["section": "desktop", "action": "deleteFolder"],
+        ]
+        for input in malformed {
+            try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
+            #expect(try await client.receive().error?.code == "INVALID_INPUT")
+        }
+    }
+
+    @Test("sidebar moves forward typed item selectors and reject conflicting anchors")
+    func sidebarMoveRoundTrip() async throws {
+        let (server, url) = try makeServer()
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        let item = "folder:A90E4362-A108-4B7C-98C2-64E6D532CD37"
+        let valid: NectoJSONValue = [
+            "section": "device", "action": "move", "item": .string(item), "before": "plugin:offline",
+        ]
+        try await client.session.send(NectoControlRequest(kind: .sidebar, input: valid))
+        #expect(try await client.receive().value == valid)
+
+        let malformed: [NectoJSONValue] = [
+            ["section": "device", "action": "move", "item": "offline"],
+            ["section": "device", "action": "move", "item": "folder:invalid"],
+            ["section": "device", "action": "move", "item": "plugin:offline", "before": "plugin:a", "after": "plugin:b"],
         ]
         for input in malformed {
             try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))

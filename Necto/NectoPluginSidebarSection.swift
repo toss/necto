@@ -114,14 +114,21 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
     var pluginIDs: [String] { Self.pluginIDs(in: items) }
 
     func folder(withID id: UUID) -> Folder? {
-        func find(in items: [Item]) -> Folder? {
-            for case .folder(let folder) in items {
-                if folder.id == id { return folder }
-                if let nested = find(in: folder.children) { return nested }
+        guard case .folder(let folder)? = location(of: .folder(id))?.item else { return nil }
+        return folder
+    }
+
+    func location(of id: Item.ID) -> (item: Item, parentID: UUID?)? {
+        func find(in items: [Item], parentID: UUID?) -> (Item, UUID?)? {
+            for item in items {
+                if item.id == id { return (item, parentID) }
+                if case .folder(let folder) = item, let found = find(in: folder.children, parentID: folder.id) {
+                    return found
+                }
             }
             return nil
         }
-        return find(in: items)
+        return find(in: items, parentID: nil)
     }
 
     func isVisible(hasAvailablePlugins: Bool) -> Bool {
@@ -239,9 +246,10 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         _ source: Item.ID,
         from sourceParentID: UUID?,
         to destination: MoveDestination,
-        unplacedRootPluginIDs: [String] = []
+        unplacedRootPluginIDs: [String] = [],
+        revealParent: Bool = true
     ) throws -> Bool {
-        guard sourceParentID != destination.parentID else { return false }
+        if case .beside(let anchor, _, _) = destination, source == anchor { return false }
         var updatedItems = items
         if destination.parentID == nil {
             var placed = Set(pluginIDs)
@@ -252,6 +260,8 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
                   unplacedRootPluginIDs.contains(id), !pluginIDs.contains(id) {
             updatedItems.append(.plugin(id))
         }
+        // Root positions include catalog plugins even if those placements have never been saved.
+        let priorItems = updatedItems
 
         var moved: Item?
         Self.editChildren(of: sourceParentID, in: &updatedItems) { siblings in
@@ -263,7 +273,7 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
 
         let openParent: Bool
         switch destination {
-        case .into: openParent = true
+        case .into: openParent = revealParent
         case .beside: openParent = false
         }
         // Searching after detaching also excludes the source folder and its descendants as destinations.
@@ -285,7 +295,7 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
             }
             return true
         }
-        guard inserted else { return false }
+        guard inserted, updatedItems != priorItems else { return false }
 
         self = try Self(items: updatedItems)
         return true

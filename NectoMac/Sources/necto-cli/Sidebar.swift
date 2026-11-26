@@ -12,7 +12,7 @@ extension NectoSidebarRequest.Section: ExpressibleByArgument {}
 struct Sidebar: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "View and organize the saved plugin sidebar.",
-        subcommands: [List.self, Folder.self]
+        subcommands: [List.self, Folder.self, Move.self]
     )
 
     struct Options: ParsableArguments {
@@ -100,6 +100,39 @@ struct Sidebar: AsyncParsableCommand {
             case .delete: action = "Deleted"
             }
             print(displayText("\(action) \(name) [folder:\(id)]"))
+        }
+    }
+
+    struct Move: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Move or reorder one sidebar item.",
+            discussion: "With no anchor, place the item first in the specified folder or last at the section root. "
+                + "An anchor selects its own parent unless --parent is specified, in which case they must agree."
+        )
+        @Argument(help: "Item from sidebar list, as plugin:<id> or folder:<uuid>.",
+                  transform: NectoSidebarRequest.ItemID.init(reference:))
+        var item: NectoSidebarRequest.ItemID
+        @Option(help: "Destination folder UUID.", transform: Sidebar.folderUUID) var parent: UUID?
+        @Option(help: "Place immediately before this item ID.", transform: NectoSidebarRequest.ItemID.init(reference:))
+        var before: NectoSidebarRequest.ItemID?
+        @Option(help: "Place immediately after this item ID.", transform: NectoSidebarRequest.ItemID.init(reference:))
+        var after: NectoSidebarRequest.ItemID?
+        @OptionGroup var options: Options
+
+        func run() async throws {
+            let move = try NectoSidebarRequest.Move(item: item, parentID: parent, before: before, after: after)
+            let value = try await options.send(.move(move))
+            guard let reference = value["item"]?.stringValue, let changed = value["changed"]?.boolValue else {
+                throw Client.Failure.protocolError
+            }
+            if options.json { print(try encodeJSON(value)); return }
+            let item = value["name"]?.stringValue.map { "\($0) [\(reference)]" } ?? reference
+            if changed {
+                let destination = value["parentID"]?.stringValue.map { "folder:\($0)" } ?? "the section root"
+                print(displayText("Moved \(item) to \(destination)"))
+            } else {
+                print(displayText("Unchanged \(item)"))
+            }
         }
     }
 

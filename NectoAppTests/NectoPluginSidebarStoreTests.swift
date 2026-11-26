@@ -167,6 +167,133 @@ struct NectoPluginSidebarStoreTests {
         }
     }
 
+    @Test("CLI moves saved items in collapsed folders and preserves the other sibling positions")
+    func sidebarMovesSavedTree() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        var moved = Section.Folder(name: "Tools", children: [.plugin("offline-child")], isCollapsed: true)
+        let duplicate = Section.Folder(name: "Tools")
+        var parent = Section.Folder(name: "Destination", children: [
+            .plugin("disabled"), .folder(duplicate), .plugin("hidden-before"), .plugin("anchor"), .plugin("hidden-after"),
+        ], isCollapsed: true)
+        var outer = Section.Folder(name: "Archive", children: [.folder(parent)], isCollapsed: true)
+        try fixture.store.save(try Section(items: [.folder(moved), .plugin("hidden-root"), .folder(outer)]), for: .device)
+        let disabledIDs = NectoPluginLibrary.setEnabled("disabled", false, in: fixture.defaults)
+        let state = NectoPluginSidebarState(store: fixture.store)
+
+        let nested = try state.moveForCLI(
+            .init(item: .folder(moved.id), parentID: parent.id), in: .device, catalog: [], disabledIDs: disabledIDs
+        )
+        #expect(nested.changed)
+        #expect(nested.parentID == parent.id)
+        #expect(nested.name == "Tools(1)")
+        moved.name = "Tools(1)"
+        parent.children.insert(.folder(moved), at: 0)
+        outer.children = [.folder(parent)]
+        #expect(state[.device].items == [.plugin("hidden-root"), .folder(outer)])
+
+        let beside = try state.moveForCLI(
+            .init(item: .plugin("disabled"), after: .plugin("anchor")), in: .device, catalog: [], disabledIDs: disabledIDs
+        )
+        #expect(beside.changed)
+        #expect(beside.parentID == parent.id)
+        parent.children = [.folder(moved), .folder(duplicate), .plugin("hidden-before"), .plugin("anchor"),
+                           .plugin("disabled"), .plugin("hidden-after")]
+        #expect(state[.device].folder(withID: parent.id) == parent)
+
+        let goFirst = try NectoSidebarRequest.Move(item: .plugin("disabled"), parentID: parent.id)
+        #expect(try state.moveForCLI(goFirst, in: .device, catalog: [], disabledIDs: disabledIDs).changed)
+        let key = Store.Kind.device.sectionKey
+        let saved = fixture.defaults.data(forKey: key)
+        #expect(try !state.moveForCLI(goFirst, in: .device, catalog: [], disabledIDs: disabledIDs).changed)
+        #expect(fixture.defaults.data(forKey: key) == saved)
+        parent.children = [.plugin("disabled"), .folder(moved), .folder(duplicate), .plugin("hidden-before"),
+                           .plugin("anchor"), .plugin("hidden-after")]
+        outer.children = [.folder(parent)]
+        #expect(try fixture.store.load(.device).items == [.plugin("hidden-root"), .folder(outer)])
+        #expect(!NectoPluginLibrary.isEnabled("disabled", in: fixture.defaults))
+    }
+
+    @Test("CLI moves known unplaced plugins using the listed root order and skips unchanged moves")
+    func sidebarMovesUnplacedRoots() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        var folder = Section.Folder(name: "Tools", children: [.plugin("offline-child")], isCollapsed: true)
+        let desktop = try Section(items: [.plugin("saved"), .folder(folder), .plugin("offline-root")])
+        let device = try Section(items: [.plugin("saved"), .plugin("device-only")])
+        try fixture.store.save(desktop, for: .desktop)
+        try fixture.store.save(device, for: .device)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let catalog = [plugin(id: "a-zulu", name: "Zulu"), plugin(id: "b-alpha", name: "Alpha"),
+                       plugin(id: "c-bravo", name: "Bravo"), plugin(id: "saved", name: "Saved")]
+
+        #expect(try state.moveForCLI(
+            .init(item: .plugin("c-bravo"), parentID: folder.id), in: .desktop, catalog: catalog, disabledIDs: []
+        ).changed)
+        folder.children.insert(.plugin("c-bravo"), at: 0)
+        #expect(state[.desktop].items == [.plugin("saved"), .folder(folder), .plugin("offline-root")])
+
+        let key = Store.Kind.desktop.sectionKey
+        let saved = fixture.defaults.data(forKey: key)
+        #expect(try !state.moveForCLI(.init(item: .plugin("a-zulu")), in: .desktop, catalog: catalog, disabledIDs: []).changed)
+        #expect(try !state.moveForCLI(
+            .init(item: .plugin("a-zulu"), after: .plugin("a-zulu")), in: .desktop, catalog: catalog, disabledIDs: []
+        ).changed)
+        #expect(fixture.defaults.data(forKey: key) == saved)
+        #expect(!state[.desktop].pluginIDs.contains("a-zulu"))
+        #expect(!state[.desktop].pluginIDs.contains("b-alpha"))
+
+        let beside = try state.moveForCLI(
+            .init(item: .plugin("a-zulu"), before: .plugin("b-alpha")), in: .desktop, catalog: catalog, disabledIDs: []
+        )
+        #expect(beside.changed)
+        #expect(beside.parentID == nil)
+        let append = try NectoSidebarRequest.Move(item: .plugin("saved"))
+        #expect(try state.moveForCLI(append, in: .desktop, catalog: catalog, disabledIDs: []).changed)
+        #expect(try !state.moveForCLI(append, in: .desktop, catalog: catalog, disabledIDs: []).changed)
+        #expect(try fixture.store.load(.desktop).items == [
+            .folder(folder), .plugin("offline-root"), .plugin("a-zulu"), .plugin("b-alpha"), .plugin("saved"),
+        ])
+        #expect(NectoPluginLibrary.sorted(catalog, by: state[.desktop].pluginIDs).map(\.id) == [
+            "c-bravo", "a-zulu", "b-alpha", "saved",
+        ])
+        #expect(try fixture.store.load(.device) == device)
+    }
+
+    @Test("Invalid CLI moves never write and preserve saved depth and section ownership")
+    func invalidSidebarMoves() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let deepest = Section.Folder(name: "Deepest", isCollapsed: true)
+        let child = Section.Folder(name: "Child", children: [.folder(deepest), .plugin("offline")], isCollapsed: true)
+        let source = Section.Folder(name: "Source", children: [.folder(child)])
+        let destination = Section.Folder(name: "Destination", isCollapsed: true)
+        let section = try Section(items: [.folder(source), .folder(destination)])
+        try fixture.store.save(section, for: .device)
+        try fixture.store.save(try Section(items: [.plugin("other-section")]), for: .desktop)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let key = Store.Kind.device.sectionKey
+        let saved = fixture.defaults.data(forKey: key)
+        let cycle = "A folder cannot move into itself or its descendants."
+        let cases: [(NectoSidebarRequest.Move, String)] = try [
+            (.init(item: .plugin("other-section")), "Item 'plugin:other-section' does not exist in this section."),
+            (.init(item: .folder(source.id), parentID: source.id), cycle),
+            (.init(item: .folder(source.id), after: .plugin("offline")), cycle),
+            (.init(item: .folder(source.id), parentID: destination.id), "A sidebar folder can be at most 3 levels deep."),
+            (.init(item: .folder(source.id), parentID: UUID()), "The parent folder does not exist in this section."),
+            (.init(item: .plugin("offline"), before: .plugin("missing")), "Anchor 'plugin:missing' does not exist in this section."),
+            (.init(item: .plugin("offline"), parentID: destination.id, before: .plugin("offline")),
+             "The anchor is not a child of the specified parent folder."),
+        ]
+        for (command, message) in cases {
+            #expect(throws: NectoBridgeError(code: .invalidInput, message: message)) {
+                try state.moveForCLI(command, in: .device, catalog: [plugin(id: "known", name: "Known")], disabledIDs: [])
+            }
+            #expect(state[.device] == section)
+            #expect(fixture.defaults.data(forKey: key) == saved)
+        }
+    }
+
     @Test("Legacy orders migrate once per section with their first occurrence of each ID")
     func migrateOnce() throws {
         let fixture = try Fixture()

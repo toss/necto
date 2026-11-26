@@ -77,6 +77,37 @@ struct NectoCLIBlackBoxTests {
         }
     }
 
+    @Test("sidebar move sends the chosen anchor and optional parent and renders the host outcome", arguments: [false, true])
+    func sidebarMove(json: Bool) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let parent = "30375E6D-4F88-43F8-90B2-912EDF1864AC"
+        let item = "folder:A90E4362-A108-4B7C-98C2-64E6D532CD37"
+        let anchor = "plugin:offline"
+        let position = json ? "after" : "before"
+        var fields: [String: NectoJSONValue] = ["section": "device", "action": "move", "item": .string(item), position: .string(anchor)]
+        if json { fields["parentID"] = .string(parent) }
+        let expected = NectoJSONValue.object(fields)
+        let value: NectoJSONValue = [
+            "section": "device", "item": .string(item), "name": "Tools", "changed": .bool(json), "parentID": .string(parent),
+        ]
+        let server = fixture.respond { request, session in
+            #expect(request.kind == .sidebar)
+            #expect(request.input == expected)
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: value))
+        }
+        let args = ["sidebar", "move", item.lowercased(), "--section", "device", "--\(position)", anchor]
+        let result = try await fixture.run(args + (json ? ["--parent", parent.lowercased(), "--json"] : []))
+        try await server.value
+        #expect(result.status == 0)
+        #expect(result.error.isEmpty)
+        if json {
+            #expect(try result.json() == value)
+        } else {
+            #expect(result.output == "Unchanged Tools [\(item)]\n")
+        }
+    }
+
     @Test("device discovery prints usable identifiers grouped by device")
     func deviceDiscovery() async throws {
         let fixture = try CLIProcessFixture()
@@ -157,6 +188,9 @@ struct NectoCLIBlackBoxTests {
         ["sidebar", "list", "--section", "all"],
         ["sidebar", "folder", "create", "Tools"],
         ["sidebar", "folder", "delete", "Tools", "--section", "device"],
+        ["sidebar", "move", "plugin:sample"],
+        ["sidebar", "move", "sample", "--section", "desktop"],
+        ["sidebar", "move", "plugin:sample", "--section", "device", "--before", "plugin:a", "--after", "plugin:b"],
     ])
     func invalidScopes(arguments: [String]) async throws {
         let fixture = try CLIProcessFixture()

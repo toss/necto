@@ -227,7 +227,7 @@ final class NectoAppModel {
             activePluginIDs: ids.active, disabledPluginIDs: ids.disabled
         )
         if saved && source.kind == .desktop {
-            plugins = NectoPluginLibrary.sorted(plugins, by: pluginSidebar[.desktop].pluginIDs)
+            updateDesktopSidebarOrder()
         }
     }
 
@@ -243,8 +243,12 @@ final class NectoAppModel {
             activePluginIDs: ids.active, disabledPluginIDs: ids.disabled
         )
         if saved && kind == .desktop {
-            plugins = NectoPluginLibrary.sorted(plugins, by: pluginSidebar[.desktop].pluginIDs)
+            updateDesktopSidebarOrder()
         }
+    }
+
+    private func updateDesktopSidebarOrder() {
+        plugins = NectoPluginLibrary.sorted(plugins, by: pluginSidebar[.desktop].pluginIDs)
     }
 
     func sidebarPluginIDs(
@@ -258,16 +262,28 @@ final class NectoAppModel {
     }
 
     private func sidebarFromCLI(_ request: NectoSidebarRequest) throws -> NectoJSONValue {
-        switch (request.action, request.section) {
-        case (.list, .device):
-            let targets = Set(connectedApps.map(\.target))
-            let catalog = devicePlugins.filter { targets.contains($0.target) }.map(\.plugin)
-            return pluginSidebar.listForCLI(.device, catalog: catalog, disabledIDs: disabledIDs)
-        case (.list, .desktop):
-            return pluginSidebar.listForCLI(.desktop, catalog: plugins, disabledIDs: disabledIDs)
-        case (.folder(let edit), let section):
-            return try pluginSidebar.editFolderForCLI(edit, in: section == .device ? .device : .desktop)
+        let kind: NectoPluginSidebarStore.Kind = request.section == .device ? .device : .desktop
+        switch request.action {
+        case .list:
+            return pluginSidebar.listForCLI(kind, catalog: sidebarCatalog(in: kind), disabledIDs: disabledIDs)
+        case .folder(let edit):
+            return try pluginSidebar.editFolderForCLI(edit, in: kind)
+        case .move(let command):
+            let result = try pluginSidebar.moveForCLI(command, in: kind, catalog: sidebarCatalog(in: kind), disabledIDs: disabledIDs)
+            if result.changed && kind == .desktop { updateDesktopSidebarOrder() }
+            var value: [String: NectoJSONValue] = [
+                "section": .string(kind.rawValue), "item": .string(command.item.reference), "changed": .bool(result.changed),
+                "parentID": result.parentID.map { .string($0.uuidString) } ?? .null,
+            ]
+            value["name"] = result.name.map(NectoJSONValue.string)
+            return .object(value)
         }
+    }
+
+    private func sidebarCatalog(in kind: NectoPluginSidebarStore.Kind) -> [NectoInstalledPlugin] {
+        if kind == .desktop { return plugins }
+        let targets = Set(connectedApps.map(\.target))
+        return devicePlugins.filter { targets.contains($0.target) }.map(\.plugin)
     }
 
     /// Records a line and republishes what the badge reads.
