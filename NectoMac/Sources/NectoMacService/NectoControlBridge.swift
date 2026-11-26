@@ -12,6 +12,7 @@ public struct NectoControlBridge: NectoControlHandling {
     private let connectedApps: @Sendable () async -> [NectoConnectedApp]
     private let install: @Sendable (NectoPluginInstallSource) async throws -> NectoJSONValue
     private let delete: @Sendable (String) async throws -> NectoJSONValue
+    private let handleSidebar: @Sendable (NectoSidebarRequest) async throws -> NectoJSONValue
 
     public init(
         registry: NectoPluginRegistry,
@@ -21,18 +22,26 @@ public struct NectoControlBridge: NectoControlHandling {
         },
         delete: @escaping @Sendable (String) async throws -> NectoJSONValue = { _ in
             throw NectoBridgeError(code: .operationUnavailable, message: "Plugin deletion is unavailable.")
+        },
+        sidebar: @escaping @Sendable (NectoSidebarRequest) async throws -> NectoJSONValue = { _ in
+            throw NectoBridgeError(code: .operationUnavailable, message: "Sidebar commands are unavailable.")
         }
     ) {
         self.registry = registry
         self.connectedApps = connectedApps
         self.install = install
         self.delete = delete
+        handleSidebar = sidebar
     }
 
     public func deletePlugin(id: String) async throws -> NectoJSONValue { try await delete(id) }
 
     public func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue {
         try await install(source)
+    }
+
+    public func sidebar(_ request: NectoSidebarRequest) async throws -> NectoJSONValue {
+        try await handleSidebar(request)
     }
 
     public func targets() async -> NectoJSONValue {

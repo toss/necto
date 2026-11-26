@@ -17,6 +17,7 @@ public protocol NectoControlHandling: Sendable {
     func plugins(app: String?, device: String?, desktop: Bool, pluginID: String?, operationID: String?) async throws -> NectoJSONValue
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue
     func deletePlugin(id: String) async throws -> NectoJSONValue
+    func sidebar(_ request: NectoSidebarRequest) async throws -> NectoJSONValue
     func invoke(
         pluginID: String,
         operationID: String,
@@ -43,6 +44,9 @@ public extension NectoControlHandling {
     }
     func installPlugin(from source: NectoPluginInstallSource) async throws -> NectoJSONValue {
         throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support plugin installation.")
+    }
+    func sidebar(_ request: NectoSidebarRequest) async throws -> NectoJSONValue {
+        throw NectoBridgeError(code: .operationUnavailable, message: "This host does not support sidebar commands.")
     }
 }
 
@@ -278,6 +282,11 @@ public final class NectoControlServer: @unchecked Sendable {
             case .deletePlugin:
                 let deletion = try NectoPluginDeletion(pluginID: request.pluginID ?? "")
                 let value = try await handler.deletePlugin(id: deletion.pluginID)
+                responder.send(.init(id: request.id, kind: .result, value: value))
+
+            case .sidebar:
+                let sidebar = try NectoSidebarRequest(input: request.input ?? .null)
+                let value = try await handler.sidebar(sidebar)
                 responder.send(.init(id: request.id, kind: .result, value: value))
 
             case .invoke:

@@ -11,6 +11,33 @@ import Testing
 
 @Suite("CLI process interface", .timeLimit(.minutes(1)))
 struct NectoCLIBlackBoxTests {
+    @Test("sidebar list prints the full tree with stable IDs in human and JSON output", arguments: [false, true])
+    func sidebarList(json: Bool) async throws {
+        let fixture = try CLIProcessFixture()
+        defer { fixture.close() }
+        let folderID = "A90E4362-A108-4B7C-98C2-64E6D532CD37"
+        let tree: NectoJSONValue = ["section": "device", "items": [
+            ["kind": "folder", "id": .string(folderID), "name": "Archive", "isCollapsed": true, "children": [
+                ["kind": "plugin", "id": "offline", "enabled": false, "available": false],
+            ]],
+        ]]
+        let server = fixture.respond { request, session in
+            #expect(request.kind == .sidebar)
+            #expect(request.input == ["section": "device", "action": "list"])
+            try await session.send(NectoControlResponse(id: request.id, kind: .result, value: tree))
+        }
+        let result = try await fixture.run(["sidebar", "list", "--section", "device"] + (json ? ["--json"] : []))
+        try await server.value
+        #expect(result.status == 0)
+        #expect(result.error.isEmpty)
+        if json {
+            #expect(try result.json() == tree)
+        } else {
+            #expect(result.output.contains("Archive [folder:\(folderID)] (collapsed)\n"))
+            #expect(result.output.contains("  offline [plugin:offline] (disabled) (unavailable)"))
+        }
+    }
+
     @Test("device discovery prints usable identifiers grouped by device")
     func deviceDiscovery() async throws {
         let fixture = try CLIProcessFixture()
@@ -87,6 +114,8 @@ struct NectoCLIBlackBoxTests {
         ["plugin", "help", "sample", "--device", "sim-1"],
         ["plugin", "send", "sample", "read", "--app", "com.example.app"],
         ["plugin", "subscribe", "sample", "observe", "--desktop", "--device", "sim-1", "--app", "com.example.app"],
+        ["sidebar", "list"],
+        ["sidebar", "list", "--section", "all"],
     ])
     func invalidScopes(arguments: [String]) async throws {
         let fixture = try CLIProcessFixture()

@@ -16,6 +16,9 @@ private struct StubHandler: NectoControlHandling {
         guard id == "sample" else { throw NectoBridgeError(code: .operationNotFound, message: "Unknown desktop plugin") }
         return ["deleted": true, "pluginID": .string(id)]
     }
+    func sidebar(_ request: NectoSidebarRequest) async throws -> NectoJSONValue {
+        ["section": .string(request.section.rawValue), "items": []]
+    }
     var streamForever = false
     var invokeForever = false
     var installForever = false
@@ -113,6 +116,26 @@ private func makeServer(
 
 @Suite("Control socket", .timeLimit(.minutes(1)))
 struct NectoControlServerTests {
+    @Test("sidebar list routes to the host only with a valid action and explicit section")
+    func sidebarListRoundTrip() async throws {
+        let (server, url) = try makeServer()
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        for section in ["device", "desktop"] {
+            try await client.session.send(NectoControlRequest(id: section, kind: .sidebar,
+                input: ["action": "list", "section": .string(section)]))
+            let response = try await client.receive()
+            #expect(response.id == section)
+            #expect(response.kind == .result)
+            #expect(response.value == ["section": .string(section), "items": []])
+        }
+        for input: NectoJSONValue in [["action": "list"], ["section": "all", "action": "list"],
+                                       ["section": "device", "action": "replace"]] {
+            try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
+            #expect(try await client.receive().error?.code == "INVALID_INPUT")
+        }
+    }
+
     @Test("discovery forwards ownership and operation selectors")
     func discoveryScopeRoundTrip() async throws {
         let (server, url) = try makeServer(StubHandler(echoScope: true))

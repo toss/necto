@@ -43,6 +43,50 @@ struct NectoPluginSidebarStoreTests {
         #expect(try reopened.load(.device) == device)
     }
 
+    @Test("CLI lists the full saved tree and the known unplaced plugins without writing")
+    func sidebarListKeepsSavedTree() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let archive = Section.Folder(name: "Archive", children: [.plugin("offline")], isCollapsed: true)
+        let tools = Section.Folder(name: "Tools", children: [.plugin("disabled"), .folder(archive)], isCollapsed: true)
+        let device = try Section(items: [.plugin("saved"), .folder(tools)])
+        let desktop = try Section(items: [.plugin("desktop-only")])
+        try fixture.store.save(device, for: .device)
+        try fixture.store.save(desktop, for: .desktop)
+        _ = NectoPluginLibrary.setEnabled("disabled", false, in: fixture.defaults)
+        let disabledIDs = NectoPluginLibrary.setEnabled("unplaced-disabled", false, in: fixture.defaults)
+        let state = NectoPluginSidebarState(store: fixture.store)
+        let before = fixture.defaults.persistentDomain(forName: fixture.suiteName) as NSDictionary?
+        let catalog = [
+            plugin(id: "a-zulu", name: "Zulu"), plugin(id: "disabled", name: "Disabled"),
+            plugin(id: "b-alpha", name: "Alpha"), plugin(id: "b-alpha", name: "Alpha"),
+            plugin(id: "unplaced-disabled", name: "A disabled plugin"),
+        ]
+
+        let result = state.listForCLI(.device, catalog: catalog, disabledIDs: disabledIDs)
+        #expect(result["section"] == "device")
+        let roots = try #require(result["items"]?.arrayValue)
+        #expect(roots.map { $0["id"]?.stringValue } == [
+            "saved", tools.id.uuidString, "b-alpha", "a-zulu", "unplaced-disabled",
+        ])
+        let folder = roots[1]
+        #expect(folder["kind"] == "folder")
+        #expect(folder["isCollapsed"] == true)
+        let children = try #require(folder["children"]?.arrayValue)
+        #expect(children[0] == [
+            "kind": "plugin", "id": "disabled", "name": "Disabled", "description": "Example plugin",
+            "version": "1.0.0", "available": true, "enabled": false,
+        ])
+        #expect(children[1]["isCollapsed"] == true)
+        #expect(children[1]["children"]?.arrayValue == [[
+            "kind": "plugin", "id": "offline", "available": false, "enabled": true,
+        ]])
+        let other = state.listForCLI(.desktop, catalog: [], disabledIDs: disabledIDs)
+        #expect(other["items"]?.arrayValue?.map { $0["id"]?.stringValue } == ["desktop-only"])
+        #expect(fixture.defaults.persistentDomain(forName: fixture.suiteName) as NSDictionary? == before)
+        #expect(state[.device] == device)
+    }
+
     @Test("Legacy orders migrate once per section with their first occurrence of each ID")
     func migrateOnce() throws {
         let fixture = try Fixture()
@@ -574,7 +618,7 @@ struct NectoPluginSidebarStoreTests {
 
     private func plugin(id: String, name: String, source: NectoInstalledPlugin.Source = .installed) -> NectoInstalledPlugin {
         let manifest = NectoPluginManifest(
-            id: id, name: name, description: "", version: "1.0.0", author: "Necto tests",
+            id: id, name: name, description: "Example plugin", version: "1.0.0", author: "Necto tests",
             icon: .init(systemName: "circle"), assets: [], allowedOrigins: [], operations: []
         )
         let archive = NectoPanelArchive(files: [])

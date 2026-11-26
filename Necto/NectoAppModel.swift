@@ -257,6 +257,17 @@ final class NectoAppModel {
         }
     }
 
+    private func sidebarFromCLI(_ request: NectoSidebarRequest) -> NectoJSONValue {
+        switch (request.action, request.section) {
+        case (.list, .device):
+            let targets = Set(connectedApps.map(\.target))
+            let catalog = devicePlugins.filter { targets.contains($0.target) }.map(\.plugin)
+            return pluginSidebar.listForCLI(.device, catalog: catalog, disabledIDs: disabledIDs)
+        case (.list, .desktop):
+            return pluginSidebar.listForCLI(.desktop, catalog: plugins, disabledIDs: disabledIDs)
+        }
+    }
+
     /// Records a line and republishes what the badge reads.
     func log(
         _ severity: NectoDiagnosticsLog.Severity,
@@ -516,6 +527,10 @@ final class NectoAppModel {
             delete: { [weak self] id in
                 guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
                 return try await self.deletePluginFromCLI(id: id)
+            },
+            sidebar: { [weak self] request in
+                guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
+                return await self.sidebarFromCLI(request)
             }
         ))
         do {

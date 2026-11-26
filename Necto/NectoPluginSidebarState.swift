@@ -3,6 +3,7 @@
 //
 
 import Foundation
+import NectoModel
 import Observation
 import OSLog
 
@@ -34,6 +35,46 @@ final class NectoPluginSidebarState {
 
     subscript(_ kind: NectoPluginSidebarStore.Kind) -> NectoPluginSidebarSection {
         sections[kind] ?? NectoPluginSidebarSection()
+    }
+
+    func listForCLI(
+        _ kind: NectoPluginSidebarStore.Kind, catalog: [NectoInstalledPlugin], disabledIDs: Set<String>
+    ) -> NectoJSONValue {
+        let section = self[kind]
+        let manifests = Dictionary(catalog.map { ($0.id, $0.manifest) }, uniquingKeysWith: { first, _ in first })
+        let placed = Set(section.pluginIDs)
+        let unplaced = manifests.values.filter { !placed.contains($0.id) }.sorted { first, second in
+            // Device roots display available, enabled plugins before the disabled ones.
+            let firstDisabled = kind == .device && disabledIDs.contains(first.id)
+            let secondDisabled = kind == .device && disabledIDs.contains(second.id)
+            if firstDisabled != secondDisabled { return !firstDisabled }
+            return (first.name, first.id) < (second.name, second.id)
+        }
+
+        func describe(_ item: NectoPluginSidebarSection.Item) -> NectoJSONValue {
+            switch item {
+            case .folder(let folder):
+                return [
+                    "kind": "folder", "id": .string(folder.id.uuidString), "name": .string(folder.name),
+                    "isCollapsed": .bool(folder.isCollapsed), "children": .array(folder.children.map(describe)),
+                ]
+            case .plugin(let id):
+                let manifest = manifests[id]
+                var entry: [String: NectoJSONValue] = [
+                    "kind": "plugin", "id": .string(id), "available": .bool(manifest != nil),
+                    "enabled": .bool(!disabledIDs.contains(id)),
+                ]
+                if let manifest {
+                    entry["name"] = .string(manifest.name)
+                    entry["description"] = .string(manifest.description)
+                    entry["version"] = .string(manifest.version)
+                }
+                return .object(entry)
+            }
+        }
+
+        let items = section.items + unplaced.map { NectoPluginSidebarSection.Item.plugin($0.id) }
+        return ["section": .string(kind.rawValue), "items": .array(items.map(describe))]
     }
 
     @discardableResult
