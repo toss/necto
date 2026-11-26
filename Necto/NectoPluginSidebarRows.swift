@@ -13,6 +13,11 @@ struct NectoPluginSidebarRows: View {
     typealias Section = NectoPluginSidebarSection
     private static let iconSpacing: CGFloat = 4
 
+    struct PluginAnchor: Hashable {
+        let kind: NectoPluginSidebarStore.Kind
+        let id: String
+    }
+
     struct Actions {
         let expandFolder: (UUID, Bool) -> Void
         let createFolder: (UUID) -> Void
@@ -57,6 +62,7 @@ struct NectoPluginSidebarRows: View {
             case .plugin(let id):
                 if let plugin = plugins[id] {
                     pluginRow(plugin, isDimmed: row.isDimmed)
+                        .id(PluginAnchor(kind: kind, id: id))
                         .overlay { dropRegions(for: row, in: siblings) }
                         .tag(entry.id)
                         .itemProvider(provider)

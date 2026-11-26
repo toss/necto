@@ -22,6 +22,7 @@ struct ContentView: View {
     @State private var isSearchingPlugins = false
     @State private var folderToRename: FolderRename?
     @State private var createdFolderAnchor: NectoPluginSidebarRowID?
+    @State private var searchScrollRequest: SearchScrollRequest?
     @State private var folderSaveFailed = false
     @AppStorage(NectoTextSize.key) private var textPoints = Double(NectoTextSize.base)
     @AppStorage(NectoFontPreference.uiKey) private var uiFontFamily = NectoFontPreference.defaultUI
@@ -157,6 +158,12 @@ struct ContentView: View {
         var id: UUID { folder.id }
     }
 
+    private struct SearchScrollRequest: Equatable {
+        let nonce = UUID()
+        let anchor: NectoPluginSidebarRows.PluginAnchor
+        let target: NectoTarget?
+    }
+
     private var sidebarDragContext: NectoPluginSidebarDrag.Context {
         let target = window.selectedTarget
         let device = model.sidebarPluginIDs(in: .device, for: target)
@@ -254,11 +261,20 @@ struct ContentView: View {
                 guard let anchor else { return }
                 DispatchQueue.main.async { proxy.scrollTo(anchor) }
             }
+            .onChange(of: searchScrollRequest) { _, request in
+                guard let request else { return }
+                DispatchQueue.main.async {
+                    guard request == searchScrollRequest, request.target == window.selectedTarget,
+                          request.anchor.id == sidebarSelection.wrappedValue else { return }
+                    proxy.scrollTo(request.anchor)
+                }
+            }
         }
     }
 
     @ViewBuilder
     private func pluginGroup(_ title: String, kind: NectoPluginSidebarStore.Kind, showsSearch: Bool) -> some View {
+        let target = window.selectedTarget
         let header = HStack(spacing: 0) {
             SidebarGroup(title: NectoL10n.text(title), scale: scale)
             Spacer(minLength: 0)
@@ -276,7 +292,9 @@ struct ContentView: View {
                         devicePlugins: window.activeDevicePlugins + window.disabledDevicePlugins,
                         desktopPlugins: model.enabledPlugins,
                         disabledPluginIDs: Set(window.disabledDevicePlugins.map(\.id)),
-                        scale: scale, selection: sidebarSelection, isSearching: $isSearchingPlugins
+                        scale: scale, selection: sidebarSelection.wrappedValue,
+                        selectResult: { selectSearchResult($0, in: $1, target: target) },
+                        isSearching: $isSearchingPlugins
                     )
                 }
             }
@@ -368,6 +386,17 @@ struct ContentView: View {
             return
         }
         editSidebar(kind) { try $0.toggleFolder(folderID) }
+    }
+
+    private func selectSearchResult(_ id: String, in kind: NectoPluginSidebarStore.Kind, target: NectoTarget?) {
+        guard target == window.selectedTarget else { return }
+        let available = model.sidebarPluginIDs(in: kind, for: target)
+        guard available.active.contains(id) || available.disabled.contains(id) else { return }
+        if let revealed = model.pluginSidebar[kind].revealingPlugin(id) {
+            guard editSidebar(kind, { $0 = revealed }) != nil else { return }
+        }
+        sidebarSelection.wrappedValue = id
+        searchScrollRequest = SearchScrollRequest(anchor: .init(kind: kind, id: id), target: target)
     }
 
     private func createFolder(in kind: NectoPluginSidebarStore.Kind, parentID: UUID? = nil) {

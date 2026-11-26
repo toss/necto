@@ -159,6 +159,12 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         }
     }
 
+    func revealingPlugin(_ id: String) -> Self? {
+        var revealed = self
+        _ = Self.editPlugin(id, in: &revealed.items, includingCurrentParent: true, expandingAncestors: true) { _, _ in }
+        return revealed == self ? nil : revealed
+    }
+
     mutating func movePluginToRoot(_ id: String) throws -> Bool {
         var updatedItems = items
         guard Self.editPlugin(id, in: &updatedItems, includingCurrentParent: false, { siblings, index in
@@ -344,7 +350,8 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
     }
 
     private static func editPlugin(
-        _ id: String, in items: inout [Item], includingCurrentParent: Bool, _ edit: (inout [Item], Int) -> Void
+        _ id: String, in items: inout [Item], includingCurrentParent: Bool,
+        expandingAncestors: Bool = false, _ edit: (inout [Item], Int) -> Void
     ) -> Bool {
         for index in items.indices {
             switch items[index] {
@@ -352,7 +359,8 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
                 edit(&items, index)
                 return true
             case .folder(var folder):
-                if editPlugin(id, in: &folder.children, includingCurrentParent: true, edit) {
+                if editPlugin(id, in: &folder.children, includingCurrentParent: true, expandingAncestors: expandingAncestors, edit) {
+                    if expandingAncestors { folder.isCollapsed = false }
                     items[index] = .folder(folder)
                     return true
                 }

@@ -108,7 +108,8 @@ struct SidebarPluginSearch: View {
     let desktopPlugins: [NectoInstalledPlugin]
     let disabledPluginIDs: Set<String>
     let scale: CGFloat
-    @Binding var selection: String?
+    let selection: String?
+    let selectResult: (String, NectoPluginSidebarStore.Kind) -> Void
     @Binding var isSearching: Bool
     @State private var query = ""
     @FocusState private var searchIsFocused: Bool
@@ -141,9 +142,7 @@ struct SidebarPluginSearch: View {
             NectoField(placeholder: NectoL10n.text("Search plugins"), text: $query, scale: scale)
                 .focused($searchIsFocused)
                 .accessibilityIdentifier("sidebar.plugin.search")
-                .onSubmit {
-                    if let first = (deviceResults + desktopResults).first { select(first.id) }
-                }
+                .onSubmit { selectFirstResult() }
                 .padding(.horizontal, 8)
 
             if deviceResults.isEmpty && desktopResults.isEmpty {
@@ -154,8 +153,8 @@ struct SidebarPluginSearch: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        resultGroup(NectoL10n.text("Device Plugins"), plugins: deviceResults)
-                        resultGroup(NectoL10n.text("Desktop Plugins"), plugins: desktopResults)
+                        resultGroup(NectoL10n.text("Device Plugins"), plugins: deviceResults, kind: .device)
+                        resultGroup(NectoL10n.text("Desktop Plugins"), plugins: desktopResults, kind: .desktop)
                     }
                 }
                 .frame(height: CGFloat(min(deviceResults.count + desktopResults.count + 2, 10)) * NectoTheme.rowHeight * scale)
@@ -172,13 +171,15 @@ struct SidebarPluginSearch: View {
     }
 
     @ViewBuilder
-    private func resultGroup(_ title: String, plugins: [NectoInstalledPlugin]) -> some View {
+    private func resultGroup(
+        _ title: String, plugins: [NectoInstalledPlugin], kind: NectoPluginSidebarStore.Kind
+    ) -> some View {
         if !plugins.isEmpty {
             SidebarGroup(title: title, scale: scale)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ForEach(plugins) { plugin in
                 let isDisabled = disabledPluginIDs.contains(plugin.id)
-                Button { select(plugin.id) } label: {
+                Button { select(plugin.id, in: kind) } label: {
                     SidebarItem(
                         title: plugin.manifest.name,
                         systemImage: plugin.manifest.icon.systemName,
@@ -193,8 +194,16 @@ struct SidebarPluginSearch: View {
         }
     }
 
-    private func select(_ id: String) {
-        selection = id
+    private func selectFirstResult() {
+        if let first = deviceResults.first {
+            select(first.id, in: .device)
+        } else if let first = desktopResults.first {
+            select(first.id, in: .desktop)
+        }
+    }
+
+    private func select(_ id: String, in kind: NectoPluginSidebarStore.Kind) {
+        selectResult(id, kind)
         isSearching = false
     }
 }

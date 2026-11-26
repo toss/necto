@@ -246,6 +246,28 @@ struct NectoPluginSidebarSectionTests {
         #expect(section.items == [.plugin("root"), .folder(opened)])
     }
 
+    @Test("Revealing a plugin opens all its ancestors and preserves other folders and saved placement")
+    func revealPluginAncestors() throws {
+        let sibling = Folder(name: "Sibling", children: [.plugin("sibling")], isCollapsed: true)
+        let unrelated = Folder(name: "Unrelated", children: [.plugin("other")])
+        var leaf = Folder(name: "Leaf", children: [.plugin("hidden"), .plugin("chosen")], isCollapsed: true)
+        var middle = Folder(name: "Middle", children: [.folder(sibling), .folder(leaf)], isCollapsed: true)
+        var outer = Folder(name: "Outer", children: [.folder(middle)], isCollapsed: true)
+        let section = try Section(items: [.plugin("root"), .folder(outer), .folder(unrelated)])
+
+        let revealed = try #require(section.revealingPlugin("chosen"))
+
+        leaf.isCollapsed = false
+        middle.isCollapsed = false
+        middle.children = [.folder(sibling), .folder(leaf)]
+        outer.isCollapsed = false
+        outer.children = [.folder(middle)]
+        #expect(revealed.items == [.plugin("root"), .folder(outer), .folder(unrelated)])
+        #expect(revealed.revealingPlugin("chosen") == nil)
+        #expect(section.revealingPlugin("root") == nil)
+        #expect(section.revealingPlugin("unplaced") == nil)
+    }
+
     @Test("Moving a plugin to a root anchor retains other hidden and unplaced root siblings")
     func moveBesideUnplacedRootAnchor() throws {
         let folder = Folder(name: "Tools", children: [.plugin("nested"), .plugin("unavailable-child")])
