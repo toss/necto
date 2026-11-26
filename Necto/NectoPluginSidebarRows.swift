@@ -52,13 +52,12 @@ struct NectoPluginSidebarRows: View {
         let siblings = siblingsByParent[parentID, default: []]
         ForEach(siblings.map { IdentifiedRow(row: $0, kind: kind) }) { entry in
             let row = entry.row
-            let provider = itemProvider(for: row)
+            let provider = { actions.dragProvider(row) }
             switch row.item {
             case .plugin(let id):
                 if let plugin = plugins[id] {
                     pluginRow(plugin, isDimmed: row.isDimmed)
                         .overlay { dropRegions(for: row, in: siblings) }
-                        .moveDisabled(provider == nil)
                         .tag(entry.id)
                         .itemProvider(provider)
                 }
@@ -79,10 +78,8 @@ struct NectoPluginSidebarRows: View {
                         .overlay { dropRegions(for: row, in: siblings, center: .into(parentID: folder.id)) }
                         .tag(entry.id)
                         .listRowSeparator(.hidden)
-                        .moveDisabled(provider == nil)
                         .itemProvider(provider)
                 }
-                .moveDisabled(provider == nil)
                 .listRowSeparator(.hidden)
             }
         }
@@ -90,11 +87,6 @@ struct NectoPluginSidebarRows: View {
             guard let insertion = Section.insertion(from: sources, to: destination, in: siblings) else { return }
             actions.reorder(insertion.source.id, insertion.anchor.id, insertion.position, parentID)
         }
-    }
-
-    private func itemProvider(for row: Section.Row) -> (() -> NSItemProvider?)? {
-        guard row.canChangeParent(in: kind) else { return nil }
-        return { actions.dragProvider(row) }
     }
 
     private func dropRegions(
@@ -153,7 +145,7 @@ struct NectoPluginSidebarRows: View {
         }
         return label
             .font(.necto(.label, scale: scale))
-            .foregroundStyle(row.isDimmed ? NectoTheme.textTertiary : NectoTheme.textSecondary)
+            .foregroundStyle(NectoTheme.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("sidebar.plugin.folder.\(kind.rawValue).\(folder.id.uuidString)")
             .contextMenu {

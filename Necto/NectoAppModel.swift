@@ -200,14 +200,14 @@ final class NectoAppModel {
         )
     }
 
-    /// Sunken to the bottom of the section, in gray. Alphabetical on purpose: what
-    /// needs no arranging gets no arranging.
     func disabledDevicePlugins(for target: NectoTarget?) -> [NectoInstalledPlugin] {
         guard let target else { return [] }
-        return devicePlugins
-            .filter { $0.target == target && disabledIDs.contains($0.id) }
-            .map(\.plugin)
-            .sorted { $0.manifest.name < $1.manifest.name }
+        return NectoPluginLibrary.sorted(
+            devicePlugins
+                .filter { $0.target == target && disabledIDs.contains($0.id) }
+                .map(\.plugin),
+            by: pluginSidebar[.device].pluginIDs
+        )
     }
 
     /// The enabled catalog entries in the sidebar's saved order.
@@ -281,9 +281,12 @@ final class NectoAppModel {
         unreadIssueCount = await diagnostics.unreadIssueCount()
     }
 
-    func setPlugin(_ plugin: NectoInstalledPlugin, enabled: Bool) {
+    func setPlugin(_ plugin: NectoInstalledPlugin, enabled: Bool, deviceTarget: NectoTarget? = nil) {
+        let available = sidebarPluginIDs(in: .device, for: deviceTarget)
         do {
-            disabledIDs = try pluginSidebar.setEnabled(plugin, enabled: enabled)
+            disabledIDs = try pluginSidebar.setEnabled(
+                plugin, enabled: enabled, availableDevicePluginIDs: available.active + available.disabled
+            )
         } catch {
             Task { await log(.failure, .plugin, "Could not save plugin enablement") }
         }

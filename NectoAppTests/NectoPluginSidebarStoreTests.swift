@@ -187,8 +187,8 @@ struct NectoPluginSidebarStoreTests {
         #expect(fixture.defaults.data(forKey: key) == data)
     }
 
-    @Test("A disabled plugin can reorder among its saved siblings while root disabled rows stay in place")
-    func reorderNestedDisabledPlugin() throws {
+    @Test("Disabled rows can move and serve as anchors among saved siblings at any depth")
+    func reorderDisabledPlugins() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let folder = Section.Folder(name: "Tools", children: [.plugin("a"), .plugin("hidden"), .plugin("disabled")])
@@ -200,18 +200,18 @@ struct NectoPluginSidebarStoreTests {
         let active = ["a", "tail"]
         let disabled = ["disabled", "root-disabled"]
 
-        #expect(!state.reorder(rootDisabled, relativeTo: tail, position: .after, activePluginIDs: active, disabledPluginIDs: disabled))
-        #expect(!state.reorder(tail, relativeTo: rootDisabled, position: .after, activePluginIDs: active, disabledPluginIDs: disabled))
+        #expect(state.reorder(rootDisabled, relativeTo: tail, position: .after, activePluginIDs: active, disabledPluginIDs: disabled))
+        #expect(state.reorder(tail, relativeTo: rootDisabled, position: .after, activePluginIDs: active, disabledPluginIDs: disabled))
         #expect(state.reorder(
             location(.plugin("disabled"), parentID: folder.id), relativeTo: location(.plugin("a"), parentID: folder.id),
             position: .before, activePluginIDs: active, disabledPluginIDs: disabled
         ))
         var expectedFolder = folder
         expectedFolder.children = [.plugin("disabled"), .plugin("a"), .plugin("hidden")]
-        #expect(try fixture.store.load(.device).items == [.plugin("root-disabled"), .folder(expectedFolder), .plugin("tail")])
+        #expect(try fixture.store.load(.device).items == [.folder(expectedFolder), .plugin("root-disabled"), .plugin("tail")])
     }
 
-    @Test("An unplaced disabled Device plugin can enter a folder and return to the alphabetized root area")
+    @Test("An unplaced disabled Device plugin can enter a folder and return beside a disabled root anchor")
     func moveDisabledDevicePlugin() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -237,37 +237,39 @@ struct NectoPluginSidebarStoreTests {
         #expect(state[.desktop] == desktop)
 
         #expect(state.move(
-            location(plugin, parentID: folder.id), to: .into(parentID: nil), in: .device,
+            location(plugin, parentID: folder.id),
+            to: .beside(.plugin("a-disabled"), position: .after, parentID: nil), in: .device,
             activePluginIDs: active, disabledPluginIDs: disabled
         ))
         let rows = state[.device].visibleRows(activePluginIDs: active, disabledPluginIDs: disabled)
         #expect(rows.map(\.id) == [
-            .plugin("active"), .plugin("a-disabled"), plugin, .plugin("z-disabled"), .folder(folder.id),
+            .folder(folder.id), .plugin("active"), .plugin("a-disabled"), plugin, .plugin("z-disabled"),
         ])
         #expect(rows.filter { $0.id == plugin }.allSatisfy { $0.parentID == nil && $0.isDimmed })
         #expect(try fixture.store.load(.device) == state[.device])
     }
 
-    @Test("A dimmed folder receives an active plugin and returns to its saved position")
-    func moveIntoDimmedFolder() throws {
+    @Test("A folder containing only unavailable plugins can move with its saved children")
+    func moveUnavailableFolder() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let folder = Section.Folder(name: "Tools", children: [.plugin("unavailable")], isCollapsed: true)
-        let saved = try Section(items: [.folder(folder), .plugin("sibling")])
+        let destination = Section.Folder(name: "Destination")
+        let saved = try Section(items: [.folder(folder), .folder(destination), .plugin("sibling")])
         try fixture.store.save(saved, for: .device)
         let state = NectoPluginSidebarState(store: fixture.store)
-        let active = ["sibling", "new", "other-new"]
-        #expect(state[.device].visibleRows(activePluginIDs: active, disabledPluginIDs: []).last?.id == .folder(folder.id))
+        let active = ["sibling"]
+        #expect(state[.device].visibleRows(activePluginIDs: active, disabledPluginIDs: []).first?.id == .folder(folder.id))
 
         #expect(state.move(
-            location(.plugin("new")), to: .into(parentID: folder.id), in: .device,
+            location(.folder(folder.id)), to: .into(parentID: destination.id), in: .device,
             activePluginIDs: active, disabledPluginIDs: []
         ))
 
         let rows = state[.device].visibleRows(activePluginIDs: active, disabledPluginIDs: [])
-        #expect(rows.map(\.id) == [.folder(folder.id), .plugin("new"), .plugin("sibling"), .plugin("other-new")])
-        #expect(rows.first?.isDimmed == false)
-        #expect(state[.device].pluginIDs == ["unavailable", "new", "sibling"])
+        #expect(rows.map(\.id) == [.folder(destination.id), .folder(folder.id), .plugin("sibling")])
+        #expect(rows.allSatisfy { !$0.isDimmed })
+        #expect(state[.device].folder(withID: destination.id)?.children == [.folder(folder)])
     }
 
     @Test("Invalid parent changes leave shared state and stored data unchanged")
@@ -285,7 +287,7 @@ struct NectoPluginSidebarStoreTests {
         let bytes = fixture.defaults.data(forKey: key)
 
         #expect(!state.move(
-            location(.folder(hidden.id)), to: .into(parentID: closed.id), in: .device,
+            location(.plugin("unavailable"), parentID: hidden.id), to: .into(parentID: closed.id), in: .device,
             activePluginIDs: active, disabledPluginIDs: []
         ))
         #expect(!state.move(
@@ -324,7 +326,7 @@ struct NectoPluginSidebarStoreTests {
         #expect(state[.device] == newer)
     }
 
-    @Test("A drop whose source or destination is hidden, dimmed or in another section leaves storage unchanged")
+    @Test("A drop whose source or destination is hidden or in another section leaves storage unchanged")
     func refuseUnavailableAndCrossSectionDrops() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
@@ -336,13 +338,10 @@ struct NectoPluginSidebarStoreTests {
         let original = try #require(fixture.defaults.data(forKey: Store.Kind.device.sectionKey))
         let a = location(.plugin("a"))
         let b = location(.plugin("b"))
-        let tools = location(.folder(folder.id))
         let absent = location(.plugin("absent"))
 
         #expect(!state.reorder(a, relativeTo: b, position: .after, activePluginIDs: ["b"], disabledPluginIDs: []))
         #expect(!state.reorder(b, relativeTo: absent, position: .after, activePluginIDs: ["b"], disabledPluginIDs: []))
-        #expect(!state.reorder(tools, relativeTo: b, position: .before, activePluginIDs: ["a", "b"], disabledPluginIDs: []))
-        #expect(!state.reorder(b, relativeTo: tools, position: .after, activePluginIDs: ["a", "b"], disabledPluginIDs: []))
         #expect(!state.reorder(
             b, relativeTo: location(.plugin("a"), in: .desktop), position: .before,
             activePluginIDs: ["a", "b"], disabledPluginIDs: []
@@ -491,12 +490,12 @@ struct NectoPluginSidebarStoreTests {
         #expect(state[.desktop] == latest)
     }
 
-    @Test("Device disablement and re-enabling preserve both sections and recompute the folder state")
+    @Test("Device disablement moves once within the current folder and enabling keeps a manual reorder")
     func retainDeviceMembership() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
         let device = plugin(id: "stream", name: "Stream", source: .device(appName: "Example", appBundleID: "com.example.app"))
-        let deviceFolder = Section.Folder(name: "Capture", children: [.plugin(device.id)])
+        let deviceFolder = Section.Folder(name: "Capture", children: [.plugin(device.id), .plugin("child"), .plugin("hidden")])
         let desktopFolder = Section.Folder(name: "Tools", children: [.plugin(device.id)])
         let deviceSection = try Section(items: [.folder(deviceFolder), .plugin("tail")])
         let desktopSection = try Section(items: [.folder(desktopFolder)])
@@ -504,22 +503,45 @@ struct NectoPluginSidebarStoreTests {
         try fixture.store.save(desktopSection, for: .desktop)
         let state = NectoPluginSidebarState(store: fixture.store)
 
-        #expect(try state.setEnabled(device, enabled: false) == [device.id])
-        let disabled = state[.device].visibleRows(activePluginIDs: ["tail"], disabledPluginIDs: [device.id])
-        #expect(disabled.map(\.id) == [.plugin("tail"), .folder(deviceFolder.id), .plugin(device.id)])
-        #expect(disabled.filter(\.isDimmed).map(\.id) == [.folder(deviceFolder.id), .plugin(device.id)])
-        let unavailable = state[.device].visibleRows(activePluginIDs: ["tail"], disabledPluginIDs: [])
-        #expect(unavailable.map(\.id) == [.plugin("tail"), .folder(deviceFolder.id)])
-        #expect(unavailable.last?.isDimmed == true)
+        #expect(try state.setEnabled(device, enabled: false, availableDevicePluginIDs: [device.id, "child", "tail", "unplaced"]) == [device.id])
+        #expect(state[.device].folder(withID: deviceFolder.id)?.children == [
+            .plugin("child"), .plugin("hidden"), .plugin(device.id),
+        ])
+        #expect(!state[.device].pluginIDs.contains("unplaced"))
+        let disabled = state[.device].visibleRows(activePluginIDs: ["child", "tail"], disabledPluginIDs: [device.id])
+        #expect(disabled.map(\.id) == [.folder(deviceFolder.id), .plugin("child"), .plugin(device.id), .plugin("tail")])
+        #expect(disabled.filter(\.isDimmed).map(\.id) == [.plugin(device.id)])
 
-        #expect(try state.setEnabled(device, enabled: true).isEmpty)
-        let reenabled = state[.device].visibleRows(activePluginIDs: [device.id, "tail"], disabledPluginIDs: [])
-        #expect(reenabled.map(\.id) == [.folder(deviceFolder.id), .plugin(device.id), .plugin("tail")])
-        #expect(reenabled.allSatisfy { !$0.isDimmed })
-        #expect(state[.device] == deviceSection)
-        #expect(state[.desktop] == desktopSection)
+        #expect(state.reorder(
+            location(.plugin(device.id), parentID: deviceFolder.id),
+            relativeTo: location(.plugin("child"), parentID: deviceFolder.id),
+            position: .before, activePluginIDs: ["child", "tail"], disabledPluginIDs: [device.id]
+        ))
+        let reopened = NectoPluginSidebarState(store: fixture.store)
+        #expect(try reopened.setEnabled(device, enabled: false) == [device.id])
+        #expect(reopened[.device] == deviceSection)
+        #expect(try reopened.setEnabled(device, enabled: true).isEmpty)
+        #expect(reopened[.device] == deviceSection)
         #expect(try fixture.store.load(.device) == deviceSection)
         #expect(try fixture.store.load(.desktop) == desktopSection)
+    }
+
+    @Test("Disabling an unplaced Device root moves it after saved hidden items and the other visible roots")
+    func disableUnplacedDeviceRoot() throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        let device = plugin(id: "b", name: "B", source: .device(appName: "Example", appBundleID: "com.example.app"))
+        let saved = try Section(items: [.plugin("a"), .plugin("hidden")])
+        try fixture.store.save(saved, for: .device)
+        _ = NectoPluginLibrary.setEnabled("off", false, in: fixture.defaults)
+        let state = NectoPluginSidebarState(store: fixture.store)
+
+        #expect(try state.setEnabled(device, enabled: false, availableDevicePluginIDs: ["a", "b", "c", "off"]) == ["off", "b"])
+        #expect(try fixture.store.load(.device).pluginIDs == ["a", "hidden", "c", "off", "b"])
+        let rows = state[.device].visibleRows(activePluginIDs: ["a", "c"], disabledPluginIDs: ["off", "b"])
+        #expect(rows.map(\.id) == [.plugin("a"), .plugin("c"), .plugin("off"), .plugin("b")])
+        #expect(try state.setEnabled(device, enabled: true) == ["off"])
+        #expect(try fixture.store.load(.device).pluginIDs == ["a", "hidden", "c", "off", "b"])
     }
 
     @Test("A corrupt saved desktop section stops a disable before it changes enablement")

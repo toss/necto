@@ -161,8 +161,30 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
 
     mutating func movePluginToRoot(_ id: String) throws -> Bool {
         var updatedItems = items
-        guard Self.removePlugin(id, from: &updatedItems, insideFolder: false) else { return false }
+        guard Self.editPlugin(id, in: &updatedItems, includingCurrentParent: false, { siblings, index in
+            siblings.remove(at: index)
+        }) else { return false }
         updatedItems.append(.plugin(id))
+        self = try Self(items: updatedItems)
+        return true
+    }
+
+    mutating func movePluginToEnd(_ id: String, unplacedRootPluginIDs: [String]) throws -> Bool {
+        var updatedItems = items
+        var placed = Set(pluginIDs)
+        if !placed.contains(id) || items.contains(.plugin(id)) {
+            // Preserve the visible fallback order before moving a root plugin past it.
+            for unplaced in unplacedRootPluginIDs where placed.insert(unplaced).inserted {
+                updatedItems.append(.plugin(unplaced))
+            }
+        }
+        if !Self.editPlugin(id, in: &updatedItems, includingCurrentParent: true, { siblings, index in
+            let plugin = siblings.remove(at: index)
+            siblings.append(plugin)
+        }) {
+            updatedItems.append(.plugin(id))
+        }
+        guard updatedItems != items else { return false }
         self = try Self(items: updatedItems)
         return true
     }
@@ -321,14 +343,16 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         return false
     }
 
-    private static func removePlugin(_ id: String, from items: inout [Item], insideFolder: Bool) -> Bool {
+    private static func editPlugin(
+        _ id: String, in items: inout [Item], includingCurrentParent: Bool, _ edit: (inout [Item], Int) -> Void
+    ) -> Bool {
         for index in items.indices {
             switch items[index] {
-            case .plugin(let pluginID) where insideFolder && pluginID == id:
-                items.remove(at: index)
+            case .plugin(let pluginID) where includingCurrentParent && pluginID == id:
+                edit(&items, index)
                 return true
             case .folder(var folder):
-                if removePlugin(id, from: &folder.children, insideFolder: true) {
+                if editPlugin(id, in: &folder.children, includingCurrentParent: true, edit) {
                     items[index] = .folder(folder)
                     return true
                 }

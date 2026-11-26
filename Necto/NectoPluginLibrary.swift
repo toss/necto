@@ -69,7 +69,9 @@ struct NectoPluginLibrary {
         defaults.set(Array(ids).sorted(), forKey: disabledKey)
     }
 
-    static func isEnabled(_ id: String) -> Bool { !disabledIDs.contains(id) }
+    static func isEnabled(_ id: String, in defaults: UserDefaults = .standard) -> Bool {
+        !disabledIDs(in: defaults).contains(id)
+    }
 
     /// What the user agreed to, per plugin. Written when an install is approved and
     /// read on every launch, so an approval is a decision rather than a formality that

@@ -319,7 +319,10 @@ struct ContentView: View {
                 createFolder: { createFolder(in: kind, parentID: $0) },
                 renameFolder: { folderToRename = FolderRename(kind: kind, folder: $0) },
                 deleteFolder: { id in editSidebar(kind) { try $0.deleteFolder(id) } },
-                setEnabled: { model.setPlugin($0, enabled: $1) },
+                setEnabled: { plugin, enabled in
+                    guard context.target == window.selectedTarget else { return }
+                    model.setPlugin(plugin, enabled: enabled, deviceTarget: context.target)
+                },
                 reorder: { source, anchor, position, parentID in
                     let location = NectoPluginSidebarState.ItemLocation(kind: kind, id: source, parentID: parentID)
                     guard context == sidebarDragContext, sidebarDrag.source(in: context) == location else { return }
@@ -336,9 +339,8 @@ struct ContentView: View {
                     guard context == sidebarDragContext else { return nil }
                     let source = NectoPluginSidebarState.ItemLocation(kind: kind, id: row.id, parentID: row.parentID)
                     if sidebarDrag.source(in: context) != source { sidebarDropFeedback.highlight = nil }
-                    let nativeReorderSource = row.canReorder ? source : nil
-                    if sidebarDropFeedback.nativeReorderSource != nativeReorderSource {
-                        sidebarDropFeedback.nativeReorderSource = nativeReorderSource
+                    if sidebarDropFeedback.nativeReorderSource != source {
+                        sidebarDropFeedback.nativeReorderSource = source
                     }
                     return sidebarDrag.provider(for: source, in: context)
                 },

@@ -45,9 +45,9 @@ struct NectoPluginSidebarSectionTests {
         #expect(Section.insertion(from: [0], to: 2, in: rows) == nil) // Inside Tools.
         #expect(Section.insertion(from: [1], to: 5, in: rows) == nil) // After its own subtree.
         #expect(Section.insertion(from: [2], to: 0, in: rows) == nil) // Outside Tools.
-        #expect(Section.insertion(from: [0], to: 6, in: rows) == nil) // After root disabled.
-        #expect(Section.insertion(from: [0], to: 7, in: rows) == nil) // After dimmed folder.
-        #expect(Section.insertion(from: [6], to: 0, in: rows) == nil) // Dimmed source.
+        #expect(Section.insertion(from: [0], to: 6, in: rows)?.anchor.id == .plugin("disabled"))
+        #expect(Section.insertion(from: [0], to: 7, in: rows)?.anchor.id == .folder(unavailable.id))
+        #expect(Section.insertion(from: [6], to: 0, in: rows)?.source.id == .folder(unavailable.id))
         #expect(Section.insertion(from: [0, 1], to: 5, in: rows) == nil)
         #expect(Section.insertion(from: [7], to: 0, in: rows) == nil)
         #expect(Section.insertion(from: [0], to: 8, in: rows) == nil)
@@ -108,21 +108,18 @@ struct NectoPluginSidebarSectionTests {
         #expect(moved?.items == [.folder(emptied), .plugin("a"), .plugin("hidden")])
     }
 
-    @Test("An extracted disabled child is placed before the first dimmed root folder")
-    func extractDisabledChildAmongDimmedRoots() throws {
+    @Test("An extracted disabled child follows the chosen root edge")
+    func extractDisabledChildBesideRootFolder() throws {
         let folder = Folder(name: "Tools", children: [.plugin("off"), .plugin("missing")])
         let other = Folder(name: "Unavailable", children: [.plugin("other-missing")])
         let saved = try Section(items: [.folder(folder), .plugin("hidden"), .folder(other)])
         let rows = saved.visibleRows(activePluginIDs: [], disabledPluginIDs: ["off"])
         let siblings = saved.visibleSiblings(activePluginIDs: [], disabledPluginIDs: ["off"])
         #expect(rows.map(\.id) == [.folder(folder.id), .plugin("off"), .folder(other.id)])
-        #expect(rows[0].isDimmed && rows[2].isDimmed)
+        #expect(rows.filter(\.isDimmed).map(\.id) == [.plugin("off")])
 
-        #expect(Section.dropDestination(
-            beside: .folder(other.id), position: .before, in: siblings[nil, default: []]
-        ) == nil)
         let rootGap = try #require(Section.dropDestination(
-            beside: .folder(folder.id), position: .before, in: siblings[nil, default: []]
+            beside: .folder(other.id), position: .before, in: siblings[nil, default: []]
         ))
         let moved = saved.candidateForMove(
             .init(kind: .device, id: .plugin("off"), parentID: folder.id),
@@ -130,8 +127,10 @@ struct NectoPluginSidebarSectionTests {
         )
         var remaining = folder
         remaining.children = [.plugin("missing")]
-        #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .folder(other), .plugin("off")])
-        #expect(moved?.visibleRows(activePluginIDs: [], disabledPluginIDs: ["off"]).first?.id == .plugin("off"))
+        #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .plugin("off"), .folder(other)])
+        #expect(moved?.visibleRows(activePluginIDs: [], disabledPluginIDs: ["off"]).map(\.id) == [
+            .folder(folder.id), .plugin("off"), .folder(other.id),
+        ])
     }
 
     @Test("A child row edge inserts before that child and preserves hidden sibling order")
@@ -181,18 +180,18 @@ struct NectoPluginSidebarSectionTests {
         #expect(childMove?.folder(withID: nested.id)?.children == [.plugin("child"), .plugin("root")])
     }
 
-    @Test("The edge above a dimmed child folder preserves the preceding sibling subtree when inserting a folder")
-    func moveFolderBeforeDimmedSibling() throws {
+    @Test("An unavailable folder remains a valid anchor and preserves hidden siblings")
+    func moveFolderBeforeUnavailableSibling() throws {
         let moving = Folder(name: "Work", children: [.plugin("payload")], isCollapsed: true)
         let source = Folder(name: "Source", children: [.folder(moving)])
         let preceding = Folder(name: "Work", children: [.plugin("active")])
-        let dimmed = Folder(name: "Unavailable", children: [.plugin("missing")])
-        let tools = Folder(name: "Tools", children: [.folder(preceding), .plugin("hidden"), .folder(dimmed)])
+        let unavailable = Folder(name: "Unavailable", children: [.plugin("missing")])
+        let tools = Folder(name: "Tools", children: [.folder(preceding), .plugin("hidden"), .folder(unavailable)])
         let saved = try Section(items: [.folder(source), .folder(tools)])
         let active = ["payload", "active"]
         let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
         let destination = try #require(Section.dropDestination(
-            beside: .folder(dimmed.id), position: .before, in: siblings[tools.id, default: []]
+            beside: .folder(unavailable.id), position: .before, in: siblings[tools.id, default: []]
         ))
         let moved = saved.candidateForMove(
             .init(kind: .device, id: .folder(moving.id), parentID: source.id),
@@ -204,7 +203,7 @@ struct NectoPluginSidebarSectionTests {
         var renamed = moving
         renamed.name = "Work(1)"
         var updated = tools
-        updated.children = [.folder(preceding), .folder(renamed), .plugin("hidden"), .folder(dimmed)]
+        updated.children = [.folder(preceding), .plugin("hidden"), .folder(renamed), .folder(unavailable)]
         #expect(moved?.items == [.folder(emptied), .folder(updated)])
     }
 
@@ -326,22 +325,22 @@ struct NectoPluginSidebarSectionTests {
         var section = try Section(items: [.plugin("root-disabled"), .folder(tools), .folder(empty)])
         #expect(section.isVisible(hasAvailablePlugins: false))
         #expect(section.visibleRows(activePluginIDs: [], disabledPluginIDs: []).map(\.id) == [
-            .folder(empty.id), .folder(tools.id),
+            .folder(tools.id), .folder(empty.id),
         ])
 
         let active = ["nested", "unplaced"]
         let disabled = ["root-disabled", "nested-disabled"]
         #expect(section.visibleRows(activePluginIDs: active, disabledPluginIDs: disabled).map(\.id) == [
-            .folder(tools.id), .plugin("nested"), .plugin("nested-disabled"), .folder(empty.id),
-            .plugin("unplaced"), .plugin("root-disabled"),
+            .plugin("root-disabled"), .folder(tools.id), .plugin("nested"), .plugin("nested-disabled"),
+            .folder(empty.id), .plugin("unplaced"),
         ])
         try section.toggleFolder(tools.id)
         #expect(section.visibleRows(activePluginIDs: active, disabledPluginIDs: disabled).map(\.id) == [
-            .folder(tools.id), .folder(empty.id), .plugin("unplaced"), .plugin("root-disabled"),
+            .plugin("root-disabled"), .folder(tools.id), .folder(empty.id), .plugin("unplaced"),
         ])
     }
 
-    @Test("A parent's dimmed folders sink in that parent and return to their saved position as availability changes")
+    @Test("Folders stay in saved positions when the connected app changes")
     func nestedFolderAvailability() throws {
         let appBTools = Folder(name: "App B Tools", children: [.plugin("app-b")])
         let unavailable = Folder(name: "Unavailable", children: [.plugin("hidden")])
@@ -355,18 +354,18 @@ struct NectoPluginSidebarSectionTests {
 
         let appA = section.visibleRows(activePluginIDs: ["app-a", "tail"], disabledPluginIDs: ["disabled"])
         #expect(appA.map(\.id) == [
-            .folder(parent.id), .plugin("disabled"), .folder(empty.id), .folder(appATools.id), .folder(appBTools.id),
-            .folder(unavailable.id), .plugin("tail"),
+            .folder(parent.id), .folder(appBTools.id), .plugin("disabled"), .folder(unavailable.id),
+            .folder(empty.id), .folder(appATools.id), .plugin("tail"),
         ])
-        #expect(appA.filter(\.isDimmed).map(\.id) == [.plugin("disabled"), .folder(appBTools.id), .folder(unavailable.id)])
+        #expect(appA.filter(\.isDimmed).map(\.id) == [.plugin("disabled")])
         #expect(appA.map(\.depth) == [1, 2, 2, 2, 2, 2, 1])
 
         let appB = section.visibleRows(activePluginIDs: ["app-b", "tail"], disabledPluginIDs: ["disabled"])
         #expect(appB.map(\.id) == [
-            .folder(parent.id), .folder(appBTools.id), .plugin("app-b"), .plugin("disabled"), .folder(empty.id),
-            .folder(unavailable.id), .folder(appATools.id), .plugin("tail"),
+            .folder(parent.id), .folder(appBTools.id), .plugin("app-b"), .plugin("disabled"),
+            .folder(unavailable.id), .folder(empty.id), .folder(appATools.id), .plugin("tail"),
         ])
-        #expect(appB.filter(\.isDimmed).map(\.id) == [.plugin("disabled"), .folder(unavailable.id), .folder(appATools.id)])
+        #expect(appB.filter(\.isDimmed).map(\.id) == [.plugin("disabled")])
         #expect(section == saved)
 
         try section.toggleFolder(parent.id)
@@ -375,8 +374,8 @@ struct NectoPluginSidebarSectionTests {
         #expect(collapsed.allSatisfy { !$0.isDimmed })
     }
 
-    @Test("Root disabled rows follow normal rows and fallbacks before dimmed folders")
-    func rootDisabledArea() throws {
+    @Test("Previously disabled roots keep their saved positions and unplaced rows follow them")
+    func savedRootOrder() throws {
         let unavailable = Folder(name: "Unavailable", children: [.plugin("hidden")])
         let disabled = Folder(name: "Disabled", children: [.plugin("nested-disabled")])
         let empty = Folder(name: "Empty")
@@ -390,15 +389,14 @@ struct NectoPluginSidebarSectionTests {
             disabledPluginIDs: ["root-disabled-a", "unplaced-disabled", "root-disabled-z", "nested-disabled"]
         )
         #expect(rows.map(\.id) == [
-            .folder(emptyStack.id), .folder(empty.id), .plugin("root-active"), .plugin("unplaced-active"),
-            .plugin("root-disabled-a"), .plugin("unplaced-disabled"), .plugin("root-disabled-z"),
-            .folder(unavailable.id), .folder(disabled.id), .plugin("nested-disabled"),
+            .folder(unavailable.id), .plugin("root-disabled-z"), .folder(emptyStack.id), .folder(empty.id),
+            .plugin("root-active"), .folder(disabled.id), .plugin("nested-disabled"), .plugin("root-disabled-a"),
+            .plugin("unplaced-active"), .plugin("unplaced-disabled"),
         ])
         #expect(rows.filter(\.isDimmed).map(\.id) == [
-            .plugin("root-disabled-a"), .plugin("unplaced-disabled"), .plugin("root-disabled-z"),
-            .folder(unavailable.id), .folder(disabled.id), .plugin("nested-disabled"),
+            .plugin("root-disabled-z"), .plugin("nested-disabled"), .plugin("root-disabled-a"), .plugin("unplaced-disabled"),
         ])
-        #expect(rows.last?.depth == 2)
+        #expect(rows.last?.depth == 1)
     }
 
     @Test("Creating folders appends within the requested parent and trims names")

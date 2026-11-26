@@ -8,12 +8,12 @@ import Testing
 struct NectoPluginSidebarDisclosureTests {
     typealias Section = NectoPluginSidebarSection
 
-    @Test("Disclosure groups keep visible children and dimmed rows under their saved parents")
+    @Test("Disclosure groups keep visible children and disabled rows under their saved parents")
     func visibleSiblings() throws {
         let closed = Section.Folder(name: "Closed", children: [.plugin("closed")], isCollapsed: true)
-        let dimmed = Section.Folder(name: "Unavailable", children: [.plugin("missing")])
+        let unavailable = Section.Folder(name: "Unavailable", children: [.plugin("missing")])
         let tools = Section.Folder(name: "Tools", children: [
-            .folder(dimmed), .plugin("hidden"), .plugin("off"), .plugin("visible"),
+            .folder(unavailable), .plugin("hidden"), .plugin("off"), .plugin("visible"),
         ])
         let section = try Section(items: [.folder(closed), .folder(tools), .plugin("root-off")])
         let siblings = section.visibleSiblings(
@@ -21,14 +21,12 @@ struct NectoPluginSidebarDisclosureTests {
         )
 
         #expect(siblings[nil]?.map(\.id) == [.folder(closed.id), .folder(tools.id), .plugin("root-off")])
-        #expect(siblings[nil]?.last?.canReorder == false)
+        #expect(siblings[nil]?.last?.isDimmed == true)
         #expect(siblings[closed.id] == nil)
         let children = try #require(siblings[tools.id])
-        #expect(children.map(\.id) == [.plugin("off"), .plugin("visible"), .folder(dimmed.id)])
-        #expect(children.first?.canReorder == true)
-        #expect(children.last?.isDimmed == true)
-        #expect(children.last?.canReorder == false)
-        #expect(section.folder(withID: dimmed.id) == dimmed)
+        #expect(children.map(\.id) == [.folder(unavailable.id), .plugin("off"), .plugin("visible")])
+        #expect(children.filter(\.isDimmed).map(\.id) == [.plugin("off")])
+        #expect(section.folder(withID: unavailable.id) == unavailable)
     }
 
     @Test("A root reorder after an expanded folder anchors to the folder rather than its last child")

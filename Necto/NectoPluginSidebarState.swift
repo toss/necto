@@ -48,14 +48,20 @@ final class NectoPluginSidebarState {
         return result
     }
 
-    func setEnabled(_ plugin: NectoInstalledPlugin, enabled: Bool) throws -> Set<String> {
-        if plugin.source == .installed && !enabled {
-            var section = try store.load(.desktop)
-            if try section.movePluginToRoot(plugin.id) {
-                try store.save(section, for: .desktop)
+    func setEnabled(
+        _ plugin: NectoInstalledPlugin, enabled: Bool, availableDevicePluginIDs: [String] = []
+    ) throws -> Set<String> {
+        let kind: NectoPluginSidebarStore.Kind = plugin.source == .installed ? .desktop : .device
+        if !enabled && (kind == .desktop || NectoPluginLibrary.isEnabled(plugin.id, in: store.defaults)) {
+            var section = try store.load(kind)
+            let changed = try kind == .desktop
+                ? section.movePluginToRoot(plugin.id)
+                : section.movePluginToEnd(plugin.id, unplacedRootPluginIDs: availableDevicePluginIDs)
+            if changed {
+                try store.save(section, for: kind)
             }
-            if self[.desktop] != section {
-                sections[.desktop] = section
+            if self[kind] != section {
+                sections[kind] = section
             }
         }
         return NectoPluginLibrary.setEnabled(plugin.id, enabled, in: store.defaults)
@@ -74,12 +80,12 @@ final class NectoPluginSidebarState {
         do {
             var section = try store.load(kind)
             let rows = section.visibleRows(activePluginIDs: activePluginIDs, disabledPluginIDs: disabledPluginIDs)
-            let siblings = rows.filter { $0.parentID == source.parentID && $0.canReorder }
+            let siblings = rows.filter { $0.parentID == source.parentID }
             guard siblings.contains(where: { $0.id == source.id }),
                   siblings.contains(where: { $0.id == anchor.id }),
                   try section.reorder(
                     source.id, relativeTo: anchor.id, position: position, in: source.parentID,
-                    unplacedRootPluginIDs: activePluginIDs
+                    unplacedRootPluginIDs: activePluginIDs + disabledPluginIDs
                   ) else { return false }
             try store.save(section, for: kind)
             sections[kind] = section
@@ -127,25 +133,19 @@ extension NectoPluginSidebarSection {
     ) -> Self? {
         guard source.kind == kind, source.parentID != destination.parentID else { return nil }
         let rows = visibleRows(activePluginIDs: activePluginIDs, disabledPluginIDs: disabledPluginIDs)
-        guard let sourceRow = rows.first(where: { $0.id == source.id && $0.parentID == source.parentID }),
-              sourceRow.canChangeParent(in: kind) else { return nil }
+        guard rows.contains(where: { $0.id == source.id && $0.parentID == source.parentID }) else { return nil }
         switch destination {
         case .into(let parentID):
             if let parentID, !rows.contains(where: { $0.id == .folder(parentID) }) { return nil }
         case .beside(let anchor, _, let parentID):
-            guard rows.contains(where: { $0.id == anchor && $0.parentID == parentID && $0.canReorder }) else {
+            guard rows.contains(where: { $0.id == anchor && $0.parentID == parentID }) else {
                 return nil
             }
         }
 
-        // A root disabled source may be available but not yet present in the saved section.
-        var rootPluginIDs = activePluginIDs
-        if sourceRow.isDimmed, source.parentID == nil, case .plugin(let id) = source.id {
-            rootPluginIDs.append(id)
-        }
         var candidate = self
         guard (try? candidate.move(
-            source.id, from: source.parentID, to: destination, unplacedRootPluginIDs: rootPluginIDs
+            source.id, from: source.parentID, to: destination, unplacedRootPluginIDs: activePluginIDs + disabledPluginIDs
         )) == true else { return nil }
         return candidate
     }
@@ -158,20 +158,6 @@ extension NectoPluginSidebarSection {
         var lastVisibleDescendantID: Item.ID?
 
         var id: Item.ID { item.id }
-
-        var canReorder: Bool {
-            switch item {
-            case .plugin: parentID != nil || !isDimmed
-            case .folder: !isDimmed
-            }
-        }
-
-        func canChangeParent(in kind: NectoPluginSidebarStore.Kind) -> Bool {
-            switch item {
-            case .plugin: !isDimmed || kind == .device
-            case .folder: !isDimmed
-            }
-        }
     }
 
     /// Each disclosure group gives its ForEach the immediate children in their displayed order.
@@ -193,7 +179,6 @@ extension NectoPluginSidebarSection {
         guard sources.count == 1, let index = sources.first, rows.indices.contains(index),
               (0...rows.count).contains(destination) else { return nil }
         let source = rows[index]
-        guard source.canReorder else { return nil }
 
         let position: InsertionPosition = destination > index ? .after : .before
         let anchor: Row?
@@ -206,7 +191,7 @@ extension NectoPluginSidebarSection {
                 $0.parentID == source.parentID && ($0.lastVisibleDescendantID ?? $0.id) == precedingID
             }
         }
-        guard let anchor, anchor.parentID == source.parentID, anchor.canReorder, anchor.id != source.id else { return nil }
+        guard let anchor, anchor.parentID == source.parentID, anchor.id != source.id else { return nil }
         return (source, anchor, position)
     }
 
@@ -214,88 +199,40 @@ extension NectoPluginSidebarSection {
     static func dropDestination(
         beside id: Item.ID, position: InsertionPosition, in siblings: [Row]
     ) -> MoveDestination? {
-        guard let index = siblings.firstIndex(where: { $0.id == id }) else { return nil }
-        let row = siblings[index]
-        if row.canReorder {
-            return .beside(id, position: position, parentID: row.parentID)
-        }
-        // Keep the line on the same visible gap if the row itself cannot be an anchor.
-        let neighbor = position == .before ? index - 1 : index + 1
-        if siblings.indices.contains(neighbor), siblings[neighbor].canReorder {
-            let opposite: InsertionPosition = position == .before ? .after : .before
-            return .beside(siblings[neighbor].id, position: opposite, parentID: row.parentID)
-        }
-        // In an all-dimmed root, extracted disabled plugins appear before the folders.
-        guard position == .before, row.parentID == nil, case .folder = row.item,
-              !siblings.contains(where: \.canReorder),
-              !siblings[..<index].contains(where: { if case .folder = $0.item { true } else { false } }) else { return nil }
-        return .into(parentID: nil)
+        guard let row = siblings.first(where: { $0.id == id }) else { return nil }
+        return .beside(id, position: position, parentID: row.parentID)
     }
 
     func visibleRows(activePluginIDs: [String], disabledPluginIDs: [String]) -> [Row] {
         let availableIDs = activePluginIDs + disabledPluginIDs
-        let active = Set(activePluginIDs)
+        let available = Set(availableIDs)
         let disabled = Set(disabledPluginIDs)
-        let available = active.union(disabled)
-        var placed = Set<String>()
 
-        func visit(
-            _ items: [Item],
-            parentID: UUID?,
-            depth: Int,
-            visible: Bool
-        ) -> (rows: [Row], hasPlugins: Bool, hasActivePlugin: Bool) {
-            var normal: [Row] = []
-            var dimmedFolders: [Row] = []
-            var hasPlugins = false
-            var hasActivePlugin = false
-
+        func visit(_ items: [Item], parentID: UUID?, depth: Int) -> [Row] {
+            var rows: [Row] = []
             for item in items {
                 switch item {
                 case .plugin(let id):
-                    hasPlugins = true
-                    hasActivePlugin = hasActivePlugin || active.contains(id)
-
-                    // Keep the existing root-level disabled area. Nested rows keep their saved positions.
-                    let isDisabled = disabled.contains(id)
-                    guard depth > 1 || !isDisabled else { continue }
-                    placed.insert(id)
-                    if visible && available.contains(id) {
-                        normal.append(Row(item: item, depth: depth, parentID: parentID, isDimmed: isDisabled))
+                    if available.contains(id) {
+                        rows.append(Row(item: item, depth: depth, parentID: parentID, isDimmed: disabled.contains(id)))
                     }
                 case .folder(let folder):
-                    // Collapsed children still affect the folder's state and own their saved placements.
-                    let children = visit(
-                        folder.children, parentID: folder.id, depth: depth + 1, visible: visible && !folder.isCollapsed
-                    )
-                    hasPlugins = hasPlugins || children.hasPlugins
-                    hasActivePlugin = hasActivePlugin || children.hasActivePlugin
-                    guard visible else { continue }
-
-                    let isDimmed = children.hasPlugins && !children.hasActivePlugin
-                    let row = Row(
-                        item: item, depth: depth, parentID: parentID, isDimmed: isDimmed,
-                        lastVisibleDescendantID: children.rows.last?.id
-                    )
-                    if isDimmed {
-                        dimmedFolders.append(row)
-                        dimmedFolders.append(contentsOf: children.rows)
-                    } else {
-                        normal.append(row)
-                        normal.append(contentsOf: children.rows)
-                    }
+                    let children = folder.isCollapsed ? [] : visit(folder.children, parentID: folder.id, depth: depth + 1)
+                    rows.append(Row(
+                        item: item, depth: depth, parentID: parentID, lastVisibleDescendantID: children.last?.id
+                    ))
+                    rows.append(contentsOf: children)
                 }
             }
-
-            if depth == 1 {
-                // Append new active plugins and the root disabled area before dimmed root folders.
-                for id in availableIDs where placed.insert(id).inserted {
-                    normal.append(Row(item: .plugin(id), depth: 1, parentID: nil, isDimmed: disabled.contains(id)))
-                }
-            }
-            return (normal + dimmedFolders, hasPlugins, hasActivePlugin)
+            return rows
         }
 
-        return visit(items, parentID: nil, depth: 1, visible: true).rows
+        var rows = visit(items, parentID: nil, depth: 1)
+        // Plugins in a collapsed folder still have a saved placement.
+        var placed = Set(pluginIDs)
+        for id in availableIDs where placed.insert(id).inserted {
+            rows.append(Row(item: .plugin(id), depth: 1, parentID: nil, isDimmed: disabled.contains(id)))
+        }
+        return rows
     }
 }

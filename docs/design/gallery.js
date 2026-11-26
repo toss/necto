@@ -235,9 +235,9 @@ if (sidebarFolders) sidebarFolders.innerHTML = `
     <div class="gallery-folder-children">
       <div class="necto-sidebar-item gallery-insertion-drop-target gallery-insertion-drop-after">${netIcon}<span>Network</span><span class="necto-trailing">1.0.0</span></div>
       <details>
-        <summary class="necto-sidebar-item gallery-folder-dimmed gallery-folder-drop-target">${disclosure}${folderIcon}<span>Archive</span></summary>
+        <summary class="necto-sidebar-item gallery-folder-drop-target">${disclosure}${folderIcon}<span>Archive</span></summary>
         <div class="gallery-folder-children">
-          <div class="necto-sidebar-item gallery-folder-dimmed">${logIcon}<span>Events</span><span class="necto-trailing">off</span></div>
+          <div class="necto-sidebar-item gallery-plugin-disabled">${logIcon}<span>Events</span><span class="necto-trailing">off</span></div>
         </div>
       </details>
     </div>
