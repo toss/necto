@@ -41,6 +41,7 @@ enum NectoTheme {
 
     /// One density across the window. Two densities read as two applications.
     static let rowHeight: CGFloat = 26
+    static let sidebarIndentation: CGFloat = 8
     static let buttonHeight: CGFloat = 24
     static let toolbarHeight: CGFloat = 38
     static let statusDotSize: CGFloat = 6

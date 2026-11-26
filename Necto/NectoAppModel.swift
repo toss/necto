@@ -32,9 +32,7 @@ final class NectoAppModel {
     private(set) var disabledIDs = NectoPluginLibrary.disabledIDs {
         didSet { refreshBackgroundPanels() }
     }
-    /// Mirrors `NectoPluginLibrary.deviceOrder` so a drop re-renders the list at
-    /// once: UserDefaults is where the order lives, but it is not observable.
-    private(set) var deviceOrder = NectoPluginLibrary.deviceOrder
+    let pluginSidebar = NectoPluginSidebarState(store: NectoPluginSidebarStore(defaults: .standard))
 
     typealias PendingInstall = InstallCoordinator.PendingInstall
     typealias PendingChoice = InstallCoordinator.PendingChoice
@@ -198,50 +196,94 @@ final class NectoAppModel {
             devicePlugins
                 .filter { $0.target == target && !disabledIDs.contains($0.id) }
                 .map(\.plugin),
-            by: deviceOrder
+            by: pluginSidebar[.device].pluginIDs
         )
     }
 
-    /// Sunken to the bottom of the section, in gray. Alphabetical on purpose: what
-    /// needs no arranging gets no arranging.
     func disabledDevicePlugins(for target: NectoTarget?) -> [NectoInstalledPlugin] {
         guard let target else { return [] }
-        return devicePlugins
-            .filter { $0.target == target && disabledIDs.contains($0.id) }
-            .map(\.plugin)
-            .sorted { $0.manifest.name < $1.manifest.name }
+        return NectoPluginLibrary.sorted(
+            devicePlugins
+                .filter { $0.target == target && disabledIDs.contains($0.id) }
+                .map(\.plugin),
+            by: pluginSidebar[.device].pluginIDs
+        )
     }
 
-    func moveDevicePlugins(from source: IndexSet, to destination: Int, target: NectoTarget?) {
-        var arranged = activeDevicePlugins(for: target)
-        arranged.move(fromOffsets: source, toOffset: destination)
-
-        // The moved block leads; ids it does not mention — disabled ones, other
-        // devices' plugins — keep their old standing behind it rather than being
-        // forgotten by an arrangement that never showed them.
-        let moved = arranged.map(\.id)
-        let kept = NectoPluginLibrary.deviceOrder.filter { !moved.contains($0) }
-        NectoPluginLibrary.deviceOrder = moved + kept
-        deviceOrder = NectoPluginLibrary.deviceOrder
-    }
-
-    /// What the sidebar lists, in the order the user arranged. A disabled plugin stays
-    /// installed and keeps its folder, it just stops being somewhere to navigate to.
+    /// The enabled catalog entries in the sidebar's saved order.
     var enabledPlugins: [NectoInstalledPlugin] {
-        plugins.filter { !disabledIDs.contains($0.id) }
+        NectoPluginLibrary.sorted(plugins.filter { !disabledIDs.contains($0.id) }, by: pluginSidebar[.desktop].pluginIDs)
     }
 
-    /// Takes the move `List` already worked out, once, when the row is dropped.
-    func movePlugins(from source: IndexSet, to destination: Int) {
-        var enabled = enabledPlugins
-        enabled.move(fromOffsets: source, toOffset: destination)
+    func reorderSidebar(
+        _ source: NectoPluginSidebarState.ItemLocation,
+        relativeTo anchor: NectoPluginSidebarState.ItemLocation,
+        position: NectoPluginSidebarSection.InsertionPosition,
+        target: NectoTarget?
+    ) {
+        let ids = sidebarPluginIDs(in: source.kind, for: target)
+        let saved = pluginSidebar.reorder(
+            source, relativeTo: anchor, position: position,
+            activePluginIDs: ids.active, disabledPluginIDs: ids.disabled
+        )
+        if saved && source.kind == .desktop {
+            updateDesktopSidebarOrder()
+        }
+    }
 
-        // Disabled plugins keep their places, so turning one back on does not move it.
-        plugins = enabled + plugins.filter { disabledIDs.contains($0.id) }
+    func moveSidebar(
+        _ source: NectoPluginSidebarState.ItemLocation,
+        to destination: NectoPluginSidebarSection.MoveDestination,
+        in kind: NectoPluginSidebarStore.Kind,
+        target: NectoTarget?
+    ) {
+        let ids = sidebarPluginIDs(in: kind, for: target)
+        let saved = pluginSidebar.move(
+            source, to: destination, in: kind,
+            activePluginIDs: ids.active, disabledPluginIDs: ids.disabled
+        )
+        if saved && kind == .desktop {
+            updateDesktopSidebarOrder()
+        }
+    }
 
-        // The whole list is written, not just the pair that moved: an order held as
-        // gaps between neighbours drifts as plugins come and go.
-        NectoPluginLibrary.order = plugins.map(\.id)
+    private func updateDesktopSidebarOrder() {
+        plugins = NectoPluginLibrary.sorted(plugins, by: pluginSidebar[.desktop].pluginIDs)
+    }
+
+    func sidebarPluginIDs(
+        in kind: NectoPluginSidebarStore.Kind,
+        for target: NectoTarget?
+    ) -> (active: [String], disabled: [String]) {
+        switch kind {
+        case .device: (activeDevicePlugins(for: target).map(\.id), disabledDevicePlugins(for: target).map(\.id))
+        case .desktop: (enabledPlugins.map(\.id), [])
+        }
+    }
+
+    private func sidebarFromCLI(_ request: NectoSidebarRequest) throws -> NectoJSONValue {
+        let kind: NectoPluginSidebarStore.Kind = request.section == .device ? .device : .desktop
+        switch request.action {
+        case .list:
+            return pluginSidebar.listForCLI(kind, catalog: sidebarCatalog(in: kind), disabledIDs: disabledIDs)
+        case .folder(let edit):
+            return try pluginSidebar.editFolderForCLI(edit, in: kind)
+        case .move(let command):
+            let result = try pluginSidebar.moveForCLI(command, in: kind, catalog: sidebarCatalog(in: kind), disabledIDs: disabledIDs)
+            if result.changed && kind == .desktop { updateDesktopSidebarOrder() }
+            var value: [String: NectoJSONValue] = [
+                "section": .string(kind.rawValue), "item": .string(command.item.reference), "changed": .bool(result.changed),
+                "parentID": result.parentID.map { .string($0.uuidString) } ?? .null,
+            ]
+            value["name"] = result.name.map(NectoJSONValue.string)
+            return .object(value)
+        }
+    }
+
+    private func sidebarCatalog(in kind: NectoPluginSidebarStore.Kind) -> [NectoInstalledPlugin] {
+        if kind == .desktop { return plugins }
+        let targets = Set(connectedApps.map(\.target))
+        return devicePlugins.filter { targets.contains($0.target) }.map(\.plugin)
     }
 
     /// Records a line and republishes what the badge reads.
@@ -268,10 +310,15 @@ final class NectoAppModel {
         unreadIssueCount = await diagnostics.unreadIssueCount()
     }
 
-    func setPlugin(_ id: String, enabled: Bool) {
-        NectoPluginLibrary.setEnabled(id, enabled)
-        disabledIDs = NectoPluginLibrary.disabledIDs
-
+    func setPlugin(_ plugin: NectoInstalledPlugin, enabled: Bool, deviceTarget: NectoTarget? = nil) {
+        let available = sidebarPluginIDs(in: .device, for: deviceTarget)
+        do {
+            disabledIDs = try pluginSidebar.setEnabled(
+                plugin, enabled: enabled, availableDevicePluginIDs: available.active + available.disabled
+            )
+        } catch {
+            Task { await log(.failure, .plugin, "Could not save plugin enablement") }
+        }
     }
 
     // MARK: Installing
@@ -498,6 +545,10 @@ final class NectoAppModel {
             delete: { [weak self] id in
                 guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
                 return try await self.deletePluginFromCLI(id: id)
+            },
+            sidebar: { [weak self] request in
+                guard let self else { throw NectoBridgeError(code: .operationUnavailable, message: "Necto is closing.") }
+                return try await self.sidebarFromCLI(request)
             }
         ))
         do {
@@ -938,7 +989,7 @@ final class NectoAppModel {
             }
         }
 
-        plugins = NectoPluginLibrary.sorted(installed)
+        plugins = NectoPluginLibrary.sorted(installed, by: pluginSidebar[.desktop].pluginIDs)
         pluginsAwaitingApproval = awaitingApproval
         pluginFailures = failures
 

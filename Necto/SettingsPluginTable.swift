@@ -49,7 +49,7 @@ private struct PluginRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            NectoSwitch(isOn: isEnabled) { model.setPlugin(plugin.id, enabled: $0) }
+            NectoSwitch(isOn: isEnabled) { model.setPlugin(plugin, enabled: $0) }
                 .frame(width: 34, alignment: .leading)
                 .accessibilityLabel(NectoL10n.format("Enable %@", plugin.manifest.name))
 

@@ -13,9 +13,8 @@ public enum NectoCLIShell {
 
 /// One request over the control socket.
 ///
-/// The vocabulary mirrors the web panel's, not the SDK's: a caller names a plugin and
-/// an operation id from its manifest, and the registry resolves the rest. The CLI is
-/// a panel that happens to live in a terminal.
+/// A plugin call names a plugin and an operation from its manifest, and the registry
+/// resolves the rest. The socket also accepts commands for app-owned features.
 public struct NectoControlRequest: Sendable, Codable {
     public enum Kind: String, Sendable, Codable {
         /// Connected apps and devices.
@@ -26,6 +25,8 @@ public struct NectoControlRequest: Sendable, Codable {
         case installPlugin
         /// Remove an installed desktop plugin through the app's removal path.
         case deletePlugin
+        /// Inspect or organize a saved sidebar section.
+        case sidebar
         /// Call an operation that answers once.
         case invoke
         /// Follow an operation that streams; events arrive until `end`.

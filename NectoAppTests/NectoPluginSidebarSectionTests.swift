@@ -1,0 +1,626 @@
+//
+//  Copyright (c) 2026 Viva Republica, Inc.
+//
+
+import Foundation
+import Testing
+
+@Suite("Plugin sidebar section")
+struct NectoPluginSidebarSectionTests {
+    typealias Section = NectoPluginSidebarSection
+    typealias Folder = Section.Folder
+    typealias Item = Section.Item
+
+    @Test("Moving either visible row around a hidden sibling keeps the hidden sibling's position relative to the untouched row")
+    func insertAroundHiddenSibling() throws {
+        let saved = try Section(items: [.plugin("a"), .plugin("c"), .plugin("b")])
+        let rows = saved.visibleRows(activePluginIDs: ["a", "b"], disabledPluginIDs: [])
+        var bBeforeA = saved
+        let upward = try #require(Section.insertion(from: [1], to: 0, in: rows))
+        #expect(try bBeforeA.reorder(
+            upward.source.id, relativeTo: upward.anchor.id, position: upward.position, in: upward.source.parentID
+        ))
+        #expect(bBeforeA.pluginIDs == ["b", "a", "c"])
+
+        var aAfterB = saved
+        let downward = try #require(Section.insertion(from: [0], to: rows.count, in: rows))
+        #expect(try aAfterB.reorder(
+            downward.source.id, relativeTo: downward.anchor.id, position: downward.position, in: downward.source.parentID
+        ))
+        #expect(aAfterB.pluginIDs == ["c", "b", "a"])
+    }
+
+    @Test("A native insertion after an expanded folder lands beyond its subtree")
+    func insertAfterExpandedFolder() throws {
+        let child = Folder(name: "Child", children: [.plugin("child")])
+        let folder = Folder(name: "Tools", children: [.plugin("tool"), .folder(child)])
+        let unavailable = Folder(name: "Unavailable", children: [.plugin("missing")])
+        var section = try Section(items: [.plugin("a"), .folder(folder), .plugin("disabled"), .folder(unavailable)])
+        let rows = section.visibleRows(activePluginIDs: ["a", "child", "tool"], disabledPluginIDs: ["disabled"])
+        #expect(rows.map(\.id) == [
+            .plugin("a"), .folder(folder.id), .plugin("tool"), .folder(child.id), .plugin("child"),
+            .plugin("disabled"), .folder(unavailable.id),
+        ])
+
+        #expect(Section.insertion(from: [0], to: 2, in: rows) == nil) // Inside Tools.
+        #expect(Section.insertion(from: [1], to: 5, in: rows) == nil) // After its own subtree.
+        #expect(Section.insertion(from: [2], to: 0, in: rows) == nil) // Outside Tools.
+        #expect(Section.insertion(from: [0], to: 6, in: rows)?.anchor.id == .plugin("disabled"))
+        #expect(Section.insertion(from: [0], to: 7, in: rows)?.anchor.id == .folder(unavailable.id))
+        #expect(Section.insertion(from: [6], to: 0, in: rows)?.source.id == .folder(unavailable.id))
+        #expect(Section.insertion(from: [0, 1], to: 5, in: rows) == nil)
+        #expect(Section.insertion(from: [7], to: 0, in: rows) == nil)
+        #expect(Section.insertion(from: [0], to: 8, in: rows) == nil)
+
+        let move = try #require(Section.insertion(from: [0], to: 5, in: rows))
+        #expect(try section.reorder(
+            move.source.id, relativeTo: move.anchor.id, position: move.position, in: move.source.parentID
+        ))
+        #expect(section.items == [.folder(folder), .plugin("a"), .plugin("disabled"), .folder(unavailable)])
+    }
+
+    @Test("A gap above a root sibling inserts an extracted item before that sibling")
+    func insertAcrossFolderBoundary() throws {
+        let tools = Folder(name: "Tools", children: [.plugin("tool-a"), .plugin("tool-b")])
+        let saved = try Section(items: [.folder(tools), .plugin("hidden"), .plugin("end")])
+        let active = ["tool-a", "tool-b", "end"]
+        let rows = saved.visibleRows(activePluginIDs: active, disabledPluginIDs: [])
+        let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
+
+        #expect(Section.insertion(from: [1], to: 3, in: rows)?.anchor.id == .plugin("tool-b"))
+        let rootGap = try #require(Section.dropDestination(
+            beside: .plugin("end"), position: .before, in: siblings[nil, default: []]
+        ))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .plugin("tool-a"), parentID: tools.id),
+            to: rootGap, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+        var remaining = tools
+        remaining.children = [.plugin("tool-b")]
+        #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .plugin("tool-a"), .plugin("end")])
+    }
+
+    @Test("The lower edge of an expanded root folder extracts its child after the whole subtree")
+    func extractToEndAfterOnlyFolder() throws {
+        let folder = Folder(name: "Tools", children: [.plugin("a")])
+        let saved = try Section(items: [.folder(folder), .plugin("hidden")])
+        let rows = saved.visibleRows(activePluginIDs: ["a"], disabledPluginIDs: [])
+        let siblings = saved.visibleSiblings(activePluginIDs: ["a"], disabledPluginIDs: [])
+
+        #expect(Section.insertion(from: [1], to: rows.count, in: rows) == nil)
+        let lastChild = try #require(Section.dropDestination(
+            beside: .plugin("a"), position: .after, in: siblings[folder.id, default: []]
+        ))
+        #expect(lastChild.parentID == folder.id)
+        #expect(saved.candidateForMove(
+            .init(kind: .device, id: .plugin("a"), parentID: folder.id),
+            to: lastChild, in: .device, activePluginIDs: ["a"], disabledPluginIDs: []
+        ) == nil)
+        let rootGap = try #require(Section.dropDestination(
+            beside: .folder(folder.id), position: .after, in: siblings[nil, default: []]
+        ))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .plugin("a"), parentID: folder.id),
+            to: rootGap, in: .device, activePluginIDs: ["a"], disabledPluginIDs: []
+        )
+        var emptied = folder
+        emptied.children = []
+        #expect(moved?.items == [.folder(emptied), .plugin("a"), .plugin("hidden")])
+    }
+
+    @Test("An extracted disabled child follows the chosen root edge")
+    func extractDisabledChildBesideRootFolder() throws {
+        let folder = Folder(name: "Tools", children: [.plugin("off"), .plugin("missing")])
+        let other = Folder(name: "Unavailable", children: [.plugin("other-missing")])
+        let saved = try Section(items: [.folder(folder), .plugin("hidden"), .folder(other)])
+        let rows = saved.visibleRows(activePluginIDs: [], disabledPluginIDs: ["off"])
+        let siblings = saved.visibleSiblings(activePluginIDs: [], disabledPluginIDs: ["off"])
+        #expect(rows.map(\.id) == [.folder(folder.id), .plugin("off"), .folder(other.id)])
+        #expect(rows.filter(\.isDimmed).map(\.id) == [.plugin("off")])
+
+        let rootGap = try #require(Section.dropDestination(
+            beside: .folder(other.id), position: .before, in: siblings[nil, default: []]
+        ))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .plugin("off"), parentID: folder.id),
+            to: rootGap, in: .device, activePluginIDs: [], disabledPluginIDs: ["off"]
+        )
+        var remaining = folder
+        remaining.children = [.plugin("missing")]
+        #expect(moved?.items == [.folder(remaining), .plugin("hidden"), .plugin("off"), .folder(other)])
+        #expect(moved?.visibleRows(activePluginIDs: [], disabledPluginIDs: ["off"]).map(\.id) == [
+            .folder(folder.id), .plugin("off"), .folder(other.id),
+        ])
+    }
+
+    @Test("A child row edge inserts before that child and preserves hidden sibling order")
+    func insertBeforeVisibleChild() throws {
+        let tools = Folder(name: "Tools", children: [.plugin("a"), .plugin("hidden"), .plugin("b"), .plugin("c")])
+        let saved = try Section(items: [.plugin("root"), .folder(tools)])
+        let active = ["root", "a", "b", "c"]
+        let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
+        let destination = try #require(Section.dropDestination(
+            beside: .plugin("b"), position: .before, in: siblings[tools.id, default: []]
+        ))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .plugin("root"), parentID: nil),
+            to: destination, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+
+        var updated = tools
+        updated.children = [.plugin("a"), .plugin("hidden"), .plugin("root"), .plugin("b"), .plugin("c")]
+        #expect(moved?.items == [.folder(updated)])
+    }
+
+    @Test("An expanded nested folder and its last child have different lower-edge destinations")
+    func insertAfterExpandedNestedFolder() throws {
+        let nested = Folder(name: "Nested", children: [.plugin("child")])
+        let tools = Folder(name: "Tools", children: [.folder(nested), .plugin("hidden"), .plugin("sibling")])
+        let saved = try Section(items: [.plugin("root"), .folder(tools)])
+        let active = ["root", "child", "sibling"]
+        let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
+        let source = NectoPluginSidebarState.ItemLocation(kind: .device, id: .plugin("root"), parentID: nil)
+
+        let folderEdge = try #require(Section.dropDestination(
+            beside: .folder(nested.id), position: .after, in: siblings[tools.id, default: []]
+        ))
+        let folderMove = saved.candidateForMove(
+            source, to: folderEdge, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+        #expect(folderMove?.folder(withID: tools.id)?.children == [
+            .folder(nested), .plugin("root"), .plugin("hidden"), .plugin("sibling"),
+        ])
+
+        let childEdge = try #require(Section.dropDestination(
+            beside: .plugin("child"), position: .after, in: siblings[nested.id, default: []]
+        ))
+        let childMove = saved.candidateForMove(
+            source, to: childEdge, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+        #expect(childMove?.folder(withID: nested.id)?.children == [.plugin("child"), .plugin("root")])
+    }
+
+    @Test("An unavailable folder remains a valid anchor and preserves hidden siblings")
+    func moveFolderBeforeUnavailableSibling() throws {
+        let moving = Folder(name: "Work", children: [.plugin("payload")], isCollapsed: true)
+        let source = Folder(name: "Source", children: [.folder(moving)])
+        let preceding = Folder(name: "Work", children: [.plugin("active")])
+        let unavailable = Folder(name: "Unavailable", children: [.plugin("missing")])
+        let tools = Folder(name: "Tools", children: [.folder(preceding), .plugin("hidden"), .folder(unavailable)])
+        let saved = try Section(items: [.folder(source), .folder(tools)])
+        let active = ["payload", "active"]
+        let siblings = saved.visibleSiblings(activePluginIDs: active, disabledPluginIDs: [])
+        let destination = try #require(Section.dropDestination(
+            beside: .folder(unavailable.id), position: .before, in: siblings[tools.id, default: []]
+        ))
+        let moved = saved.candidateForMove(
+            .init(kind: .device, id: .folder(moving.id), parentID: source.id),
+            to: destination, in: .device, activePluginIDs: active, disabledPluginIDs: []
+        )
+
+        var emptied = source
+        emptied.children = []
+        var renamed = moving
+        renamed.name = "Work(1)"
+        var updated = tools
+        updated.children = [.folder(preceding), .plugin("hidden"), .folder(renamed), .folder(unavailable)]
+        #expect(moved?.items == [.folder(emptied), .folder(updated)])
+    }
+
+    @Test("Reordering a nested folder moves its entire subtree within the same parent")
+    func reorderNestedFolder() throws {
+        let dimmedChild = Folder(name: "Unavailable", children: [.plugin("unavailable")], isCollapsed: true)
+        let source = Folder(name: "Tools", children: [.folder(dimmedChild), .plugin("tool")], isCollapsed: true)
+        let sibling = Folder(name: "Other")
+        let parent = Folder(name: "Parent", children: [.folder(source), .plugin("hidden"), .folder(sibling)])
+        var section = try Section(items: [.plugin("root"), .folder(parent)])
+        #expect(try section.reorder(.folder(source.id), relativeTo: .folder(sibling.id), position: .after, in: parent.id))
+        var updatedParent = parent
+        updatedParent.children = [.plugin("hidden"), .folder(sibling), .folder(source)]
+        #expect(section.items == [.plugin("root"), .folder(updatedParent)])
+
+        let original = section
+        #expect(try !section.reorder(.folder(source.id), relativeTo: .plugin("root"), position: .before, in: parent.id))
+        #expect(try !section.reorder(.folder(source.id), relativeTo: .folder(source.id), position: .before, in: parent.id))
+        #expect(section == original)
+    }
+
+    @Test("Moving into a collapsed folder prepends the subtree and resolves only the moved folder's name")
+    func moveFolderIntoFolder() throws {
+        let child = Folder(name: "Child", children: [.plugin("unavailable-in-child")], isCollapsed: true)
+        let moved = Folder(name: "Tools", children: [.plugin("tool"), .folder(child)], isCollapsed: true)
+        let duplicate = Folder(name: "Tools")
+        let suffixed = Folder(name: "Tools(1)")
+        let destination = Folder(name: "Archive", children: [
+            .folder(duplicate), .plugin("unavailable-in-archive"), .folder(suffixed),
+        ], isCollapsed: true)
+        var section = try Section(items: [.folder(moved), .plugin("root"), .folder(destination)])
+
+        #expect(try section.move(.folder(moved.id), from: nil, to: .into(parentID: destination.id)))
+
+        var renamed = moved
+        renamed.name = "Tools(2)"
+        var opened = destination
+        opened.isCollapsed = false
+        opened.children.insert(.folder(renamed), at: 0)
+        #expect(section.items == [.plugin("root"), .folder(opened)])
+    }
+
+    @Test("Revealing a plugin opens all its ancestors and preserves other folders and saved placement")
+    func revealPluginAncestors() throws {
+        let sibling = Folder(name: "Sibling", children: [.plugin("sibling")], isCollapsed: true)
+        let unrelated = Folder(name: "Unrelated", children: [.plugin("other")])
+        var leaf = Folder(name: "Leaf", children: [.plugin("hidden"), .plugin("chosen")], isCollapsed: true)
+        var middle = Folder(name: "Middle", children: [.folder(sibling), .folder(leaf)], isCollapsed: true)
+        var outer = Folder(name: "Outer", children: [.folder(middle)], isCollapsed: true)
+        let section = try Section(items: [.plugin("root"), .folder(outer), .folder(unrelated)])
+
+        let revealed = try #require(section.revealingPlugin("chosen"))
+
+        leaf.isCollapsed = false
+        middle.isCollapsed = false
+        middle.children = [.folder(sibling), .folder(leaf)]
+        outer.isCollapsed = false
+        outer.children = [.folder(middle)]
+        #expect(revealed.items == [.plugin("root"), .folder(outer), .folder(unrelated)])
+        #expect(revealed.revealingPlugin("chosen") == nil)
+        #expect(section.revealingPlugin("root") == nil)
+        #expect(section.revealingPlugin("unplaced") == nil)
+    }
+
+    @Test("Moving a plugin to a root anchor retains other hidden and unplaced root siblings")
+    func moveBesideUnplacedRootAnchor() throws {
+        let folder = Folder(name: "Tools", children: [.plugin("nested"), .plugin("unavailable-child")])
+        var section = try Section(items: [.plugin("a"), .folder(folder), .plugin("unavailable-root")])
+        var appended = section
+
+        #expect(try section.move(
+            .plugin("nested"), from: folder.id, to: .beside(.plugin("new-b"), position: .before, parentID: nil),
+            unplacedRootPluginIDs: ["a", "new-a", "new-b", "nested", "unavailable-child"]
+        ))
+
+        var updatedFolder = folder
+        updatedFolder.children = [.plugin("unavailable-child")]
+        #expect(section.items == [
+            .plugin("a"), .folder(updatedFolder), .plugin("unavailable-root"), .plugin("new-a"),
+            .plugin("nested"), .plugin("new-b"),
+        ])
+
+        #expect(try appended.move(
+            .plugin("nested"), from: folder.id, to: .into(parentID: nil), unplacedRootPluginIDs: ["a", "new-a", "new-b"]
+        ))
+        #expect(appended.items == [
+            .plugin("a"), .folder(updatedFolder), .plugin("unavailable-root"), .plugin("new-a"),
+            .plugin("new-b"), .plugin("nested"),
+        ])
+    }
+
+    @Test("A bad destination or an overflowing hidden subtree leaves membership, names and collapse unchanged")
+    func rejectInvalidFolderMoves() throws {
+        let deepest = Folder(name: "Deepest", isCollapsed: true)
+        let child = Folder(name: "Child", children: [.folder(deepest)], isCollapsed: true)
+        let moved = Folder(name: "Tools", children: [.folder(child)])
+        let destination = Folder(name: "Archive", children: [.folder(.init(name: "Tools"))], isCollapsed: true)
+        var section = try Section(items: [.folder(moved), .folder(destination), .plugin("root")])
+        let original = section
+
+        #expect(try !section.move(.folder(moved.id), from: nil, to: .into(parentID: moved.id)))
+        #expect(try !section.move(.folder(moved.id), from: nil, to: .into(parentID: child.id)))
+        #expect(try !section.move(.plugin("root"), from: nil, to: .into(parentID: UUID())))
+        #expect(try !section.move(.plugin("root"), from: nil, to: .into(parentID: nil)))
+        #expect(throws: Section.ValidationError.folderDepthExceeded) {
+            try section.move(.folder(moved.id), from: nil, to: .into(parentID: destination.id))
+        }
+        #expect(section == original)
+
+        #expect(try section.move(.plugin("root"), from: nil, to: .into(parentID: deepest.id)))
+        #expect(section.pluginIDs == ["root"])
+        #expect(section.items.count == 2)
+    }
+
+    @Test("Default folder names use the first free suffix only within the requested parent")
+    func createDefaultFolders() throws {
+        let first = Folder(name: "New Folder")
+        let third = Folder(name: "New Folder(2)")
+        var section = try Section(items: [.folder(first), .folder(third)])
+        let second = try section.createFolder(defaultName: "New Folder")
+        let fourth = try section.createFolder(defaultName: "New Folder")
+        let child = try section.createFolder(defaultName: "New Folder", in: first.id)
+        #expect(section.items == [
+            .folder(.init(id: first.id, name: first.name, children: [.folder(.init(id: child, name: "New Folder"))])),
+            .folder(third),
+            .folder(.init(id: second, name: "New Folder(1)")),
+            .folder(.init(id: fourth, name: "New Folder(3)")),
+        ])
+    }
+
+    @Test("Folders keep sections visible and unavailable plugins stay hidden")
+    func visibleRows() throws {
+        let flat = try Section(items: [.plugin("unavailable")])
+        #expect(flat.isVisible(hasAvailablePlugins: false) == false)
+        #expect(flat.isVisible(hasAvailablePlugins: true))
+
+        let empty = Folder(name: "Empty")
+        let tools = Folder(name: "Tools", children: [
+            .plugin("nested"), .plugin("nested-disabled"), .plugin("unavailable"),
+        ])
+        var section = try Section(items: [.plugin("root-disabled"), .folder(tools), .folder(empty)])
+        #expect(section.isVisible(hasAvailablePlugins: false))
+        #expect(section.visibleRows(activePluginIDs: [], disabledPluginIDs: []).map(\.id) == [
+            .folder(tools.id), .folder(empty.id),
+        ])
+
+        let active = ["nested", "unplaced"]
+        let disabled = ["root-disabled", "nested-disabled"]
+        #expect(section.visibleRows(activePluginIDs: active, disabledPluginIDs: disabled).map(\.id) == [
+            .plugin("root-disabled"), .folder(tools.id), .plugin("nested"), .plugin("nested-disabled"),
+            .folder(empty.id), .plugin("unplaced"),
+        ])
+        try section.toggleFolder(tools.id)
+        #expect(section.visibleRows(activePluginIDs: active, disabledPluginIDs: disabled).map(\.id) == [
+            .plugin("root-disabled"), .folder(tools.id), .folder(empty.id), .plugin("unplaced"),
+        ])
+    }
+
+    @Test("Folders stay in saved positions when the connected app changes")
+    func nestedFolderAvailability() throws {
+        let appBTools = Folder(name: "App B Tools", children: [.plugin("app-b")])
+        let unavailable = Folder(name: "Unavailable", children: [.plugin("hidden")])
+        let empty = Folder(name: "Empty")
+        let appATools = Folder(name: "App A Tools", children: [.plugin("app-a")], isCollapsed: true)
+        let parent = Folder(name: "Tools", children: [
+            .folder(appBTools), .plugin("disabled"), .folder(unavailable), .folder(empty), .folder(appATools),
+        ])
+        var section = try Section(items: [.folder(parent), .plugin("tail")])
+        let saved = section
+
+        let appA = section.visibleRows(activePluginIDs: ["app-a", "tail"], disabledPluginIDs: ["disabled"])
+        #expect(appA.map(\.id) == [
+            .folder(parent.id), .folder(appBTools.id), .plugin("disabled"), .folder(unavailable.id),
+            .folder(empty.id), .folder(appATools.id), .plugin("tail"),
+        ])
+        #expect(appA.filter(\.isDimmed).map(\.id) == [.plugin("disabled")])
+        #expect(appA.map(\.depth) == [1, 2, 2, 2, 2, 2, 1])
+
+        let appB = section.visibleRows(activePluginIDs: ["app-b", "tail"], disabledPluginIDs: ["disabled"])
+        #expect(appB.map(\.id) == [
+            .folder(parent.id), .folder(appBTools.id), .plugin("app-b"), .plugin("disabled"),
+            .folder(unavailable.id), .folder(empty.id), .folder(appATools.id), .plugin("tail"),
+        ])
+        #expect(appB.filter(\.isDimmed).map(\.id) == [.plugin("disabled")])
+        #expect(section == saved)
+
+        try section.toggleFolder(parent.id)
+        let collapsed = section.visibleRows(activePluginIDs: ["app-a", "tail"], disabledPluginIDs: ["disabled"])
+        #expect(collapsed.map(\.id) == [.folder(parent.id), .plugin("tail")])
+        #expect(collapsed.allSatisfy { !$0.isDimmed })
+    }
+
+    @Test("Previously disabled roots keep their saved positions and unplaced rows follow them")
+    func savedRootOrder() throws {
+        let unavailable = Folder(name: "Unavailable", children: [.plugin("hidden")])
+        let disabled = Folder(name: "Disabled", children: [.plugin("nested-disabled")])
+        let empty = Folder(name: "Empty")
+        let emptyStack = Folder(name: "Empty Stack", children: [.folder(empty)])
+        let section = try Section(items: [
+            .folder(unavailable), .plugin("root-disabled-z"), .folder(emptyStack), .plugin("root-active"),
+            .folder(disabled), .plugin("root-disabled-a"), .plugin("unavailable-disabled"),
+        ])
+        let rows = section.visibleRows(
+            activePluginIDs: ["unplaced-active", "root-active"],
+            disabledPluginIDs: ["root-disabled-a", "unplaced-disabled", "root-disabled-z", "nested-disabled"]
+        )
+        #expect(rows.map(\.id) == [
+            .folder(unavailable.id), .plugin("root-disabled-z"), .folder(emptyStack.id), .folder(empty.id),
+            .plugin("root-active"), .folder(disabled.id), .plugin("nested-disabled"), .plugin("root-disabled-a"),
+            .plugin("unplaced-active"), .plugin("unplaced-disabled"),
+        ])
+        #expect(rows.filter(\.isDimmed).map(\.id) == [
+            .plugin("root-disabled-z"), .plugin("nested-disabled"), .plugin("root-disabled-a"), .plugin("unplaced-disabled"),
+        ])
+        #expect(rows.last?.depth == 1)
+    }
+
+    @Test("Creating folders appends within the requested parent and trims names")
+    func createFolders() throws {
+        let existing = Folder(name: "Existing", children: [.plugin("b")])
+        var section = try Section(items: [.plugin("a"), .folder(existing)])
+        let root = try section.createFolder(named: " Tools \n")
+        let child = try section.createFolder(named: " Logs ", in: existing.id)
+        let grandchild = try section.createFolder(named: " Debug ", in: child)
+        #expect(section.items == [
+            .plugin("a"),
+            .folder(.init(id: existing.id, name: "Existing", children: [
+                .plugin("b"),
+                .folder(.init(id: child, name: "Logs", children: [
+                    .folder(.init(id: grandchild, name: "Debug")),
+                ])),
+            ])),
+            .folder(.init(id: root, name: "Tools")),
+        ])
+    }
+
+    @Test("A folder at depth three can contain plugins but cannot contain another folder")
+    func limitFolderDepth() throws {
+        let deepest = Folder(name: "Debug", children: [.plugin("a")], isCollapsed: true)
+        let child = Folder(name: "Logs", children: [.folder(deepest)], isCollapsed: true)
+        let root = Folder(name: "Tools", children: [.folder(child)], isCollapsed: true)
+        var section = try Section(items: [.folder(root)])
+        #expect(section.items == [.folder(root)])
+
+        let original = section
+        #expect(throws: Section.ValidationError.folderDepthExceeded) {
+            try section.createFolder(named: "Too Deep", in: deepest.id)
+        }
+        #expect(section == original)
+
+        var invalid = deepest
+        invalid.children.append(.folder(.init(name: "Too Deep")))
+        #expect(throws: Section.ValidationError.folderDepthExceeded) {
+            try Section(items: [.folder(.init(name: "Tools", children: [
+                .folder(.init(name: "Logs", children: [.folder(invalid)])),
+            ]))])
+        }
+    }
+
+    @Test("Blank names are rejected without changing the section", arguments: ["", " \n\t"])
+    func rejectBlankNames(_ name: String) throws {
+        let child = Folder(name: "Logs")
+        let root = Folder(name: "Tools", children: [.folder(child)])
+        var section = try Section(items: [.folder(root)])
+        let original = section
+        #expect(throws: Section.ValidationError.emptyFolderName) {
+            try section.createFolder(named: name, in: root.id)
+        }
+        #expect(section == original)
+        #expect(throws: Section.ValidationError.emptyFolderName) {
+            try section.renameFolder(child.id, to: name)
+        }
+        #expect(section == original)
+    }
+
+    @Test("Equal folder names are allowed across parents and rejected among siblings")
+    func validateSiblingNames() throws {
+        let logs = Folder(name: " Logs \n")
+        let traces = Folder(name: "Traces")
+        let tools = Folder(name: "Tools", children: [.folder(logs), .folder(traces)], isCollapsed: true)
+        let debug = Folder(name: "Debug")
+        var section = try Section(items: [.folder(tools), .folder(debug)])
+        let savedLogs = Folder(id: logs.id, name: "Logs")
+        #expect(section.items == [
+            .folder(.init(id: tools.id, name: "Tools", children: [.folder(savedLogs), .folder(traces)], isCollapsed: true)),
+            .folder(debug),
+        ])
+
+        let debugLogs = try section.createFolder(named: "Logs", in: debug.id)
+        #expect(section.items[1] == .folder(.init(id: debug.id, name: "Debug", children: [
+            .folder(.init(id: debugLogs, name: "Logs")),
+        ])))
+        let original = section
+        #expect(throws: Section.ValidationError.duplicateFolderName) {
+            try section.createFolder(named: " Logs ", in: tools.id)
+        }
+        #expect(section == original)
+        #expect(throws: Section.ValidationError.duplicateFolderName) {
+            try section.renameFolder(traces.id, to: "Logs")
+        }
+        #expect(section == original)
+        #expect(throws: Section.ValidationError.duplicateFolderName) {
+            try Section(items: [.folder(.init(name: "Tools", children: [
+                .folder(logs), .folder(.init(name: "Logs")),
+            ]))])
+        }
+        #expect(throws: Section.ValidationError.emptyFolderName) {
+            try Section(items: [.folder(.init(name: "Tools", children: [.folder(.init(name: " \n"))]))])
+        }
+    }
+
+    @Test("Renaming a nested folder keeps its ID, children, position and collapse state")
+    func renameFolder() throws {
+        let archive = Folder(name: "Archive", children: [.plugin("b")], isCollapsed: true)
+        let child = Folder(name: "Logs", children: [.plugin("unavailable"), .folder(archive)], isCollapsed: true)
+        let root = Folder(name: "Tools", children: [.plugin("a"), .folder(child), .plugin("c")])
+        var section = try Section(items: [.folder(root)])
+        try section.renameFolder(child.id, to: " Logs ")
+        #expect(section.items == [.folder(root)])
+        try section.renameFolder(child.id, to: " Network ")
+        var renamed = child
+        renamed.name = "Network"
+        #expect(section.items == [.folder(.init(id: root.id, name: "Tools", children: [
+            .plugin("a"), .folder(renamed), .plugin("c"),
+        ]))])
+    }
+
+    @Test("Deleting a root folder promotes its immediate children in order and keeps their subtrees")
+    func deleteRootFolder() throws {
+        let child = Folder(name: "Logs", children: [
+            .plugin("unavailable-in-folder"), .folder(.init(name: "Archive", children: [.plugin("b")])),
+        ])
+        let root = Folder(name: "Tools", children: [.plugin("unavailable"), .folder(child), .plugin("c")])
+        var section = try Section(items: [.plugin("a"), .folder(root), .plugin("d")])
+        try section.deleteFolder(root.id)
+        #expect(section.items == [.plugin("a"), .plugin("unavailable"), .folder(child), .plugin("c"), .plugin("d")])
+    }
+
+    @Test("Deleting a nested folder keeps its children in the same position")
+    func deleteNestedFolder() throws {
+        let deepest = Folder(name: "Archive", children: [.plugin("b")])
+        let child = Folder(name: "Logs", children: [.folder(deepest), .plugin("unavailable")])
+        let root = Folder(name: "Tools", children: [.plugin("a"), .folder(child), .plugin("c")])
+        var section = try Section(items: [.folder(root)])
+        try section.deleteFolder(child.id)
+        #expect(section.items == [.folder(.init(id: root.id, name: "Tools", children: [
+            .plugin("a"), .folder(deepest), .plugin("unavailable"), .plugin("c"),
+        ]))])
+    }
+
+    @Test("Deleting an empty folder removes only that folder")
+    func deleteEmptyFolder() throws {
+        let empty = Folder(name: "Archive")
+        let child = Folder(name: "Logs", children: [.plugin("a"), .folder(empty), .plugin("b")])
+        let root = Folder(name: "Tools", children: [.folder(child)])
+        var section = try Section(items: [.folder(root)])
+        try section.deleteFolder(empty.id)
+        #expect(section.items == [.folder(.init(id: root.id, name: "Tools", children: [
+            .folder(.init(id: child.id, name: "Logs", children: [.plugin("a"), .plugin("b")])),
+        ]))])
+    }
+
+    @Test("Promotion keeps existing and nonconflicting names and can reuse the deleted folder's name")
+    func resolvePromotionNameCollisions() throws {
+        let existing = Folder(name: "Logs", children: [.plugin("a")])
+        let conflicting = Folder(name: "Logs", children: [.plugin("b")], isCollapsed: true)
+        let suffixed = Folder(name: "Logs(1)", children: [.plugin("c")])
+        let removed = Folder(name: "Logs(2)", children: [.folder(conflicting), .folder(suffixed)])
+        let parent = Folder(name: "Tools", children: [.folder(existing), .folder(removed)])
+        var section = try Section(items: [.folder(parent)])
+        try section.deleteFolder(removed.id)
+        #expect(section.items == [.folder(.init(id: parent.id, name: "Tools", children: [
+            .folder(existing),
+            .folder(.init(id: conflicting.id, name: "Logs(2)", children: conflicting.children, isCollapsed: true)),
+            .folder(suffixed),
+        ]))])
+    }
+
+    @Test("An unknown parent or folder leaves the section unchanged")
+    func rejectUnknownFolder() throws {
+        let root = Folder(name: "Tools", children: [.folder(.init(name: "Logs"))])
+        var section = try Section(items: [.folder(root)])
+        let original = section
+        let missing = UUID()
+        #expect(throws: Section.ValidationError.parentFolderNotFound) {
+            try section.createFolder(named: "Debug", in: missing)
+        }
+        #expect(section == original)
+        #expect(throws: Section.ValidationError.folderNotFound) { try section.renameFolder(missing, to: "Debug") }
+        #expect(section == original)
+        #expect(throws: Section.ValidationError.folderNotFound) { try section.deleteFolder(missing) }
+        #expect(section == original)
+    }
+
+    @Test("A plugin ID can occupy only one location", arguments: [
+        [Item.plugin("a"), .plugin("a")],
+        [.plugin("a"), .folder(.init(name: "Tools", children: [.plugin("a")]))],
+        [.folder(.init(name: "Tools", children: [.plugin("a"), .plugin("a")]))],
+        [
+            .folder(.init(name: "Tools", children: [.plugin("a")])),
+            .folder(.init(name: "Logs", children: [.folder(.init(name: "Archive", children: [.plugin("a")]))])),
+        ],
+    ])
+    func rejectDuplicatePluginIDs(_ items: [Item]) {
+        #expect(throws: Section.ValidationError.duplicatePluginID) { try Section(items: items) }
+    }
+
+    @Test("Folder IDs must be unique across branches and depths")
+    func rejectDuplicateFolderIDs() {
+        let folder = Folder(name: "Logs")
+        #expect(throws: Section.ValidationError.duplicateFolderID) {
+            try Section(items: [
+                .folder(.init(name: "Tools", children: [.folder(folder)])),
+                .folder(.init(name: "Debug", children: [
+                    .folder(.init(name: "Archive", children: [.folder(.init(id: folder.id, name: "More Logs"))])),
+                ])),
+            ])
+        }
+    }
+}

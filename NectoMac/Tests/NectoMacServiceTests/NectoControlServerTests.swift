@@ -16,6 +16,12 @@ private struct StubHandler: NectoControlHandling {
         guard id == "sample" else { throw NectoBridgeError(code: .operationNotFound, message: "Unknown desktop plugin") }
         return ["deleted": true, "pluginID": .string(id)]
     }
+    func sidebar(_ request: NectoSidebarRequest) async throws -> NectoJSONValue {
+        switch request.action {
+        case .list: ["section": .string(request.section.rawValue), "items": []]
+        case .folder, .move: request.input
+        }
+    }
     var streamForever = false
     var invokeForever = false
     var installForever = false
@@ -113,6 +119,77 @@ private func makeServer(
 
 @Suite("Control socket", .timeLimit(.minutes(1)))
 struct NectoControlServerTests {
+    @Test("sidebar list routes to the host only with a valid action and explicit section")
+    func sidebarListRoundTrip() async throws {
+        let (server, url) = try makeServer()
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        for section in ["device", "desktop"] {
+            try await client.session.send(NectoControlRequest(id: section, kind: .sidebar,
+                input: ["action": "list", "section": .string(section)]))
+            let response = try await client.receive()
+            #expect(response.id == section)
+            #expect(response.kind == .result)
+            #expect(response.value == ["section": .string(section), "items": []])
+        }
+        for input: NectoJSONValue in [["action": "list"], ["section": "all", "action": "list"],
+                                       ["section": "device", "action": "replace"]] {
+            try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
+            #expect(try await client.receive().error?.code == "INVALID_INPUT")
+        }
+    }
+
+    @Test("sidebar folder commands route typed UUIDs and reject malformed arguments")
+    func sidebarFolderRoundTrip() async throws {
+        let (server, url) = try makeServer()
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        let id = "A90E4362-A108-4B7C-98C2-64E6D532CD37"
+        let commands: [NectoJSONValue] = [
+            ["section": "desktop", "action": "createFolder", "name": "Tools"],
+            ["section": "device", "action": "createFolder", "name": "Logs", "parentID": .string(id)],
+            ["section": "desktop", "action": "renameFolder", "folderID": .string(id), "name": "Logs"],
+            ["section": "device", "action": "deleteFolder", "folderID": .string(id)],
+        ]
+        for input in commands {
+            try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
+            #expect(try await client.receive().value == input)
+        }
+        let malformed: [NectoJSONValue] = [
+            ["section": "device", "action": "createFolder", "name": "Logs", "parentID": 1],
+            ["section": "device", "action": "createFolder"],
+            ["section": "desktop", "action": "renameFolder", "folderID": "Logs", "name": "Traces"],
+            ["section": "desktop", "action": "deleteFolder"],
+        ]
+        for input in malformed {
+            try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
+            #expect(try await client.receive().error?.code == "INVALID_INPUT")
+        }
+    }
+
+    @Test("sidebar moves forward typed item selectors and reject conflicting anchors")
+    func sidebarMoveRoundTrip() async throws {
+        let (server, url) = try makeServer()
+        defer { server.stop() }
+        let client = try await TestClient(url)
+        let item = "folder:A90E4362-A108-4B7C-98C2-64E6D532CD37"
+        let valid: NectoJSONValue = [
+            "section": "device", "action": "move", "item": .string(item), "before": "plugin:offline",
+        ]
+        try await client.session.send(NectoControlRequest(kind: .sidebar, input: valid))
+        #expect(try await client.receive().value == valid)
+
+        let malformed: [NectoJSONValue] = [
+            ["section": "device", "action": "move", "item": "offline"],
+            ["section": "device", "action": "move", "item": "folder:invalid"],
+            ["section": "device", "action": "move", "item": "plugin:offline", "before": "plugin:a", "after": "plugin:b"],
+        ]
+        for input in malformed {
+            try await client.session.send(NectoControlRequest(kind: .sidebar, input: input))
+            #expect(try await client.receive().error?.code == "INVALID_INPUT")
+        }
+    }
+
     @Test("discovery forwards ownership and operation selectors")
     func discoveryScopeRoundTrip() async throws {
         let (server, url) = try makeServer(StubHandler(echoScope: true))

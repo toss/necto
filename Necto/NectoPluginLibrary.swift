@@ -14,9 +14,7 @@ import Foundation
 @MainActor
 struct NectoPluginLibrary {
     private static let disabledKey = "disabledPluginIDs"
-    private static let orderKey = "pluginOrder"
     private static let grantsKey = "pluginGrants"
-    private static let deviceOrderKey = "devicePluginOrder"
     private static let shellPolicyKey = "shellPolicy"
     private static let installationsKey = "localPluginInstallations"
 
@@ -59,11 +57,21 @@ struct NectoPluginLibrary {
     /// Installed and enabled are separate. Turning a plugin off is how you find out
     /// whether it is the one misbehaving, without losing it or its settings.
     static var disabledIDs: Set<String> {
-        get { Set(UserDefaults.standard.stringArray(forKey: disabledKey) ?? []) }
-        set { UserDefaults.standard.set(Array(newValue).sorted(), forKey: disabledKey) }
+        get { disabledIDs(in: .standard) }
+        set { saveDisabledIDs(newValue, in: .standard) }
     }
 
-    static func isEnabled(_ id: String) -> Bool { !disabledIDs.contains(id) }
+    private static func disabledIDs(in defaults: UserDefaults) -> Set<String> {
+        Set(defaults.stringArray(forKey: disabledKey) ?? [])
+    }
+
+    private static func saveDisabledIDs(_ ids: Set<String>, in defaults: UserDefaults) {
+        defaults.set(Array(ids).sorted(), forKey: disabledKey)
+    }
+
+    static func isEnabled(_ id: String, in defaults: UserDefaults = .standard) -> Bool {
+        !disabledIDs(in: defaults).contains(id)
+    }
 
     /// What the user agreed to, per plugin. Written when an install is approved and
     /// read on every launch, so an approval is a decision rather than a formality that
@@ -89,32 +97,18 @@ struct NectoPluginLibrary {
         }
     }
 
-    static func setEnabled(_ id: String, _ enabled: Bool) {
-        var ids = disabledIDs
+    static func setEnabled(_ id: String, _ enabled: Bool, in defaults: UserDefaults) -> Set<String> {
+        var ids = disabledIDs(in: defaults)
         if enabled { ids.remove(id) } else { ids.insert(id) }
-        disabledIDs = ids
+        saveDisabledIDs(ids, in: defaults)
+        return ids
     }
 
 
     // MARK: Order
 
-    /// The order the user dragged them into. Ids the list does not mention sort after
-    /// it by name, so a newly installed plugin appears at the end rather than jumping
-    /// into the middle of an arrangement someone chose.
-    static var order: [String] {
-        get { UserDefaults.standard.stringArray(forKey: orderKey) ?? [] }
-        set { UserDefaults.standard.set(newValue, forKey: orderKey) }
-    }
-
-    /// The arrangement of the Device Plugins section, kept apart from the desktop
-    /// list so the two `onMove` writers never clobber each other.
-    static var deviceOrder: [String] {
-        get { UserDefaults.standard.stringArray(forKey: deviceOrderKey) ?? [] }
-        set { UserDefaults.standard.set(newValue, forKey: deviceOrderKey) }
-    }
-
-    static func sorted(_ plugins: [NectoInstalledPlugin], by order: [String]? = nil) -> [NectoInstalledPlugin] {
-        let order = order ?? self.order
+    /// IDs missing from the saved order appear at the end, sorted by name.
+    static func sorted(_ plugins: [NectoInstalledPlugin], by order: [String]) -> [NectoInstalledPlugin] {
         let rank = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($0.element, $0.offset) })
 
         return plugins.sorted { first, second in

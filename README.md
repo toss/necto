@@ -14,8 +14,8 @@ Build the tools you need as plugins. A modern alternative to Flipper.
   your app and its panel appears in Necto when the app connects; a desktop plugin
   installs from a GitHub release, folder or ZIP and works without a connected app
   ([docs/plugin-manifest.md](docs/plugin-manifest.md)).
-- Everything Necto does, the CLI does too. Install and delete plugins, call bridge
-  operations, or install the bundled skill and let an AI debug the app itself
+- Use the CLI to organize the plugin sidebar, install and delete plugins, and call
+  bridge operations. The bundled skill gives coding agents the same commands
   ([docs/control-socket.md](docs/control-socket.md)).
 - Feature screens are web plugins made up of a `manifest.json` and web assets.
   They use the same design tokens as the app

@@ -74,21 +74,21 @@ struct NectoSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresentabl
 
         override func viewDidLayout() {
             super.viewDidLayout()
-            if scrollerStyleObservation == nil {
+            if tableStyleObservation == nil {
                 configureSidebarList(in: sidebarHost.view)
             }
+            configureSidebarScrollerIfNeeded()
         }
 
         private func configureSidebarList(in view: NSView) {
             if let scrollView = view as? NSScrollView,
                let table = scrollView.documentView as? NSTableView {
-                // List restores the system style after inserting rows. Observe the
-                // scroll view so initial connections also keep overlay scrollbars.
-                scrollerStyleObservation = scrollView.observe(\.scrollerStyle, options: [.initial, .new]) { scrollView, _ in
+                sidebarScrollView = scrollView
+                // Let AppKit choose the List's scroller style. Forcing overlay
+                // scrollbars can re-enter disclosure row layout in an overflowing List.
+                scrollerStyleObservation = scrollView.observe(\.scrollerStyle, options: [.initial, .new]) { [weak self] _, _ in
                     MainActor.assumeIsolated {
-                        if scrollView.scrollerStyle != .overlay {
-                            scrollView.scrollerStyle = .overlay
-                        }
+                        self?.scheduleSidebarScrollerUpdate()
                     }
                 }
                 // SwiftUI's plain List uses AppKit's fullWidth style, which adds
@@ -101,13 +101,52 @@ struct NectoSplitView<Sidebar: View, Detail: View>: NSViewControllerRepresentabl
                         table.intercellSpacing.width = 0
                     }
                 }
+                if let outline = table as? NSOutlineView {
+                    DispatchQueue.main.async { [weak outline] in
+                        guard let outline, outline.indentationPerLevel != NectoTheme.sidebarIndentation else { return }
+                        outline.indentationPerLevel = NectoTheme.sidebarIndentation
+                    }
+                }
                 return
             }
-            for child in view.subviews where scrollerStyleObservation == nil {
+            for child in view.subviews where tableStyleObservation == nil {
                 configureSidebarList(in: child)
             }
         }
 
+        private func configureSidebarScrollerIfNeeded() {
+            guard let scrollView = sidebarScrollView, scrollView.scrollerStyle == .legacy,
+                  scrollView.hasVerticalScroller, let scroller = scrollView.verticalScroller,
+                  scrollView.autohidesScrollers || scroller.controlSize != .small else { return }
+            scheduleSidebarScrollerUpdate()
+        }
+
+        private func scheduleSidebarScrollerUpdate() {
+            guard !sidebarScrollerUpdatePending, let scrollView = sidebarScrollView else { return }
+            sidebarScrollerUpdatePending = true
+            // SwiftUI can restore List's scroller settings while updating the rows.
+            // Keep the legacy gutter stable without changing AppKit's chosen style.
+            DispatchQueue.main.async { [weak self, weak scrollView] in
+                guard let self else { return }
+                defer { sidebarScrollerUpdatePending = false }
+                guard let scrollView, scrollView.scrollerStyle == .legacy, scrollView.hasVerticalScroller,
+                      let scroller = scrollView.verticalScroller else { return }
+                let needsSmall = scroller.controlSize != .small
+                let needsGutter = scrollView.autohidesScrollers
+                guard needsSmall || needsGutter else { return }
+                if needsSmall {
+                    scroller.controlSize = .small
+                }
+                if needsGutter {
+                    scrollView.autohidesScrollers = false
+                }
+                // The installed scroller can still have its old frame.
+                scrollView.tile()
+            }
+        }
+
+        private weak var sidebarScrollView: NSScrollView?
+        private var sidebarScrollerUpdatePending = false
         private var scrollerStyleObservation: NSKeyValueObservation?
         private var tableStyleObservation: NSKeyValueObservation?
         private var hasPlacedDivider = false

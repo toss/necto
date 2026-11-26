@@ -8,6 +8,8 @@ import SwiftUI
 struct ContentView: View {
     let model: NectoAppModel
     @State private var window: NectoWindowState
+    @State private var sidebarDrag = NectoPluginSidebarDrag()
+    @State private var sidebarDropFeedback = NectoPluginSidebarDropTarget.Feedback()
 
     init(model: NectoAppModel) {
         self.model = model
@@ -18,6 +20,10 @@ struct ContentView: View {
 
     @StateObject private var find = NectoFindSession()
     @State private var isSearchingPlugins = false
+    @State private var folderToRename: FolderRename?
+    @State private var createdFolderAnchor: NectoPluginSidebarRowID?
+    @State private var searchScrollRequest: SearchScrollRequest?
+    @State private var folderSaveFailed = false
     @AppStorage(NectoTextSize.key) private var textPoints = Double(NectoTextSize.base)
     @AppStorage(NectoFontPreference.uiKey) private var uiFontFamily = NectoFontPreference.defaultUI
     @AppStorage(NectoFontPreference.codeKey) private var codeFontFamily = NectoFontPreference.defaultCode
@@ -39,7 +45,10 @@ struct ContentView: View {
             .environment(\.locale, selectedLanguage.locale)
         .background(NectoWindowAttachment(state: window).frame(width: 0, height: 0))
         .task { await model.load(); claimBackgroundPanel() }
-        .onChange(of: window.isMain) { _, _ in claimBackgroundPanel() }
+        .onChange(of: window.isMain) { _, isMain in
+            if !isMain { clearSidebarDrag() }
+            claimBackgroundPanel()
+        }
         .onChange(of: window.selectedPluginID) { _, _ in claimBackgroundPanel() }
         .onChange(of: window.isShowingSettings) { _, _ in claimBackgroundPanel() }
         .onChange(of: model.enabledPlugins.map { "\($0.id)|\($0.contentIdentity)|\($0.principal?.sourceIdentity ?? "")" }) { _, _ in claimBackgroundPanel() }
@@ -102,6 +111,17 @@ struct ContentView: View {
                 )
             }
         }
+        .sheet(item: $folderToRename) { request in
+            SidebarFolderRenameSheet(
+                name: request.folder.name, scale: scale, cancel: { folderToRename = nil }
+            ) { name in
+                try model.pluginSidebar.edit(request.kind) { try $0.renameFolder(request.folder.id, to: name) }
+                folderToRename = nil
+            }
+        }
+        .alert(NectoL10n.text("Could not save the folder."), isPresented: $folderSaveFailed) {
+            Button(NectoL10n.text("Done"), role: .cancel) {}
+        }
     }
 
     private func claimBackgroundPanel() {
@@ -132,10 +152,42 @@ struct ContentView: View {
         case app(String)
     }
 
+    private struct FolderRename: Identifiable {
+        let kind: NectoPluginSidebarStore.Kind
+        let folder: NectoPluginSidebarSection.Folder
+        var id: UUID { folder.id }
+    }
+
+    private struct SearchScrollRequest: Equatable {
+        let nonce = UUID()
+        let anchor: NectoPluginSidebarRows.PluginAnchor
+        let target: NectoTarget?
+    }
+
+    private var sidebarDragContext: NectoPluginSidebarDrag.Context {
+        let target = window.selectedTarget
+        let device = model.sidebarPluginIDs(in: .device, for: target)
+        return .init(
+            target: target,
+            device: .init(
+                layout: model.pluginSidebar[.device], activePluginIDs: device.active, disabledPluginIDs: device.disabled
+            ),
+            desktop: .init(
+                layout: model.pluginSidebar[.desktop], activePluginIDs: model.sidebarPluginIDs(in: .desktop, for: target).active
+            )
+        )
+    }
+
     /// A `List` for its selection, keyboard, accessibility and reordering.
     private var sidebarList: some View {
-        ScrollViewReader { proxy in
-            List(selection: sidebarSelection) {
+        let context = sidebarDragContext
+        let activeDevice = window.activeDevicePlugins
+        let disabledDevice = window.disabledDevicePlugins
+        let showsDevice = model.pluginSidebar[.device].isVisible(
+            hasAvailablePlugins: !activeDevice.isEmpty || !disabledDevice.isEmpty
+        )
+        return ScrollViewReader { proxy in
+            List(selection: sidebarRowSelection) {
                 if model.apps.isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: "cable.connector.slash")
@@ -170,74 +222,20 @@ struct ContentView: View {
                     }
                 }
 
-                if !window.activeDevicePlugins.isEmpty || !window.disabledDevicePlugins.isEmpty {
+                if showsDevice {
                     Section {
-                        pluginGroup("Device Plugins", showsSearch: true)
+                        pluginGroup("Device Plugins", kind: .device, showsSearch: true)
                             .plainRow()
-
-                        ForEach(window.activeDevicePlugins) { plugin in
-                            SidebarItem(
-                                title: plugin.manifest.name,
-                                systemImage: plugin.manifest.icon.systemName,
-                                trailing: plugin.manifest.version,
-                                isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
-                                scale: scale
-                            )
-                            .contextMenu {
-                                Button(NectoL10n.text("Disable")) { model.setPlugin(plugin.id, enabled: false) }
-                            }
-                            .plainRow(isSelected: window.selectedPluginID == plugin.id)
-                            .tag(plugin.id)
-                        }
-                        .onMove { from, to in
-                            model.moveDevicePlugins(from: from, to: to, target: window.selectedTarget)
-                        }
-
-                        // The disabled sink to the bottom, in gray. Clicking one is not a
-                        // dead end: its pane says what happened and offers the way back.
-                        ForEach(window.disabledDevicePlugins) { plugin in
-                            SidebarItem(
-                                title: plugin.manifest.name,
-                                systemImage: plugin.manifest.icon.systemName,
-                                trailing: NectoL10n.text("off"),
-                                isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
-                                scale: scale,
-                                isDimmed: true
-                            )
-                            .contextMenu {
-                                Button(NectoL10n.text("Enable")) { model.setPlugin(plugin.id, enabled: true) }
-                            }
-                            .plainRow(isSelected: window.selectedPluginID == plugin.id)
-                            .tag(plugin.id)
-                        }
+                        pluginRows(in: .device, active: activeDevice, disabled: disabledDevice, context: context)
                     }
+                    .id(window.selectedTarget)
                 }
 
-                if !model.enabledPlugins.isEmpty {
+                if model.pluginSidebar[.desktop].isVisible(hasAvailablePlugins: !model.enabledPlugins.isEmpty) {
                     Section {
-                        pluginGroup(
-                            "Desktop Plugins",
-                            showsSearch: window.activeDevicePlugins.isEmpty && window.disabledDevicePlugins.isEmpty
-                        )
-                        .plainRow()
-
-                        // `editActions: .move` rather than a drag of our own: `ForEach`
-                        // writes the rearranged list straight back through the binding, and
-                        // the drag, its animation and the keyboard all stay the platform's.
-                        ForEach(model.enabledPlugins) { plugin in
-                            SidebarItem(
-                                title: plugin.manifest.name,
-                                systemImage: plugin.manifest.icon.systemName,
-                                trailing: plugin.manifest.version,
-                                isSelected: !window.isShowingSettings && window.selectedPluginID == plugin.id,
-                                scale: scale
-                            )
-                            .plainRow(isSelected: window.selectedPluginID == plugin.id)
-                            .tag(plugin.id)
-                        }
-                        .onMove { from, to in
-                            model.movePlugins(from: from, to: to)
-                        }
+                        pluginGroup("Desktop Plugins", kind: .desktop, showsSearch: !showsDevice)
+                            .plainRow()
+                        pluginRows(in: .desktop, active: model.enabledPlugins, context: context)
                     }
                 }
             }
@@ -249,6 +247,9 @@ struct ContentView: View {
             // AppKit rejects a zero minimum; use the same height as the rows themselves.
             .environment(\.defaultMinListRowHeight, NectoTheme.rowHeight * scale)
             .clipped()
+            .padding(.leading, 6)
+            .onChange(of: context) { _, _ in clearSidebarDrag() }
+            .onDisappear { clearSidebarDrag() }
             .onChange(of: Set(model.connectedApps.map(\.id))) { previous, current in
                 guard !current.subtracting(previous).isEmpty, let first = model.apps.first else { return }
                 // Wait for List to apply the inserted rows before resolving their positions.
@@ -256,24 +257,49 @@ struct ContentView: View {
                     proxy.scrollTo(SidebarAnchor.app(first.id), anchor: .top)
                 }
             }
+            .onChange(of: createdFolderAnchor) { _, anchor in
+                guard let anchor else { return }
+                DispatchQueue.main.async { proxy.scrollTo(anchor) }
+            }
+            .onChange(of: searchScrollRequest) { _, request in
+                guard let request else { return }
+                DispatchQueue.main.async {
+                    guard request == searchScrollRequest, request.target == window.selectedTarget,
+                          request.anchor.id == sidebarSelection.wrappedValue else { return }
+                    proxy.scrollTo(request.anchor)
+                }
+            }
         }
     }
 
     @ViewBuilder
-    private func pluginGroup(_ title: String, showsSearch: Bool) -> some View {
+    private func pluginGroup(_ title: String, kind: NectoPluginSidebarStore.Kind, showsSearch: Bool) -> some View {
+        let target = window.selectedTarget
         let header = HStack(spacing: 0) {
             SidebarGroup(title: NectoL10n.text(title), scale: scale)
             Spacer(minLength: 0)
-            if showsSearch {
-                SidebarPluginSearch(
-                    devicePlugins: window.activeDevicePlugins + window.disabledDevicePlugins,
-                    desktopPlugins: model.enabledPlugins,
-                    disabledPluginIDs: Set(window.disabledDevicePlugins.map(\.id)),
-                    scale: scale, selection: sidebarSelection, isSearching: $isSearchingPlugins
-                )
-                .padding(.trailing, 12)
-                .padding(.top, 8)
+            HStack(spacing: 0) {
+                Button { createFolder(in: kind) } label: {
+                    Image(systemName: "folder.badge.plus")
+                }
+                .buttonStyle(SidebarIconButtonStyle(scale: scale))
+                .help(NectoL10n.text("New Folder"))
+                .accessibilityLabel(NectoL10n.text("New Folder"))
+                .accessibilityIdentifier("sidebar.plugin.folder.create.\(kind.rawValue)")
+
+                if showsSearch {
+                    SidebarPluginSearch(
+                        devicePlugins: window.activeDevicePlugins + window.disabledDevicePlugins,
+                        desktopPlugins: model.enabledPlugins,
+                        disabledPluginIDs: Set(window.disabledDevicePlugins.map(\.id)),
+                        scale: scale, selection: sidebarSelection.wrappedValue,
+                        selectResult: { selectSearchResult($0, in: $1, target: target) },
+                        isSearching: $isSearchingPlugins
+                    )
+                }
             }
+            .padding(.trailing, 12)
+            .padding(.top, 8)
         }
         if showsSearch {
             header.accessibilityAction(named: Text(NectoL10n.text("Search plugins"))) {
@@ -281,6 +307,115 @@ struct ContentView: View {
             }
         } else {
             header
+        }
+    }
+
+    private func pluginRows(
+        in kind: NectoPluginSidebarStore.Kind,
+        active: [NectoInstalledPlugin],
+        disabled: [NectoInstalledPlugin] = [],
+        context: NectoPluginSidebarDrag.Context
+    ) -> some View {
+        let section = context[kind]
+        let visibleRows = section.layout.visibleRows(
+            activePluginIDs: section.activePluginIDs, disabledPluginIDs: section.disabledPluginIDs
+        )
+        func allowsDrop(to destination: NectoPluginSidebarSection.MoveDestination) -> Bool {
+            context == sidebarDragContext && sidebarDrag.allowsDrop(to: destination, in: kind, context: context)
+        }
+        return NectoPluginSidebarRows(
+            kind: kind,
+            siblingsByParent: section.layout.visibleSiblings(
+                activePluginIDs: section.activePluginIDs, disabledPluginIDs: section.disabledPluginIDs
+            ),
+            visibleRows: visibleRows,
+            plugins: Dictionary((active + disabled).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }),
+            scale: scale,
+            selectedPluginID: window.isShowingSettings ? nil : window.selectedPluginID,
+            actions: .init(
+                expandFolder: { setFolderExpanded($1, folderID: $0, in: kind) },
+                createFolder: { createFolder(in: kind, parentID: $0) },
+                renameFolder: { folderToRename = FolderRename(kind: kind, folder: $0) },
+                deleteFolder: { id in editSidebar(kind) { try $0.deleteFolder(id) } },
+                setEnabled: { plugin, enabled in
+                    guard context.target == window.selectedTarget else { return }
+                    model.setPlugin(plugin, enabled: enabled, deviceTarget: context.target)
+                },
+                reorder: { source, anchor, position, parentID in
+                    let location = NectoPluginSidebarState.ItemLocation(kind: kind, id: source, parentID: parentID)
+                    guard context == sidebarDragContext, sidebarDrag.source(in: context) == location else { return }
+                    _ = sidebarDrag.takeNativeSource(in: context)
+                    sidebarDropFeedback.clear()
+                    model.reorderSidebar(
+                        location,
+                        relativeTo: .init(kind: kind, id: anchor, parentID: parentID),
+                        position: position,
+                        target: context.target
+                    )
+                },
+                dragProvider: { row in
+                    guard context == sidebarDragContext else { return nil }
+                    let source = NectoPluginSidebarState.ItemLocation(kind: kind, id: row.id, parentID: row.parentID)
+                    if sidebarDrag.source(in: context) != source { sidebarDropFeedback.highlight = nil }
+                    if sidebarDropFeedback.nativeReorderSource != source {
+                        sidebarDropFeedback.nativeReorderSource = source
+                    }
+                    return sidebarDrag.provider(for: source, in: context)
+                },
+                dropFeedback: sidebarDropFeedback,
+                acceptsDrop: { context == sidebarDragContext && sidebarDrag.acceptsDrop(in: context) },
+                allowsDrop: allowsDrop,
+                receiveDrop: { destination, providers in
+                    guard allowsDrop(to: destination) else { return false }
+                    sidebarDropFeedback.clear()
+                    return sidebarDrag.receive(providers, context: context, currentContext: { sidebarDragContext }) { source in
+                        model.moveSidebar(source, to: destination, in: kind, target: context.target)
+                    }
+                }
+            )
+        )
+    }
+
+    private func clearSidebarDrag() {
+        sidebarDrag.clear()
+        sidebarDropFeedback.clear()
+    }
+
+    private func setFolderExpanded(_ expanded: Bool, folderID: UUID, in kind: NectoPluginSidebarStore.Kind) {
+        guard let folder = model.pluginSidebar[kind].folder(withID: folderID), folder.isCollapsed == expanded else {
+            return
+        }
+        editSidebar(kind) { try $0.toggleFolder(folderID) }
+    }
+
+    private func selectSearchResult(_ id: String, in kind: NectoPluginSidebarStore.Kind, target: NectoTarget?) {
+        guard target == window.selectedTarget else { return }
+        let available = model.sidebarPluginIDs(in: kind, for: target)
+        guard available.active.contains(id) || available.disabled.contains(id) else { return }
+        if let revealed = model.pluginSidebar[kind].revealingPlugin(id) {
+            guard editSidebar(kind, { $0 = revealed }) != nil else { return }
+        }
+        sidebarSelection.wrappedValue = id
+        searchScrollRequest = SearchScrollRequest(anchor: .init(kind: kind, id: id), target: target)
+    }
+
+    private func createFolder(in kind: NectoPluginSidebarStore.Kind, parentID: UUID? = nil) {
+        let id = editSidebar(kind) {
+            try $0.createFolder(defaultName: NectoL10n.text("New Folder"), in: parentID)
+        }
+        if let id { createdFolderAnchor = .folder(kind, id) }
+    }
+
+    @discardableResult
+    private func editSidebar<Result>(
+        _ kind: NectoPluginSidebarStore.Kind,
+        _ edit: (inout NectoPluginSidebarSection) throws -> Result
+    ) -> Result? {
+        do {
+            return try model.pluginSidebar.edit(kind, edit)
+        } catch {
+            folderSaveFailed = true
+            return nil
         }
     }
 
@@ -361,6 +496,23 @@ struct ContentView: View {
         }
     }
 
+    private var sidebarRowSelection: Binding<NectoPluginSidebarRowID?> {
+        Binding(
+            get: { sidebarSelection.wrappedValue.map(NectoPluginSidebarRowID.plugin) },
+            set: { row in
+                switch row {
+                case .plugin(let id):
+                    sidebarSelection.wrappedValue = id
+                case .folder(let kind, let id):
+                    guard let folder = model.pluginSidebar[kind].folder(withID: id) else { return }
+                    setFolderExpanded(folder.isCollapsed, folderID: id, in: kind)
+                case nil:
+                    break
+                }
+            }
+        )
+    }
+
     private var sidebarSelection: Binding<String?> {
         Binding(
             get: { window.isShowingSettings ? nil : window.selectedPluginID },
@@ -384,7 +536,7 @@ struct ContentView: View {
                 Text("The app still carries it. Nothing is shown on this Mac.")
                     .font(.necto(.caption, scale: scale))
                     .foregroundStyle(NectoTheme.textTertiary)
-                Button(NectoL10n.text("Enable")) { model.setPlugin(plugin.id, enabled: true) }
+                Button(NectoL10n.text("Enable")) { model.setPlugin(plugin, enabled: true) }
                     .buttonStyle(NectoButtonStyle(scale: scale, primary: true))
                     .padding(.top, 12)
             }

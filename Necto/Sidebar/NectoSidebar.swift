@@ -37,12 +37,79 @@ struct SidebarGroup: View {
     }
 }
 
+struct SidebarIconButtonStyle: ButtonStyle {
+    let scale: CGFloat
+    @State private var isHovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        let size = NectoTheme.buttonHeight * max(1, scale)
+        let restingBackground = isHovering ? NectoTheme.hover : .clear
+
+        return configuration.label
+            .font(.necto(.label, scale: scale))
+            .foregroundStyle(NectoTheme.textTertiary)
+            .frame(width: size, height: size)
+            .background(
+                configuration.isPressed ? NectoTheme.selected : restingBackground,
+                in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl)
+            )
+            .contentShape(Rectangle())
+            .onHover { isHovering = $0 }
+    }
+}
+
+struct SidebarFolderRenameSheet: View {
+    @State var name: String
+    let scale: CGFloat
+    let cancel: () -> Void
+    let rename: (String) throws -> Void
+    @State private var failure: String? = nil
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        NectoDialog(title: NectoL10n.text("Rename Folder"), scale: scale) {
+            VStack(alignment: .leading, spacing: 8) {
+                NectoField(placeholder: NectoL10n.text("Folder name"), text: $name, scale: scale)
+                    .focused($isFocused)
+                    .onSubmit(submit)
+                    .accessibilityIdentifier("sidebar.plugin.folder.rename.name")
+                if let failure {
+                    Text(failure)
+                        .font(.necto(.caption, scale: scale))
+                        .foregroundStyle(NectoTheme.danger)
+                }
+            }
+        } actions: {
+            Button(NectoL10n.text("Cancel"), action: cancel)
+                .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+                .keyboardShortcut(.cancelAction)
+            Button(NectoL10n.text("Rename"), action: submit)
+                .buttonStyle(NectoButtonStyle(scale: scale, primary: true))
+                .keyboardShortcut(.defaultAction)
+        }
+        .onAppear { isFocused = true }
+    }
+
+    private func submit() {
+        do {
+            try rename(name)
+        } catch NectoPluginSidebarSection.ValidationError.emptyFolderName {
+            failure = NectoL10n.text("Enter a folder name.")
+        } catch NectoPluginSidebarSection.ValidationError.duplicateFolderName {
+            failure = NectoL10n.text("A folder with that name already exists here.")
+        } catch {
+            failure = NectoL10n.text("Could not save the folder.")
+        }
+    }
+}
+
 struct SidebarPluginSearch: View {
     let devicePlugins: [NectoInstalledPlugin]
     let desktopPlugins: [NectoInstalledPlugin]
     let disabledPluginIDs: Set<String>
     let scale: CGFloat
-    @Binding var selection: String?
+    let selection: String?
+    let selectResult: (String, NectoPluginSidebarStore.Kind) -> Void
     @Binding var isSearching: Bool
     @State private var query = ""
     @FocusState private var searchIsFocused: Bool
@@ -60,9 +127,8 @@ struct SidebarPluginSearch: View {
             isSearching = true
         } label: {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(NectoTheme.textTertiary)
         }
-        .buttonStyle(NectoButtonStyle(scale: scale, quiet: true))
+        .buttonStyle(SidebarIconButtonStyle(scale: scale))
         .help(NectoL10n.text("Search plugins"))
         .accessibilityLabel(NectoL10n.text("Search plugins"))
         .accessibilityIdentifier("sidebar.plugin.search.open")
@@ -76,9 +142,7 @@ struct SidebarPluginSearch: View {
             NectoField(placeholder: NectoL10n.text("Search plugins"), text: $query, scale: scale)
                 .focused($searchIsFocused)
                 .accessibilityIdentifier("sidebar.plugin.search")
-                .onSubmit {
-                    if let first = (deviceResults + desktopResults).first { select(first.id) }
-                }
+                .onSubmit { selectFirstResult() }
                 .padding(.horizontal, 8)
 
             if deviceResults.isEmpty && desktopResults.isEmpty {
@@ -89,8 +153,8 @@ struct SidebarPluginSearch: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        resultGroup(NectoL10n.text("Device Plugins"), plugins: deviceResults)
-                        resultGroup(NectoL10n.text("Desktop Plugins"), plugins: desktopResults)
+                        resultGroup(NectoL10n.text("Device Plugins"), plugins: deviceResults, kind: .device)
+                        resultGroup(NectoL10n.text("Desktop Plugins"), plugins: desktopResults, kind: .desktop)
                     }
                 }
                 .frame(height: CGFloat(min(deviceResults.count + desktopResults.count + 2, 10)) * NectoTheme.rowHeight * scale)
@@ -107,13 +171,15 @@ struct SidebarPluginSearch: View {
     }
 
     @ViewBuilder
-    private func resultGroup(_ title: String, plugins: [NectoInstalledPlugin]) -> some View {
+    private func resultGroup(
+        _ title: String, plugins: [NectoInstalledPlugin], kind: NectoPluginSidebarStore.Kind
+    ) -> some View {
         if !plugins.isEmpty {
             SidebarGroup(title: title, scale: scale)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ForEach(plugins) { plugin in
                 let isDisabled = disabledPluginIDs.contains(plugin.id)
-                Button { select(plugin.id) } label: {
+                Button { select(plugin.id, in: kind) } label: {
                     SidebarItem(
                         title: plugin.manifest.name,
                         systemImage: plugin.manifest.icon.systemName,
@@ -128,8 +194,16 @@ struct SidebarPluginSearch: View {
         }
     }
 
-    private func select(_ id: String) {
-        selection = id
+    private func selectFirstResult() {
+        if let first = deviceResults.first {
+            select(first.id, in: .device)
+        } else if let first = desktopResults.first {
+            select(first.id, in: .desktop)
+        }
+    }
+
+    private func select(_ id: String, in kind: NectoPluginSidebarStore.Kind) {
+        selectResult(id, kind)
         isSearching = false
     }
 }
@@ -148,17 +222,17 @@ struct SidebarItem: View {
     var isDimmed = false
     var hasUpdate = false
     var select: (() -> Void)?
+    var leadingInset: CGFloat = 8
+    var iconSpacing: CGFloat = 8
+    var backgroundLeadingExtension: CGFloat = 0
 
     @State private var isHovering = false
+    static let iconWidth: CGFloat = 16
 
-    /// A tap rather than a `Button`: a button takes the mouse down for itself, and
-    /// `List` never gets the chance to start a drag. Reordering the sidebar is worth
-    /// more than the button's own press animation, which this row does not use anyway.
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .foregroundStyle(NectoTheme.textTertiary)
-                .frame(width: 16)
+        HStack(spacing: iconSpacing) {
+            icon
+                .frame(width: Self.iconWidth)
 
             Text(title)
                 .lineLimit(1)
@@ -176,16 +250,27 @@ struct SidebarItem: View {
         }
         .font(.necto(.label, scale: scale))
         .foregroundStyle(isDimmed ? NectoTheme.textTertiary : isSelected ? NectoTheme.text : NectoTheme.textSecondary)
-        .padding(.leading, 8)
+        .padding(.leading, leadingInset)
         .padding(.trailing, 16)
         .frame(height: NectoTheme.rowHeight * scale)
-        .background(background, in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
+        .background {
+            RoundedRectangle(cornerRadius: NectoTheme.radiusControl)
+                .fill(background)
+                .padding(.leading, -backgroundLeadingExtension)
+                .allowsHitTesting(false)
+        }
         .contentShape(Rectangle())
-        .padding(.horizontal, 8)
+        .padding(.leading, leadingInset)
+        .padding(.trailing, 8)
         .onHover { isHovering = $0 }
         .modifier(TapIfPresent(action: select))
         .accessibilityElement(children: .combine)
         .accessibilityValue(hasUpdate ? NectoL10n.text("Update available") : "")
+    }
+
+    private var icon: some View {
+        Image(systemName: systemImage)
+            .foregroundStyle(NectoTheme.textTertiary)
     }
 
     private var background: Color {
@@ -207,29 +292,38 @@ struct SidebarItem: View {
 /// `ListOutlineItem.item(forRowAt:)` then reads past the end of the row ids.
 ///
 /// There is no SwiftUI spelling for this, so it is reached through the view it belongs
-/// to. Applied on every update because a row view is reused as the list scrolls.
+/// to. Recheck after updates because AppKit can reuse a row as the list scrolls.
 private struct ListChromeOff: NSViewRepresentable {
     let isSelected: Bool
 
     func makeNSView(context _: Context) -> NSView {
         let view = NSView()
-        // A row has no ancestors yet while it is being made.
-        DispatchQueue.main.async { apply(from: view) }
+        scheduleUpdate(from: view)
         return view
     }
 
     func updateNSView(_ view: NSView, context _: Context) {
-        apply(from: view)
+        scheduleUpdate(from: view)
+    }
+
+    private func scheduleUpdate(from view: NSView) {
+        // Changing the enclosing row or table style can invalidate layout.
+        DispatchQueue.main.async { [weak view] in
+            guard let view else { return }
+            apply(from: view)
+        }
     }
 
     private func apply(from view: NSView) {
         var ancestor = view.superview
         while let current = ancestor {
-            if let row = current as? NSTableRowView {
+            if let row = current as? NSTableRowView, row.selectionHighlightStyle != .none {
                 row.selectionHighlightStyle = .none
             }
             if let table = current as? NSTableView {
-                table.selectionHighlightStyle = .none
+                if table.selectionHighlightStyle != .none {
+                    table.selectionHighlightStyle = .none
+                }
                 return
             }
             ancestor = current.superview

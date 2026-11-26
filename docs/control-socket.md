@@ -35,6 +35,7 @@ general CLI calls from plugin grants. See [shell access](bridges.md#shell-access
 { "id": "i1", "kind": "installPlugin", "input": { "path": "/absolute/path/to/dist" } }
 { "id": "i2", "kind": "installPlugin", "input": { "repositoryURL": "https://github.com/owner/plugins" } }
 { "id": "d1", "kind": "deletePlugin", "pluginID": "com.example.plugin" }
+{ "id": "s1", "kind": "sidebar", "input": { "section": "device", "action": "list" } }
 { "id": "r3", "kind": "invoke",    "pluginID": "url-scheme", "operationID": "links.open",
   "input": { "url": "https://example.com" }, "device": "sim-1", "app": "com.example.app" }
 { "id": "r4", "kind": "subscribe", "pluginID": "plugin-sample", "operationID": "host.ticks", "device": "sim-1", "app": "com.example.app" }
@@ -90,7 +91,7 @@ even if the CLI exits. This is not an unattended or approval-bypassing install A
 
 A request sees exactly one `result` or `error` — except `subscribe`, which sees any
 number of `event`s and then one `end` or `error`. Error codes are the bridge's own
-(`docs/plugin-manifest.md` lists them), forwarded from the registry.
+(`docs/plugin-manifest.md` lists them). Plugin call errors are forwarded from the registry.
 
 ## The discovery chain
 
@@ -138,6 +139,78 @@ combined with `--input`. No input means `{}`. `plugin invoke` remains an alias f
 scope flags. `targets --json` retains the flat target list. Commands that formerly
 guessed a target now require an explicit scope; update scripts accordingly.
 
+## Organize the sidebar
+
+Every sidebar command requires `--section device` or `--section desktop` and
+accepts `--json`. All apps share one Device layout. Desktop has its own layout.
+`sidebar list --json` supplies the IDs for the next edit.
+
+```bash
+necto sidebar list --section device --json
+necto sidebar folder create 'Traffic' --section device --json
+necto sidebar folder create 'Requests' --section device --parent "$folder_id" --json
+necto sidebar folder rename "$folder_id" 'Network' --section device
+necto sidebar move "plugin:$plugin_id" --section device --parent "$folder_id" --before "folder:$child_id"
+necto sidebar folder delete "$folder_id" --section device --json
+```
+
+Take the plugin ID from the list and the folder UUIDs from the list or create
+results. Folder commands and `--parent` take a bare UUID. `move`, `--before`,
+and `--after` take a typed selector (`plugin:<manifest-id>` or `folder:<uuid>`).
+Each command edits one item.
+
+List includes every saved item, including collapsed children and disabled or
+unavailable plugins. Known plugins without a saved position appear after the saved
+root items. Listing leaves those positions unsaved. The Device catalog includes
+plugins from all currently connected apps. Saved items can be moved while their
+apps are disconnected.
+
+Without an anchor, move inserts first in the destination folder, or last at the
+section root when `--parent` is omitted. An anchor infers its own parent. If you
+also supply `--parent`, it must match the anchor's parent. Use either `--before`
+or `--after`. When moving several items to the first slot, issue the commands in
+reverse order to produce the desired order, or place each item relative to an
+anchor. A move to the current position, including before or after itself, succeeds
+with `changed: false` and skips the write.
+
+Folder creation assigns an available name by adding a numeric suffix when needed.
+Renaming to a sibling folder's name fails. Renaming to the current name succeeds
+with `changed: false`. Deleting a folder promotes its direct children into its
+former position, in order. Moving or promoting a folder adds a suffix if a sibling
+folder already has its name. A folder can be up to three levels deep, with plugin rows
+at depth four. A folder cannot move into itself or its descendants. CLI edits
+preserve existing collapse states and window selection. New folders start expanded.
+The commands edit the saved arrangement only.
+
+### Sidebar socket input and results
+
+Send `kind: "sidebar"` with `input.section` set to `device` or `desktop` and
+`input.action` set to one of the following values.
+
+| Action | Other input fields |
+| --- | --- |
+| `list` | None |
+| `createFolder` | `name`, optional `parentID` |
+| `renameFolder` | `folderID`, `name` |
+| `deleteFolder` | `folderID` |
+| `move` | Typed `item`, optional `parentID`, optional `before` or `after` |
+
+`list` returns `section` and an ordered `items` array. Folder nodes carry
+`kind: "folder"`, `id` (UUID), `name`, `isCollapsed`, and `children`. Plugin nodes
+carry `kind: "plugin"`, `id` (manifest ID), `available`, and `enabled`. When the
+catalog has the manifest, the node also carries `name`, `description`, and `version`.
+`available` indicates catalog presence. `enabled` reflects saved plugin enablement.
+
+Folder edits return `section`, `folderID`, `name`, and `changed`. Delete also
+returns `deleted: true`. Create returns the allocated name. Move returns `section`,
+the typed `item`, `parentID` (`null` for the root), and `changed`. For a folder,
+it also returns the resulting `name`.
+
+The socket returns `INVALID_INPUT` for unknown IDs, invalid destinations, and other
+validation failures. A corrupt saved layout that blocks a write returns
+`PROVIDER_FAILED`. The CLI reports errors on stderr and exits nonzero. Read the
+section again after editing to confirm the resulting order and names.
+
 ## Coding agent skills
 
 ```bash
@@ -148,7 +221,7 @@ necto skills install --codex --claude
 
 Both agents use the same bundled `SKILL.md`. Codex installs to
 `~/.agents/skills/necto`; Claude Code installs to `~/.claude/skills/necto`. The skill
-teaches discovery and schema-based calls rather than listing specific plugins.
+covers discovery, schema-based calls, and organizing the saved sidebar.
 It does not change a manifest or install plugin-specific skills.
 
 Installation works without a running Necto app. Repeating it with identical content
