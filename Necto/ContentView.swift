@@ -239,6 +239,7 @@ struct ContentView: View {
             // AppKit rejects a zero minimum; use the same height as the rows themselves.
             .environment(\.defaultMinListRowHeight, NectoTheme.rowHeight * scale)
             .clipped()
+            .padding(.leading, 6)
             .onChange(of: context) { _, _ in sidebarDrag.clear() }
             .onDisappear { sidebarDrag.clear() }
             .onChange(of: Set(model.connectedApps.map(\.id))) { previous, current in

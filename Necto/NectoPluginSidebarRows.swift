@@ -11,6 +11,7 @@ enum NectoPluginSidebarRowID: Hashable {
 
 struct NectoPluginSidebarRows: View {
     typealias Section = NectoPluginSidebarSection
+    private static let iconSpacing: CGFloat = 4
 
     struct Actions {
         let expandFolder: (UUID, Bool) -> Void
@@ -148,7 +149,9 @@ struct NectoPluginSidebarRows: View {
             trailing: isDimmed ? NectoL10n.text("off") : plugin.manifest.version,
             isSelected: isSelected,
             scale: scale,
-            isDimmed: isDimmed
+            isDimmed: isDimmed,
+            leadingInset: 0,
+            iconSpacing: Self.iconSpacing
         )
         .contextMenu {
             if kind == .device {
@@ -161,7 +164,13 @@ struct NectoPluginSidebarRows: View {
     }
 
     private func folderLabel(_ folder: Section.Folder, row: Section.Row) -> some View {
-        Label(folder.name, systemImage: "folder")
+        let label = HStack(spacing: Self.iconSpacing) {
+            Image(systemName: "folder")
+                .frame(width: SidebarItem.iconWidth)
+                .accessibilityHidden(true)
+            Text(folder.name)
+        }
+        return label
             .font(.necto(.label, scale: scale))
             .foregroundStyle(row.isDimmed ? NectoTheme.textTertiary : NectoTheme.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -146,6 +146,9 @@ h3.stepped { margin: var(--necto-space-5) 0 var(--necto-space-1); font-size: 14p
   height:auto;
   margin-inline-end:var(--necto-space-1);
 }
+.gallery-folder-example .gallery-folder-children > .necto-sidebar-item {
+  padding-inline-start:calc(var(--necto-space-2) * (1 + var(--necto-font-scale)) + var(--necto-space-1));
+}
 .gallery-folder-example details[open] > summary .gallery-folder-chevron { transform:rotate(90deg); }
 .gallery-folder-example .gallery-folder-dimmed { color:var(--necto-text-tertiary); }
 .gallery-folder-drop-target { position:relative; }

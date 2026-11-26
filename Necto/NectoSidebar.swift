@@ -213,12 +213,14 @@ struct SidebarItem: View {
     var isDimmed = false
     var hasUpdate = false
     var select: (() -> Void)?
+    var leadingInset: CGFloat = 8
+    var iconSpacing: CGFloat = 8
 
     @State private var isHovering = false
-    private static let iconWidth: CGFloat = 16
+    static let iconWidth: CGFloat = 16
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: iconSpacing) {
             icon
                 .frame(width: Self.iconWidth)
 
@@ -238,12 +240,13 @@ struct SidebarItem: View {
         }
         .font(.necto(.label, scale: scale))
         .foregroundStyle(isDimmed ? NectoTheme.textTertiary : isSelected ? NectoTheme.text : NectoTheme.textSecondary)
-        .padding(.leading, 8)
+        .padding(.leading, leadingInset)
         .padding(.trailing, 16)
         .frame(height: NectoTheme.rowHeight * scale)
         .background(background, in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
         .contentShape(Rectangle())
-        .padding(.horizontal, 8)
+        .padding(.leading, leadingInset)
+        .padding(.trailing, 8)
         .onHover { isHovering = $0 }
         .modifier(TapIfPresent(action: select))
         .accessibilityElement(children: .combine)
