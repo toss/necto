@@ -12,6 +12,7 @@ enum NectoPluginSidebarRowID: Hashable {
 struct NectoPluginSidebarRows: View {
     typealias Section = NectoPluginSidebarSection
     private static let iconSpacing: CGFloat = 4
+    private static let backgroundLeadingExtension: CGFloat = 4
 
     struct PluginAnchor: Hashable {
         let kind: NectoPluginSidebarStore.Kind
@@ -81,7 +82,7 @@ struct NectoPluginSidebarRows: View {
                     )
                 } label: {
                     folderLabel(folder, row: row)
-                        .modifier(FolderHover(scale: scale))
+                        .modifier(FolderHover(scale: scale, leadingExtension: Self.backgroundLeadingExtension))
                         .overlay { dropRegions(for: row, in: siblings, center: .into(parentID: folder.id)) }
                         .tag(entry.id)
                         .listRowSeparator(.hidden)
@@ -131,7 +132,8 @@ struct NectoPluginSidebarRows: View {
             scale: scale,
             isDimmed: isDimmed,
             leadingInset: 0,
-            iconSpacing: Self.iconSpacing
+            iconSpacing: Self.iconSpacing,
+            backgroundLeadingExtension: Self.backgroundLeadingExtension
         )
         .contextMenu {
             if kind == .device {
@@ -167,6 +169,7 @@ struct NectoPluginSidebarRows: View {
 
 private struct FolderHover: ViewModifier {
     let scale: CGFloat
+    let leadingExtension: CGFloat
     @State private var isHovering = false
 
     func body(content: Content) -> some View {
@@ -175,6 +178,7 @@ private struct FolderHover: ViewModifier {
                 RoundedRectangle(cornerRadius: NectoTheme.radiusControl)
                     .fill(isHovering ? NectoTheme.hover : .clear)
                     .frame(height: NectoTheme.rowHeight * scale)
+                    .padding(.leading, -leadingExtension)
                     .padding(.trailing, 8)
                     .allowsHitTesting(false)
             }

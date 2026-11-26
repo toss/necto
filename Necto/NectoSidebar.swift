@@ -224,6 +224,7 @@ struct SidebarItem: View {
     var select: (() -> Void)?
     var leadingInset: CGFloat = 8
     var iconSpacing: CGFloat = 8
+    var backgroundLeadingExtension: CGFloat = 0
 
     @State private var isHovering = false
     static let iconWidth: CGFloat = 16
@@ -252,7 +253,12 @@ struct SidebarItem: View {
         .padding(.leading, leadingInset)
         .padding(.trailing, 16)
         .frame(height: NectoTheme.rowHeight * scale)
-        .background(background, in: RoundedRectangle(cornerRadius: NectoTheme.radiusControl))
+        .background {
+            RoundedRectangle(cornerRadius: NectoTheme.radiusControl)
+                .fill(background)
+                .padding(.leading, -backgroundLeadingExtension)
+                .allowsHitTesting(false)
+        }
         .contentShape(Rectangle())
         .padding(.leading, leadingInset)
         .padding(.trailing, 8)
