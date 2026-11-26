@@ -225,7 +225,7 @@ struct NectoPluginSidebarSectionTests {
         #expect(section == original)
     }
 
-    @Test("Moving into a collapsed folder appends the subtree and resolves only the moved folder's name")
+    @Test("Moving into a collapsed folder prepends the subtree and resolves only the moved folder's name")
     func moveFolderIntoFolder() throws {
         let child = Folder(name: "Child", children: [.plugin("unavailable-in-child")], isCollapsed: true)
         let moved = Folder(name: "Tools", children: [.plugin("tool"), .folder(child)], isCollapsed: true)
@@ -242,7 +242,7 @@ struct NectoPluginSidebarSectionTests {
         renamed.name = "Tools(2)"
         var opened = destination
         opened.isCollapsed = false
-        opened.children.append(.folder(renamed))
+        opened.children.insert(.folder(renamed), at: 0)
         #expect(section.items == [.plugin("root"), .folder(opened)])
     }
 

@@ -211,17 +211,17 @@ struct NectoPluginSidebarStoreTests {
         #expect(try fixture.store.load(.device).items == [.folder(expectedFolder), .plugin("root-disabled"), .plugin("tail")])
     }
 
-    @Test("An unplaced disabled Device plugin can enter a folder and return beside a disabled root anchor")
+    @Test("An unplaced disabled Device plugin enters at the front of a folder and can return beside a disabled root anchor")
     func moveDisabledDevicePlugin() throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        let folder = Section.Folder(name: "Tools", children: [.plugin("unavailable")], isCollapsed: true)
+        let folder = Section.Folder(name: "Tools", children: [.plugin("unavailable"), .plugin("child")], isCollapsed: true)
         let device = try Section(items: [.folder(folder), .plugin("active")])
         let desktop = try Section(items: [.plugin("m-disabled")])
         try fixture.store.save(device, for: .device)
         try fixture.store.save(desktop, for: .desktop)
         let state = NectoPluginSidebarState(store: fixture.store)
-        let active = ["active"]
+        let active = ["active", "child"]
         let disabled = ["a-disabled", "m-disabled", "z-disabled"]
         let plugin = Section.Item.ID.plugin("m-disabled")
 
@@ -231,7 +231,7 @@ struct NectoPluginSidebarStoreTests {
         ))
         var updatedFolder = folder
         updatedFolder.isCollapsed = false
-        updatedFolder.children.append(.plugin("m-disabled"))
+        updatedFolder.children = [.plugin("m-disabled"), .plugin("unavailable"), .plugin("child")]
         #expect(state[.device].items == [.folder(updatedFolder), .plugin("active")])
         #expect(try fixture.store.load(.device) == state[.device])
         #expect(state[.desktop] == desktop)
@@ -243,7 +243,7 @@ struct NectoPluginSidebarStoreTests {
         ))
         let rows = state[.device].visibleRows(activePluginIDs: active, disabledPluginIDs: disabled)
         #expect(rows.map(\.id) == [
-            .folder(folder.id), .plugin("active"), .plugin("a-disabled"), plugin, .plugin("z-disabled"),
+            .folder(folder.id), .plugin("child"), .plugin("active"), .plugin("a-disabled"), plugin, .plugin("z-disabled"),
         ])
         #expect(rows.filter { $0.id == plugin }.allSatisfy { $0.parentID == nil && $0.isDimmed })
         #expect(try fixture.store.load(.device) == state[.device])

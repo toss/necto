@@ -252,8 +252,8 @@ struct NectoPluginSidebarSection: Equatable, Sendable {
         let inserted = Self.editChildren(of: destination.parentID, in: &updatedItems, openParent: openParent) { siblings in
             let index: Int
             switch destination {
-            case .into:
-                index = siblings.endIndex
+            case .into(let parentID):
+                index = parentID == nil ? siblings.endIndex : siblings.startIndex
             case .beside(let anchor, let position, _):
                 guard let anchorIndex = siblings.firstIndex(where: { $0.id == anchor }) else { return false }
                 index = position == .before ? anchorIndex : anchorIndex + 1
